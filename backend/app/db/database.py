@@ -1,7 +1,10 @@
 import aiosqlite
 from typing import Optional
+from datetime import datetime
 
 from app.core.config import settings
+from app.db.schema import ALL_TABLES, INDEXES
+from app.db.migrations import run_migrations as run_db_migrations
 
 
 class Database:
@@ -55,11 +58,63 @@ class Database:
 db = Database()
 
 
+async def create_tables():
+    """Create all database tables"""
+    # Create tables
+    for table_sql in ALL_TABLES:
+        await db.execute(table_sql)
+    
+    # Create indexes
+    for index_sql in INDEXES:
+        await db.execute(index_sql)
+    
+    await db.commit()
+
+
+async def run_migrations():
+    """Run database migrations"""
+    await run_db_migrations(db)
+
+
 async def init_db():
     """Initialize database with schema"""
     await db.connect()
     
-    # Will be implemented in Task 1.2
-    # For now, just ensure connection works
+    # Create tables
+    await create_tables()
+    
+    # Run migrations
+    await run_migrations()
+    
+    # Insert default preferences
+    await initialize_default_preferences()
     
     print("Database initialized successfully")
+
+
+async def initialize_default_preferences():
+    """Insert default preference values"""
+    default_prefs = [
+        ("hotkey", "F8", "string", "Global hotkey for voice recording"),
+        ("ollama_port", "11434", "int", "Ollama server port"),
+        ("ollama_model", "llama2", "string", "Default Ollama model"),
+        ("whisper_model", "base", "string", "Whisper model size"),
+        ("pattern_unlock_shown", "false", "bool", "Whether pattern unlock celebration was shown"),
+        ("coffee_popup_shown", "false", "bool", "Whether coffee popup was shown"),
+        ("coffee_popup_dismissed_date", "", "string", "Last date coffee popup was dismissed"),
+        ("first_use_date", datetime.now().isoformat(), "string", "First use date of the application"),
+    ]
+    
+    for key, value, value_type, description in default_prefs:
+        # Check if preference already exists
+        existing = await db.fetch_one(
+            "SELECT id FROM preferences WHERE key = ?", (key,)
+        )
+        if not existing:
+            await db.execute(
+                """INSERT INTO preferences (key, value, value_type, description) 
+                   VALUES (?, ?, ?, ?)""",
+                (key, value, value_type, description)
+            )
+    
+    await db.commit()

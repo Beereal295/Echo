@@ -1,0 +1,62 @@
+"""Database migration system"""
+from datetime import datetime
+from typing import List, Tuple
+
+
+# Migration format: (version, description, up_sql, down_sql)
+MIGRATIONS: List[Tuple[int, str, str, str]] = [
+    (
+        1,
+        "Initial schema",
+        """-- This migration is handled by schema.py create_tables()""",
+        """-- Rollback not supported for initial schema"""
+    ),
+    # Future migrations will be added here
+    # Example:
+    # (
+    #     2,
+    #     "Add user_id to entries",
+    #     "ALTER TABLE entries ADD COLUMN user_id INTEGER DEFAULT 1",
+    #     "ALTER TABLE entries DROP COLUMN user_id"
+    # ),
+]
+
+
+async def get_current_version(db) -> int:
+    """Get current schema version"""
+    try:
+        result = await db.fetch_one(
+            "SELECT MAX(version) as version FROM schema_version"
+        )
+        return result["version"] if result and result["version"] else 0
+    except:
+        # Table doesn't exist yet
+        return 0
+
+
+async def apply_migration(db, version: int, description: str, up_sql: str):
+    """Apply a single migration"""
+    if up_sql.strip() and not up_sql.strip().startswith("--"):
+        await db.execute(up_sql)
+    
+    await db.execute(
+        "INSERT INTO schema_version (version, applied_at, description) VALUES (?, ?, ?)",
+        (version, datetime.now().isoformat(), description)
+    )
+    await db.commit()
+    print(f"Applied migration {version}: {description}")
+
+
+async def run_migrations(db):
+    """Run all pending migrations"""
+    current_version = await get_current_version(db)
+    
+    for version, description, up_sql, _ in MIGRATIONS:
+        if version > current_version:
+            await apply_migration(db, version, description, up_sql)
+    
+    final_version = await get_current_version(db)
+    if final_version > current_version:
+        print(f"Database migrated from version {current_version} to {final_version}")
+    else:
+        print(f"Database is up to date at version {final_version}")
