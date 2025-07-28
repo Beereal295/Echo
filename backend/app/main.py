@@ -11,15 +11,21 @@ from app.api.errors import (
     validation_exception_handler,
     general_exception_handler
 )
+from app.services.processing_queue import get_processing_queue, cleanup_processing_queue
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     await init_db()
+    
+    # Initialize processing queue
+    processing_queue = await get_processing_queue()
+    
     yield
+    
     # Shutdown
-    pass
+    await cleanup_processing_queue()
 
 
 app = FastAPI(

@@ -20,6 +20,12 @@ class EntryProcessRequest(BaseModel):
     mode: ProcessingMode = Field(..., description="Processing mode to apply")
 
 
+class EntryCreateAndProcessRequest(BaseModel):
+    """Request schema for creating and processing an entry."""
+    raw_text: str = Field(..., min_length=1, description="Raw transcription text")
+    modes: List[ProcessingMode] = Field(..., description="Processing modes to apply")
+
+
 class EntryCreateRequest(BaseModel):
     """Request schema for creating a new entry."""
     raw_text: str = Field(..., min_length=1, description="Raw transcription text")

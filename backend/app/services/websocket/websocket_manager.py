@@ -38,6 +38,7 @@ class WebSocketManager:
         self.CHANNEL_TRANSCRIPTION = "transcription"
         self.CHANNEL_HOTKEY = "hotkey"
         self.CHANNEL_SYSTEM = "system"
+        self.CHANNEL_PROCESSING = "processing"
         
         # State tracking
         self.current_recording_session: Optional[str] = None
@@ -360,6 +361,21 @@ class WebSocketManager:
         await self.connection_manager.broadcast_to_channel(
             self.CHANNEL_SYSTEM,
             system_message
+        )
+    
+    async def broadcast_processing_status(self, job_data: Dict[str, Any]):
+        """Broadcast processing job status update"""
+        processing_message = WebSocketMessage(
+            type=MessageType.STATE_CHANGE,
+            data={
+                "event": "processing_status_update",
+                "job": job_data
+            }
+        )
+        
+        await self.connection_manager.broadcast_to_channel(
+            self.CHANNEL_PROCESSING,
+            processing_message
         )
     
     def get_connection_stats(self) -> Dict[str, Any]:

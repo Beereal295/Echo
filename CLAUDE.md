@@ -22,6 +22,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Never run or test the main application during development
 - Focus purely on implementation according to documented specifications
 - All testing and validation is handled by project lead
+- If we found an error during testing and after fixing the error if the project lead gives a go ahead, fix the errors in the main implementation as well before moving forward
 
 ## Project Overview
 

@@ -13,9 +13,10 @@ from app.api.schemas import (
 )
 from app.db import EntryRepository
 from app.models.entry import Entry
-from app.schemas.entry import ProcessingMode, EntryProcessRequest
+from app.schemas.entry import ProcessingMode, EntryProcessRequest, EntryCreateAndProcessRequest
 # Note: Using our newer schema definitions that include ProcessingMode enum
 from app.services.entry_processing import get_entry_processing_service
+from app.services.processing_queue import get_processing_queue
 
 router = APIRouter(prefix="/entries", tags=["entries"])
 
@@ -239,12 +240,12 @@ async def search_entries(search_request: EntrySearchRequest):
         raise HTTPException(status_code=500, detail=f"Failed to search entries: {str(e)}")
 
 
-@router.post("/process/{entry_id}", response_model=EntryResponse)
+@router.post("/process/{entry_id}", response_model=dict)
 async def process_entry(
     entry_id: int = Path(..., description="Entry ID"),
     process_request: EntryProcessRequest = ...
 ):
-    """Process an existing entry with specified mode (enhanced or structured)"""
+    """Queue an entry for processing with specified mode (enhanced or structured)"""
     try:
         # Get existing entry
         entry = await EntryRepository.get_by_id(entry_id)
@@ -252,47 +253,100 @@ async def process_entry(
         if not entry:
             raise HTTPException(status_code=404, detail="Entry not found")
         
-        # Get processing service
-        processing_service = await get_entry_processing_service()
-        
-        # Process the entry
-        result = await processing_service.process_entry(
-            raw_text=entry.raw_text,
+        # Add to processing queue
+        processing_queue = await get_processing_queue()
+        job_id = await processing_queue.add_job(
+            entry_id=entry_id,
             mode=process_request.mode,
-            existing_entry=entry
+            raw_text=entry.raw_text
         )
         
-        # Update entry based on processing mode
-        if process_request.mode == ProcessingMode.ENHANCED:
-            entry.enhanced_text = result["processed_text"]
-        elif process_request.mode == ProcessingMode.STRUCTURED:
-            entry.structured_summary = result["processed_text"]
-        
-        # Update processing metadata
-        entry.processing_metadata = result["processing_metadata"]
-        entry.word_count = result["word_count"]
-        entry.mode = process_request.mode.value
-        
-        # Save updates
-        updated_entry = await EntryRepository.update(entry)
-        
-        return EntryResponse(
-            id=updated_entry.id,
-            raw_text=updated_entry.raw_text,
-            enhanced_text=updated_entry.enhanced_text,
-            structured_summary=updated_entry.structured_summary,
-            mode=updated_entry.mode,
-            embeddings=updated_entry.embeddings,
-            timestamp=updated_entry.timestamp,
-            mood_tags=updated_entry.mood_tags,
-            word_count=updated_entry.word_count,
-            processing_metadata=updated_entry.processing_metadata
-        )
+        return {
+            "message": "Entry queued for processing",
+            "job_id": job_id,
+            "entry_id": entry_id,
+            "mode": process_request.mode.value,
+            "status": "pending"
+        }
         
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to process entry: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to queue entry for processing: {str(e)}")
+
+
+@router.post("/create-and-process", response_model=dict)
+async def create_and_process_entry(
+    request: EntryCreateAndProcessRequest
+):
+    """Create a new entry and queue it for processing in specified modes"""
+    try:
+        # Create raw entry first
+        entry = Entry(
+            raw_text=request.raw_text,
+            mode="raw",
+            timestamp=datetime.now(),
+            word_count=len(request.raw_text.split())
+        )
+        
+        created_entry = await EntryRepository.create(entry)
+        
+        # Queue for processing in each requested mode
+        processing_queue = await get_processing_queue()
+        job_ids = []
+        
+        for mode in request.modes:
+            if mode != ProcessingMode.RAW:  # Skip raw mode
+                job_id = await processing_queue.add_job(
+                    entry_id=created_entry.id,
+                    mode=mode,
+                    raw_text=request.raw_text
+                )
+                job_ids.append({"mode": mode.value, "job_id": job_id})
+        
+        return {
+            "message": "Entry created and queued for processing",
+            "entry_id": created_entry.id,
+            "jobs": job_ids,
+            "raw_entry": {
+                "id": created_entry.id,
+                "raw_text": created_entry.raw_text,
+                "timestamp": created_entry.timestamp,
+                "word_count": created_entry.word_count
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create and process entry: {str(e)}")
+
+
+@router.get("/processing/job/{job_id}", response_model=dict)
+async def get_processing_job_status(job_id: str = Path(..., description="Job ID")):
+    """Get the status of a processing job"""
+    try:
+        processing_queue = await get_processing_queue()
+        job = processing_queue.get_job(job_id)
+        
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+        
+        return job.to_dict()
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get job status: {str(e)}")
+
+
+@router.get("/processing/queue/status", response_model=dict)
+async def get_queue_status():
+    """Get the status of the processing queue"""
+    try:
+        processing_queue = await get_processing_queue()
+        return processing_queue.get_queue_status()
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get queue status: {str(e)}")
 
 
 @router.get("/stats/count", response_model=dict)
