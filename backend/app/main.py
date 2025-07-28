@@ -1,9 +1,16 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
 from contextlib import asynccontextmanager
 
 from app.core.config import settings
 from app.db.database import init_db
+from app.api.api import api_router
+from app.api.errors import (
+    http_exception_handler,
+    validation_exception_handler,
+    general_exception_handler
+)
 
 
 @asynccontextmanager
@@ -18,32 +25,35 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Echo Journal API",
     description="Local-first journaling application with AI integration",
-    version="0.1.0",
-    lifespan=lifespan
+    version=settings.VERSION,
+    lifespan=lifespan,
+    docs_url="/docs",
+    redoc_url="/redoc"
 )
 
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],  # React dev servers
+    allow_origins=settings.BACKEND_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add exception handlers
+app.add_exception_handler(HTTPException, http_exception_handler)
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(Exception, general_exception_handler)
+
+# Include API routes
+app.include_router(api_router)
 
 
 @app.get("/")
 async def root():
     return {
         "message": "Echo Journal API",
-        "version": "0.1.0",
-        "status": "operational"
-    }
-
-
-@app.get("/api/health")
-async def health_check():
-    return {
-        "status": "healthy",
-        "service": "echo-journal-api"
+        "version": settings.VERSION,
+        "status": "operational",
+        "docs_url": "/docs"
     }

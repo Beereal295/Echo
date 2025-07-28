@@ -155,3 +155,7 @@ This appears to be a planning/design phase project with comprehensive documentat
 - `prompt_spec_journal_ai.md` - AI prompt specifications
 
 No actual code files (Python, JavaScript, etc.) exist yet in the repository.
+
+## Development Notes
+
+- For technical implementation check context7 MCP for latest documentation before coding
