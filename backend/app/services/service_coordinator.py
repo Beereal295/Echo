@@ -8,6 +8,7 @@ from typing import Optional
 
 from .stt import get_stt_service
 from .hotkey import get_hotkey_service
+from .websocket import get_websocket_manager
 from app.db.repositories import get_preferences_repository
 
 logger = logging.getLogger(__name__)
@@ -19,6 +20,7 @@ class ServiceCoordinator:
     def __init__(self):
         self.stt_service = None
         self.hotkey_service = None
+        self.websocket_manager = None
         self.preferences_repo = None
         self.initialized = False
     
@@ -42,9 +44,17 @@ class ServiceCoordinator:
             self.hotkey_service = await get_hotkey_service()
             logger.info("Hotkey service initialized")
             
+            # Initialize WebSocket manager
+            self.websocket_manager = await get_websocket_manager()
+            logger.info("WebSocket manager initialized")
+            
             # Set up service dependencies
             self.hotkey_service.set_stt_service(self.stt_service)
             self.hotkey_service.set_preferences_repository(self.preferences_repo)
+            
+            # Set up WebSocket manager dependencies
+            self.websocket_manager.set_stt_service(self.stt_service)
+            self.websocket_manager.set_hotkey_service(self.hotkey_service)
             
             # Set up callbacks
             self.hotkey_service.set_callbacks(
@@ -76,6 +86,9 @@ class ServiceCoordinator:
     async def cleanup(self):
         """Clean up all services"""
         try:
+            if self.websocket_manager:
+                await self.websocket_manager.cleanup()
+            
             if self.hotkey_service:
                 self.hotkey_service.cleanup()
             
@@ -94,9 +107,11 @@ class ServiceCoordinator:
             "initialized": self.initialized,
             "stt_service": self.stt_service is not None,
             "hotkey_service": self.hotkey_service is not None,
+            "websocket_manager": self.websocket_manager is not None,
             "preferences_repo": self.preferences_repo is not None,
             "stt_status": self.stt_service.get_state_info() if self.stt_service else None,
-            "hotkey_status": self.hotkey_service.get_status() if self.hotkey_service else None
+            "hotkey_status": self.hotkey_service.get_status() if self.hotkey_service else None,
+            "websocket_status": self.websocket_manager.get_connection_stats() if self.websocket_manager else None
         }
 
 

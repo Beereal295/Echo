@@ -12,7 +12,10 @@ from app.api.schemas import (
     ErrorResponse
 )
 from app.db import EntryRepository
-from app.models import Entry
+from app.models.entry import Entry
+from app.schemas.entry import ProcessingMode, EntryProcessRequest
+# Note: Using our newer schema definitions that include ProcessingMode enum
+from app.services.entry_processing import get_entry_processing_service
 
 router = APIRouter(prefix="/entries", tags=["entries"])
 
@@ -21,14 +24,17 @@ router = APIRouter(prefix="/entries", tags=["entries"])
 async def create_entry(entry_data: EntryCreate):
     """Create a new journal entry"""
     try:
-        # Create entry model
+        # Create entry model with basic data
+        # Handle mode as string (from API schema) 
+        mode_str = entry_data.mode if isinstance(entry_data.mode, str) else entry_data.mode.value
         entry = Entry(
             raw_text=entry_data.raw_text,
-            mode=entry_data.mode,
-            timestamp=datetime.now()
+            mode=mode_str,
+            timestamp=datetime.now(),
+            word_count=len(entry_data.raw_text.split())
         )
         
-        # Save to database
+        # Save to database first
         created_entry = await EntryRepository.create(entry)
         
         # Convert to response format
@@ -153,7 +159,7 @@ async def update_entry(
             entry.structured_summary = entry_data.structured_summary
             
         if entry_data.mode is not None:
-            entry.mode = entry_data.mode
+            entry.mode = entry_data.mode if isinstance(entry_data.mode, str) else entry_data.mode.value
             
         if entry_data.mood_tags is not None:
             entry.mood_tags = entry_data.mood_tags
@@ -231,6 +237,62 @@ async def search_entries(search_request: EntrySearchRequest):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to search entries: {str(e)}")
+
+
+@router.post("/process/{entry_id}", response_model=EntryResponse)
+async def process_entry(
+    entry_id: int = Path(..., description="Entry ID"),
+    process_request: EntryProcessRequest = ...
+):
+    """Process an existing entry with specified mode (enhanced or structured)"""
+    try:
+        # Get existing entry
+        entry = await EntryRepository.get_by_id(entry_id)
+        
+        if not entry:
+            raise HTTPException(status_code=404, detail="Entry not found")
+        
+        # Get processing service
+        processing_service = await get_entry_processing_service()
+        
+        # Process the entry
+        result = await processing_service.process_entry(
+            raw_text=entry.raw_text,
+            mode=process_request.mode,
+            existing_entry=entry
+        )
+        
+        # Update entry based on processing mode
+        if process_request.mode == ProcessingMode.ENHANCED:
+            entry.enhanced_text = result["processed_text"]
+        elif process_request.mode == ProcessingMode.STRUCTURED:
+            entry.structured_summary = result["processed_text"]
+        
+        # Update processing metadata
+        entry.processing_metadata = result["processing_metadata"]
+        entry.word_count = result["word_count"]
+        entry.mode = process_request.mode.value
+        
+        # Save updates
+        updated_entry = await EntryRepository.update(entry)
+        
+        return EntryResponse(
+            id=updated_entry.id,
+            raw_text=updated_entry.raw_text,
+            enhanced_text=updated_entry.enhanced_text,
+            structured_summary=updated_entry.structured_summary,
+            mode=updated_entry.mode,
+            embeddings=updated_entry.embeddings,
+            timestamp=updated_entry.timestamp,
+            mood_tags=updated_entry.mood_tags,
+            word_count=updated_entry.word_count,
+            processing_metadata=updated_entry.processing_metadata
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to process entry: {str(e)}")
 
 
 @router.get("/stats/count", response_model=dict)

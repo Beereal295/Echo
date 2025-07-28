@@ -43,6 +43,12 @@ class Entry:
             "processing_metadata": json.dumps(self.processing_metadata) if self.processing_metadata else None
         }
     
+    def update_processing_metadata(self, new_metadata: dict):
+        """Update processing metadata while preserving existing data"""
+        if self.processing_metadata is None:
+            self.processing_metadata = {}
+        self.processing_metadata.update(new_metadata)
+    
     @classmethod
     def from_dict(cls, data: dict):
         """Create Entry from database row"""

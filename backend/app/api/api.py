@@ -5,7 +5,9 @@ from app.api.routes import (
     preferences_router,
     health_router,
     stt_router,
-    hotkey_router
+    hotkey_router,
+    websocket_router,
+    ollama_router
 )
 from app.core.config import settings
 
@@ -18,3 +20,5 @@ api_router.include_router(preferences_router)
 api_router.include_router(health_router)
 api_router.include_router(stt_router)
 api_router.include_router(hotkey_router)
+api_router.include_router(websocket_router)
+api_router.include_router(ollama_router)

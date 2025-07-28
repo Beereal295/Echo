@@ -8,7 +8,10 @@
       "Bash(git init:*)",
       "Bash(git checkout:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(venvScriptsactivate.bat)",
+      "Bash(pip install:*)",
+      "Bash(venv/Scripts/activate:*)"
     ],
     "deny": []
   }

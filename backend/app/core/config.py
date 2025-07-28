@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     
     # Ollama settings
     OLLAMA_BASE_URL: str = "http://localhost:11434"
-    OLLAMA_DEFAULT_MODEL: str = "llama2"
+    OLLAMA_DEFAULT_MODEL: str = "mistral:latest"
     OLLAMA_TIMEOUT: int = 30
     
     # STT settings

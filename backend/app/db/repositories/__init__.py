@@ -9,10 +9,8 @@ _preferences_repo = None
 
 async def get_preferences_repository() -> PreferencesRepository:
     """Get global preferences repository instance"""
-    global _preferences_repo
-    if _preferences_repo is None:
-        _preferences_repo = PreferencesRepository(db)
-    return _preferences_repo
+    # PreferencesRepository is a static class, just return the class
+    return PreferencesRepository
 
 __all__ = [
     "EntryRepository",
