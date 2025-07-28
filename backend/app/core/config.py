@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     # STT settings
     WHISPER_MODEL: str = "base"
     WHISPER_DEVICE: str = "cpu"
-    WHISPER_LANGUAGE: Optional[str] = None
+    WHISPER_LANGUAGE: Optional[str] = "english"
     
     # Embedding settings
     EMBEDDING_MODEL: str = "BAAI/bge-small-en-v1.5"

@@ -13,10 +13,11 @@ async def test_api_endpoints():
     
     # Initialize database first
     await init_db()
-    print("✓ Database initialized")
+    print("[OK] Database initialized")
     
     # Test with httpx client
-    async with httpx.AsyncClient(app=app, base_url="http://test") as client:
+    from httpx import ASGITransport
+    async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         
         # Test root endpoint
         print("\n1. Testing root endpoint...")
@@ -24,17 +25,17 @@ async def test_api_endpoints():
         assert response.status_code == 200
         data = response.json()
         assert data["message"] == "Echo Journal API"
-        print("✓ Root endpoint working")
+        print("[OK] Root endpoint working")
         
         # Test health endpoint
         print("\n2. Testing health endpoints...")
         response = await client.get("/api/v1/health/")
         assert response.status_code == 200
-        print("✓ Health endpoint working")
+        print("[OK] Health endpoint working")
         
         response = await client.get("/api/v1/health/database")
         assert response.status_code == 200
-        print("✓ Database health endpoint working")
+        print("[OK] Database health endpoint working")
         
         # Test preferences endpoints
         print("\n3. Testing preferences endpoints...")
@@ -42,28 +43,39 @@ async def test_api_endpoints():
         assert response.status_code == 200
         prefs = response.json()
         assert "preferences" in prefs
-        print(f"✓ Found {len(prefs['preferences'])} default preferences")
+        print(f"[OK] Found {len(prefs['preferences'])} default preferences")
         
         # Test getting specific preference
         response = await client.get("/api/v1/preferences/hotkey")
         assert response.status_code == 200
         pref = response.json()
         assert pref["key"] == "hotkey"
-        assert pref["typed_value"] == "F8"
-        print("✓ Individual preference retrieval working")
+        original_hotkey = pref["typed_value"]  # Store original value
+        print(f"[OK] Individual preference retrieval working (current value: {original_hotkey})")
         
         # Test updating preference
+        test_hotkey = "F10"  # Use a different test value
         update_data = {
             "key": "hotkey",
-            "value": "F9",
+            "value": test_hotkey,
             "value_type": "string",
-            "description": "Updated hotkey"
+            "description": "Updated hotkey for testing"
         }
         response = await client.put("/api/v1/preferences/hotkey", json=update_data)
         assert response.status_code == 200
         updated_pref = response.json()
-        assert updated_pref["typed_value"] == "F9"
-        print("✓ Preference update working")
+        assert updated_pref["typed_value"] == test_hotkey
+        print(f"[OK] Preference update working (updated to: {test_hotkey})")
+        
+        # Restore original value
+        restore_data = {
+            "key": "hotkey",
+            "value": original_hotkey,
+            "value_type": "string",
+            "description": "Global hotkey for voice recording"
+        }
+        await client.put("/api/v1/preferences/hotkey", json=restore_data)
+        print(f"[OK] Preference restored to original value: {original_hotkey}")
         
         # Test entries endpoints
         print("\n4. Testing entries endpoints...")
@@ -78,14 +90,14 @@ async def test_api_endpoints():
         created_entry = response.json()
         entry_id = created_entry["id"]
         assert created_entry["raw_text"] == entry_data["raw_text"]
-        print(f"✓ Entry created with ID: {entry_id}")
+        print(f"[OK] Entry created with ID: {entry_id}")
         
         # Test entry retrieval
         response = await client.get(f"/api/v1/entries/{entry_id}")
         assert response.status_code == 200
         retrieved_entry = response.json()
         assert retrieved_entry["id"] == entry_id
-        print("✓ Entry retrieval working")
+        print("[OK] Entry retrieval working")
         
         # Test entry listing
         response = await client.get("/api/v1/entries/")
@@ -93,7 +105,7 @@ async def test_api_endpoints():
         entries_list = response.json()
         assert "entries" in entries_list
         assert entries_list["total"] >= 1
-        print(f"✓ Entry listing working (found {entries_list['total']} entries)")
+        print(f"[OK] Entry listing working (found {entries_list['total']} entries)")
         
         # Test entry update
         update_data = {
@@ -104,7 +116,7 @@ async def test_api_endpoints():
         assert response.status_code == 200
         updated_entry = response.json()
         assert updated_entry["enhanced_text"] == update_data["enhanced_text"]
-        print("✓ Entry update working")
+        print("[OK] Entry update working")
         
         # Test entry search
         search_data = {
@@ -115,16 +127,16 @@ async def test_api_endpoints():
         assert response.status_code == 200
         search_results = response.json()
         assert len(search_results) >= 1
-        print(f"✓ Entry search working (found {len(search_results)} results)")
+        print(f"[OK] Entry search working (found {len(search_results)} results)")
         
         # Test entry count
         response = await client.get("/api/v1/entries/stats/count")
         assert response.status_code == 200
         count_data = response.json()
         assert count_data["total_entries"] >= 1
-        print(f"✓ Entry count working (total: {count_data['total_entries']})")
+        print(f"[OK] Entry count working (total: {count_data['total_entries']})")
         
-        print("\n✅ All API endpoint tests passed!")
+        print("\n[SUCCESS] All API endpoint tests passed!")
 
 
 if __name__ == "__main__":

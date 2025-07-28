@@ -12,12 +12,12 @@ async def test_database():
     
     # Initialize database
     await init_db()
-    print("✓ Database initialized successfully")
+    print("[OK] Database initialized successfully")
     
     # Test preferences
     print("\nTesting preferences...")
     hotkey = await PreferencesRepository.get_value("hotkey", "F8")
-    print(f"✓ Default hotkey: {hotkey}")
+    print(f"[OK] Default hotkey: {hotkey}")
     
     # Test entry creation
     print("\nTesting entry creation...")
@@ -26,17 +26,17 @@ async def test_database():
         mode="raw"
     )
     created_entry = await EntryRepository.create(test_entry)
-    print(f"✓ Created entry with ID: {created_entry.id}")
+    print(f"[OK] Created entry with ID: {created_entry.id}")
     
     # Test entry retrieval
     retrieved_entry = await EntryRepository.get_by_id(created_entry.id)
-    print(f"✓ Retrieved entry: {retrieved_entry.raw_text[:30]}...")
+    print(f"[OK] Retrieved entry: {retrieved_entry.raw_text[:30]}...")
     
     # Test entry count
     count = await EntryRepository.count()
-    print(f"✓ Total entries in database: {count}")
+    print(f"[OK] Total entries in database: {count}")
     
-    print("\n✅ All database tests passed!")
+    print("\n[SUCCESS] All database tests passed!")
 
 
 if __name__ == "__main__":
