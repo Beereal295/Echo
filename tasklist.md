@@ -158,18 +158,18 @@ This document serves as the project management tool for Echo development. All ta
 **Status:** ✅ **Ready for Testing**
 **Note:** Basic implementation complete. WebSocket client and API client setup to be revisited before desktop app creation (Phase 7).
 
-### Task 4.2: Layout and Navigation ⏳
+### Task 4.2: Layout and Navigation ✅
 **Description:** Implement persistent sidebar and main layout structure
 **Sub-tasks:**
-- [ ] 4.2.1: Create persistent left sidebar component
-- [ ] 4.2.2: Implement main layout with content area
-- [ ] 4.2.3: Add navigation menu with proper routing
-- [ ] 4.2.4: Create floating plus button for entry creation
-- [ ] 4.2.5: Implement responsive design considerations
+- [x] 4.2.1: Create persistent left sidebar component
+- [x] 4.2.2: Implement main layout with content area
+- [x] 4.2.3: Add navigation menu with proper routing
+- [x] 4.2.4: Create floating plus button for entry creation
+- [x] 4.2.5: Implement responsive design considerations
 
 **Dependencies:** Task 4.1
 **Testing Criteria:** Layout renders correctly with navigation working
-**Status:** ⏳
+**Status:** ✅ **Ready for Testing**
 
 ### Task 4.3: New Entry Page ⏳
 **Description:** Implement entry creation interface with STT integration
