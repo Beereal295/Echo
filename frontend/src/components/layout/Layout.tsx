@@ -99,13 +99,17 @@ function Layout({ children }: LayoutProps) {
     <div className="flex h-screen bg-background overflow-hidden">
       {/* Left Sidebar - Responsive with Glass Effect */}
       <motion.aside 
-        initial={{ x: -20, opacity: 0 }}
+        initial={{ x: -256, opacity: 0 }}
         animate={{ 
           x: 0, 
           opacity: 1,
           width: sidebarCollapsed ? 80 : 256
         }}
-        transition={{ duration: 0.5 }}
+        transition={{ 
+          duration: 0.6, 
+          ease: "easeOut",
+          delay: 0.2
+        }}
         className={`${
           sidebarCollapsed ? 'w-20' : 'w-64'
         } border-r border-border/50 bg-card/90 backdrop-blur-xl flex flex-col relative transition-all duration-300`}
@@ -152,12 +156,7 @@ function Layout({ children }: LayoutProps) {
               const isActive = location.pathname === item.path
               
               return (
-                <motion.div
-                  key={item.path}
-                  initial={{ x: -20, opacity: 0 }}
-                  animate={{ x: 0, opacity: 1 }}
-                  transition={{ duration: 0.3, delay: index * 0.1 }}
-                >
+                <div key={item.path}>
                   <Link to={item.path}>
                     <Button 
                       className={`w-full ${sidebarCollapsed ? 'justify-center px-2' : 'justify-start'} relative overflow-hidden group transition-all duration-300 ${
@@ -205,19 +204,14 @@ function Layout({ children }: LayoutProps) {
                       </div>
                     </Button>
                   </Link>
-                </motion.div>
+                </div>
               )
             })}
           </div>
         </nav>
 
         {/* Bottom Section - Streak */}
-        <motion.div 
-          initial={{ y: 20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.8 }}
-          className="p-4 border-t border-border/50 relative"
-        >
+        <div className="p-4 border-t border-border/50 relative">
           {sidebarCollapsed ? (
             <div className="flex justify-center">
               <Badge className="bg-primary/10 text-primary border border-primary/20 font-medium hover:bg-primary/20 hover:text-primary transition-colors duration-300 group">
@@ -233,7 +227,7 @@ function Layout({ children }: LayoutProps) {
               </Badge>
             </div>
           )}
-        </motion.div>
+        </div>
       </motion.aside>
 
       {/* Main Content Area */}

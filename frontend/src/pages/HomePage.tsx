@@ -101,17 +101,21 @@ function HomePage() {
           Express yourself in three different ways with the power of AI
         </motion.p>
         
-        {/* Floating elements */}
+        {/* Floating elements - positioned relative to content area */}
         <motion.div 
           className="absolute top-20 left-20 text-primary/20"
+          initial={{ opacity: 0, scale: 0 }}
           animate={{ 
+            opacity: 1,
+            scale: 1,
             y: [-10, 10, -10],
             rotate: [0, 5, 0]
           }}
           transition={{ 
-            duration: 4,
-            repeat: Infinity,
-            ease: "easeInOut"
+            opacity: { duration: 0.5, delay: 1 },
+            scale: { duration: 0.5, delay: 1 },
+            y: { duration: 4, repeat: Infinity, ease: "easeInOut", delay: 1.5 },
+            rotate: { duration: 4, repeat: Infinity, ease: "easeInOut", delay: 1.5 }
           }}
         >
           <Sparkles className="w-8 h-8" />
@@ -119,15 +123,18 @@ function HomePage() {
         
         <motion.div 
           className="absolute top-32 right-32 text-secondary/20"
+          initial={{ opacity: 0, scale: 0 }}
           animate={{ 
+            opacity: 1,
+            scale: 1,
             y: [10, -10, 10],
             rotate: [0, -5, 0]
           }}
           transition={{ 
-            duration: 5,
-            repeat: Infinity,
-            ease: "easeInOut",
-            delay: 1
+            opacity: { duration: 0.5, delay: 1.2 },
+            scale: { duration: 0.5, delay: 1.2 },
+            y: { duration: 5, repeat: Infinity, ease: "easeInOut", delay: 1.7 },
+            rotate: { duration: 5, repeat: Infinity, ease: "easeInOut", delay: 1.7 }
           }}
         >
           <Zap className="w-6 h-6" />
