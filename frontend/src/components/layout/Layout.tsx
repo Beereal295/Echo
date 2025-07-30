@@ -111,7 +111,17 @@ function Layout({ children }: LayoutProps) {
         } border-r border-border/50 bg-card/90 backdrop-blur-xl flex flex-col relative transition-all duration-300`}
       >
         {/* Ambient gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-accent/5 pointer-events-none" />
+        <motion.div 
+          className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-accent/5 pointer-events-none"
+          animate={{ 
+            opacity: [0.3, 0.6, 0.3]
+          }}
+          transition={{ 
+            duration: 4, 
+            repeat: Infinity, 
+            ease: "easeInOut" 
+          }}
+        />
         
         {/* Logo/Title */}
         <div className={`${sidebarCollapsed ? 'p-4' : 'p-6'} border-b border-border/50 relative transition-all duration-300`}>
@@ -243,8 +253,14 @@ function Layout({ children }: LayoutProps) {
       {/* Floating Plus Button with Enhanced Design */}
       <motion.div
         initial={{ scale: 0, rotate: -180 }}
-        animate={{ scale: 1, rotate: 0 }}
-        transition={{ type: "spring", stiffness: 260, damping: 20, delay: 1 }}
+        animate={{ 
+          scale: [1, 1.1, 1], 
+          rotate: 0 
+        }}
+        transition={{ 
+          scale: { duration: 2.5, repeat: Infinity, ease: "easeInOut", delay: 2 },
+          rotate: { type: "spring", stiffness: 260, damping: 20, delay: 1 }
+        }}
         className="fixed bottom-4 right-4 md:bottom-8 md:right-8 z-50"
       >
         <Link to="/new" className="focus:outline-none outline-none">
