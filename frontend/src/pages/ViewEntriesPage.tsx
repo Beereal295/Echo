@@ -238,11 +238,22 @@ Word Count: ${entry.word_count}
   const formatTimestamp = (timestamp: string) => {
     const date = new Date(timestamp)
     const dayOfWeek = date.toLocaleDateString('en-US', { weekday: 'long' })
-    const formattedDate = date.toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric',
-      year: 'numeric'
-    })
+    const day = date.getDate()
+    const month = date.toLocaleDateString('en-US', { month: 'long' })
+    const year = date.getFullYear()
+    
+    // Add ordinal suffix (1st, 2nd, 3rd, 4th, etc.)
+    const getOrdinalSuffix = (day: number) => {
+      if (day > 3 && day < 21) return 'th'
+      switch (day % 10) {
+        case 1: return 'st'
+        case 2: return 'nd'
+        case 3: return 'rd'
+        default: return 'th'
+      }
+    }
+    
+    const formattedDate = `${day}${getOrdinalSuffix(day)} ${month} ${year}`
     const time = date.toLocaleTimeString('en-US', { 
       hour: 'numeric', 
       minute: '2-digit',
@@ -810,12 +821,13 @@ Word Count: ${entry.word_count}
                           }}
                         >
                           <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="flex flex-col">
-                                <span className="font-semibold text-white text-sm">{dayOfWeek}</span>
-                                <span className="text-muted-foreground text-xs">{formattedDate}</span>
+                            <div>
+                              <div className="font-semibold text-white text-sm">
+                                <span className="text-primary">{dayOfWeek}</span>
+                                <span className="text-white">, </span>
+                                <span className="text-muted-foreground">{formattedDate}</span>
                               </div>
-                              <div className="flex items-center gap-1 text-muted-foreground">
+                              <div className="flex items-center gap-2 mt-1 text-muted-foreground">
                                 <Clock className="h-3 w-3" />
                                 <span className="text-xs">{time}</span>
                               </div>
@@ -1015,7 +1027,9 @@ Word Count: ${entry.word_count}
                   <div className="flex items-center justify-between">
                     <div>
                       <CardTitle className="text-white">
-                        {formatTimestamp(selectedEntry.timestamp).dayOfWeek}, {formatTimestamp(selectedEntry.timestamp).formattedDate}
+                        <span className="text-primary">{formatTimestamp(selectedEntry.timestamp).dayOfWeek}</span>
+                        <span className="text-white">, </span>
+                        <span className="text-muted-foreground">{formatTimestamp(selectedEntry.timestamp).formattedDate}</span>
                       </CardTitle>
                       <CardDescription className="flex items-center gap-2 mt-1">
                         <Clock className="h-4 w-4" />
@@ -1203,7 +1217,9 @@ Word Count: ${entry.word_count}
                 <div className="flex items-center justify-between p-6 border-b border-border">
                   <div>
                     <h2 className="text-xl font-bold text-white">
-                      {formatTimestamp(selectedEntry.timestamp).dayOfWeek}, {formatTimestamp(selectedEntry.timestamp).formattedDate}
+                      <span className="text-primary">{formatTimestamp(selectedEntry.timestamp).dayOfWeek}</span>
+                      <span className="text-white">, </span>
+                      <span className="text-muted-foreground">{formatTimestamp(selectedEntry.timestamp).formattedDate}</span>
                     </h2>
                     <p className="text-muted-foreground flex items-center gap-2 mt-1">
                       <Clock className="h-4 w-4" />
