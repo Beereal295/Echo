@@ -126,6 +126,13 @@ class ApiClient {
     return this.request<Entry>(`/entries/${entryId}`)
   }
 
+  async updateEntry(entryId: number, entryData: Partial<EntryCreate>): Promise<ApiResponse<Entry>> {
+    return this.request<Entry>(`/entries/${entryId}`, {
+      method: 'PUT',
+      body: JSON.stringify(entryData)
+    })
+  }
+
   async deleteEntry(entryId: number): Promise<ApiResponse<any>> {
     return this.request(`/entries/${entryId}`, {
       method: 'DELETE'

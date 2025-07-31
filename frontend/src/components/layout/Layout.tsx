@@ -266,7 +266,7 @@ function Layout({ children }: LayoutProps) {
         </nav>
 
         {/* Toggle Button */}
-        <div className="p-4 border-t border-border/50">
+        <div className="px-4 py-3 border-t border-border/50">
           {sidebarCollapsed ? (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -308,11 +308,11 @@ function Layout({ children }: LayoutProps) {
         </div>
 
         {/* Bottom Section - Streak */}
-        <div className="p-4 border-t border-border/50 relative">
+        <div className="px-4 py-3 border-t border-border/50 min-h-[60px] flex items-center">
           {sidebarCollapsed ? (
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="flex justify-center">
+                <div className="w-full flex justify-center">
                   <Badge className="bg-primary/10 text-primary border border-primary/20 font-medium hover:bg-primary/20 hover:text-primary transition-colors duration-300 group cursor-pointer">
                     <Flame className="h-3 w-3 text-primary group-hover:text-primary transition-colors duration-300" />
                   </Badge>
@@ -323,7 +323,7 @@ function Layout({ children }: LayoutProps) {
               </TooltipContent>
             </Tooltip>
           ) : (
-            <div className="flex items-center justify-between">
+            <div className="w-full flex items-center justify-between">
               <AnimatePresence mode="wait">
                 <motion.span 
                   key="streak-text"
@@ -338,7 +338,18 @@ function Layout({ children }: LayoutProps) {
               </AnimatePresence>
               <Badge className="bg-primary/10 text-primary border border-primary/20 font-medium hover:bg-primary/20 hover:text-primary transition-colors duration-300 group">
                 <Flame className="mr-1 h-3 w-3 text-primary group-hover:text-primary transition-colors duration-300" />
-                0 days
+                <AnimatePresence mode="wait">
+                  <motion.span 
+                    key="streak-count"
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -10 }}
+                    transition={{ duration: 0.2, ease: "easeOut" }}
+                    className="whitespace-nowrap"
+                  >
+                    0 days
+                  </motion.span>
+                </AnimatePresence>
               </Badge>
             </div>
           )}
@@ -359,9 +370,9 @@ function Layout({ children }: LayoutProps) {
         </motion.div>
       </main>
 
-      {/* Floating Plus Button with Enhanced Design - Only show on homepage and entries page */}
+      {/* Floating Plus Button with Enhanced Design - Only show on homepage */}
       <AnimatePresence>
-        {(location.pathname === '/' || location.pathname === '/entries') && (
+        {location.pathname === '/' && (
           <motion.div
             initial={{ scale: 0, rotate: -180 }}
             animate={{ 
