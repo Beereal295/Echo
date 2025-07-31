@@ -206,6 +206,7 @@ class OllamaService:
         # Build options
         options = {
             "temperature": temperature,
+            "num_ctx": 16384,  # Increase context length from default 2048 to 16384
             **kwargs
         }
         if max_tokens:
@@ -271,6 +272,7 @@ class OllamaService:
         # Build options
         options = {
             "temperature": temperature,
+            "num_ctx": 16384,  # Increase context length from default 2048 to 16384
             **kwargs
         }
         if max_tokens:

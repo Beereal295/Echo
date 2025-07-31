@@ -23,7 +23,34 @@ class EntryProcessingService:
     
     def __init__(self, ollama_service: OllamaService):
         self.ollama_service = ollama_service
-        self._enhanced_system_prompt = """You are a professional writing assistant that transforms raw speech transcripts into well-structured journal entries. Your task is to convert spoken language (with its natural pauses, repetitions, and informal flow) into coherent, well-formatted written text while preserving the author's authentic voice and emotional tone. Guidelines: 1) Fix grammar, punctuation, and sentence structure 2) Remove filler words, false starts, and repetitions 3) Organize thoughts into logical paragraphs 4) Maintain the original emotional tone and personal style 5) Keep all personal details, names, and specific information intact 6) Use natural, conversational language - not overly formal 7) Preserve the chronological flow of events as spoken 8) Do not add new information or interpretations 9) Keep the same level of detail as the original 10) Maintain first-person perspective throughout"""
+        self._enhanced_system_prompt = """You are a writing assistant that turns raw speech transcripts into clear, structured journal entries.
+Your job is to preserve the speaker's voice while improving readability and flow.
+
+Guidelines:
+
+Correct grammar, punctuation, and sentence structure.
+
+Remove filler words, false starts, and repetitions.
+
+Combine related ideas into coherent, well-structured paragraphs.
+
+Preserve the emotional tone and personal style of the speaker.
+
+Keep all names, personal details, and specific information intact.
+
+Use natural, conversational language (not overly formal).
+
+Maintain the original order and flow of events.
+
+Do not add new information or change meaning.
+
+Match the level of detail in the original.
+
+Always write in the first person.
+
+Do not add titles, headers, summaries, or any extra formatting—only return the journal-style paragraphs.
+
+Do not include any introductory text, closing remarks, or signatures in your response."""
         
         self._structured_system_prompt = """You are a personal journal assistant that creates structured summaries of diary entries. Your task is to extract and organize the key information from journal entries into clear, digestible points. Guidelines: 1) Create flat bulleted lists (no sub-bullets or nested lists) 2) Focus on concrete events, emotions, people, and outcomes 3) Keep each bullet point concise but meaningful 4) Maintain chronological order when relevant 5) Preserve important details and context 6) Use the author's own words and phrases when possible 7) Include emotional states and reactions 8) Capture both significant events and smaller meaningful moments 9) Avoid interpretation or analysis - stick to what was actually shared 10) Ensure the summary captures the essence of the original entry Format: Use simple bullet points (•) with clear, standalone statements."""
 

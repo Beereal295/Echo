@@ -78,7 +78,7 @@ class StateManager:
     
     def can_start_recording(self) -> bool:
         """Check if recording can be started"""
-        return self.current_state == RecordingState.IDLE
+        return self.current_state in {RecordingState.IDLE, RecordingState.SUCCESS, RecordingState.ERROR}
     
     def can_stop_recording(self) -> bool:
         """Check if recording can be stopped"""

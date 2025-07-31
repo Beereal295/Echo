@@ -30,6 +30,7 @@ class STTService:
         # Callbacks
         self.transcription_callback: Optional[Callable[[Dict[str, Any]], None]] = None
         self.error_callback: Optional[Callable[[str], None]] = None
+        self.state_callback: Optional[Callable[[RecordingState], None]] = None
         
         # Setup state callbacks
         self._setup_state_callbacks()
@@ -60,6 +61,10 @@ class STTService:
     def _on_state_change(self, new_state: RecordingState):
         """Handle state manager changes"""
         logger.info(f"STT Service state: {new_state.value}")
+        
+        # Notify external callback if set
+        if self.state_callback:
+            self.state_callback(new_state)
     
     async def initialize(self) -> bool:
         """Initialize STT service"""
@@ -84,6 +89,18 @@ class STTService:
         """Set callback for errors"""
         self.error_callback = callback
     
+    def set_callbacks(self, 
+                     transcription_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
+                     error_callback: Optional[Callable[[str], None]] = None,
+                     state_callback: Optional[Callable[[RecordingState], None]] = None):
+        """Set multiple callbacks at once"""
+        if transcription_callback:
+            self.transcription_callback = transcription_callback
+        if error_callback:
+            self.error_callback = error_callback
+        if state_callback:
+            self.state_callback = state_callback
+    
     def start_recording(self) -> bool:
         """Start audio recording"""
         if not self.state_manager.can_start_recording():
@@ -91,6 +108,11 @@ class STTService:
             return False
         
         try:
+            # Reset state to IDLE if coming from SUCCESS or ERROR
+            current_state = self.state_manager.get_state()
+            if current_state in {RecordingState.SUCCESS, RecordingState.ERROR}:
+                self.state_manager.set_state(RecordingState.IDLE)
+            
             # Start new session
             self.current_session = {
                 "start_time": None,  # Could add timestamp
@@ -175,7 +197,10 @@ class STTService:
             
             # Call transcription callback
             if self.transcription_callback:
+                logger.info(f"Calling transcription callback with result: {result.get('text', 'NO TEXT') if result else 'NO RESULT'}")
                 self.transcription_callback(result)
+            else:
+                logger.warning("No transcription callback set!")
             
             logger.info("Transcription completed successfully")
             

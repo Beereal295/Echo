@@ -12,6 +12,7 @@ from app.api.errors import (
     general_exception_handler
 )
 from app.services.processing_queue import get_processing_queue, cleanup_processing_queue
+from app.services.service_coordinator import get_service_coordinator
 
 
 @asynccontextmanager
@@ -21,6 +22,10 @@ async def lifespan(app: FastAPI):
     
     # Initialize processing queue
     processing_queue = await get_processing_queue()
+    
+    # Initialize services (STT, WebSocket, Hotkey)
+    service_coordinator = await get_service_coordinator()
+    await service_coordinator.initialize()
     
     yield
     
@@ -44,6 +49,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"]
 )
 
 # Add exception handlers

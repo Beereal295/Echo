@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { 
@@ -244,30 +244,36 @@ function Layout({ children }: LayoutProps) {
         </motion.div>
       </main>
 
-      {/* Floating Plus Button with Enhanced Design */}
-      <motion.div
-        initial={{ scale: 0, rotate: -180 }}
-        animate={{ 
-          scale: [1, 1.1, 1], 
-          rotate: 0 
-        }}
-        transition={{ 
-          scale: { duration: 2.5, repeat: Infinity, ease: "easeInOut", delay: 2 },
-          rotate: { type: "spring", stiffness: 260, damping: 20, delay: 1 }
-        }}
-        className="fixed bottom-4 right-4 md:bottom-8 md:right-8 z-50"
-      >
-        <Link to="/new" className="focus:outline-none outline-none">
+      {/* Floating Plus Button with Enhanced Design - Only show on homepage and entries page */}
+      <AnimatePresence>
+        {(location.pathname === '/' || location.pathname === '/entries') && (
           <motion.div
-            whileHover={{ rotate: 90, scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            transition={{ type: "spring", stiffness: 400, damping: 17 }}
-            className="flex items-center justify-center cursor-pointer focus:outline-none outline-none"
+            initial={{ scale: 0, rotate: -180 }}
+            animate={{ 
+              scale: [1, 1.1, 1], 
+              rotate: 0 
+            }}
+            exit={{ scale: 0, rotate: -180, opacity: 0 }}
+            transition={{ 
+              scale: { duration: 2.5, repeat: Infinity, ease: "easeInOut", delay: 2 },
+              rotate: { type: "spring", stiffness: 260, damping: 20, delay: 1 },
+              exit: { duration: 0.3 }
+            }}
+            className="fixed bottom-4 right-4 md:bottom-8 md:right-8 z-50"
           >
-            <Plus className="h-16 w-16 stroke-2" style={{color: 'white'}} />
+            <Link to="/new" className="focus:outline-none outline-none">
+              <motion.div
+                whileHover={{ rotate: 90, scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+                transition={{ type: "spring", stiffness: 400, damping: 17 }}
+                className="flex items-center justify-center cursor-pointer focus:outline-none outline-none"
+              >
+                <Plus className="h-16 w-16 stroke-2" style={{color: 'white'}} />
+              </motion.div>
+            </Link>
           </motion.div>
-        </Link>
-      </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

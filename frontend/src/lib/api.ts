@@ -1,6 +1,6 @@
 // API client for Echo Journal backend
 
-const API_BASE_URL = 'http://localhost:8000/api'
+const API_BASE_URL = 'http://localhost:8000/api/v1'
 
 interface ApiResponse<T> {
   success: boolean
@@ -33,6 +33,19 @@ interface EntryListResponse {
   page_size: number
   has_next: boolean
   has_prev: boolean
+}
+
+interface Preference {
+  id: number
+  key: string
+  value: string
+  value_type: string
+  description?: string
+  typed_value: any
+}
+
+interface PreferencesListResponse {
+  preferences: Preference[]
 }
 
 class ApiClient {
@@ -200,8 +213,8 @@ class ApiClient {
   }
 
   // Preferences endpoints
-  async getPreferences(): Promise<ApiResponse<any>> {
-    return this.request('/preferences/')
+  async getPreferences(): Promise<ApiResponse<PreferencesListResponse>> {
+    return this.request<PreferencesListResponse>('/preferences/')
   }
 
   async updatePreference(key: string, value: any): Promise<ApiResponse<any>> {
@@ -219,4 +232,4 @@ class ApiClient {
 
 // Export singleton instance
 export const api = new ApiClient()
-export type { Entry, EntryCreate, EntryListResponse, ApiResponse }
+export type { Entry, EntryCreate, EntryListResponse, ApiResponse, Preference, PreferencesListResponse }

@@ -63,6 +63,13 @@ class ServiceCoordinator:
                 on_error=self._on_recording_error
             )
             
+            # Set up STT service callbacks to WebSocket manager
+            self.stt_service.set_callbacks(
+                state_callback=self.websocket_manager.on_stt_state_change,
+                transcription_callback=self.websocket_manager.on_transcription_result,
+                error_callback=self.websocket_manager.on_stt_error
+            )
+            
             self.initialized = True
             logger.info("All services initialized successfully")
             return True

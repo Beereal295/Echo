@@ -212,7 +212,7 @@ class ProcessingQueue:
             # Update processing metadata and word count
             entry.processing_metadata = result["processing_metadata"]
             entry.word_count = result["word_count"]
-            entry.mode = job.mode.value
+            # Don't overwrite entry.mode - keep it as "raw" since this is the base entry
             
             # Save to database
             await EntryRepository.update(entry)

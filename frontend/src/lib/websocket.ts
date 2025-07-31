@@ -43,7 +43,7 @@ class WebSocketClient {
   private errorHandlers: ErrorHandler[] = []
   private connectionHandlers: ((connected: boolean) => void)[] = []
 
-  constructor(url: string = 'ws://localhost:8000/ws/stt') {
+  constructor(url: string = 'ws://localhost:8000/api/v1/ws/stt') {
     this.url = url
   }
 
@@ -123,12 +123,16 @@ class WebSocketClient {
   }
 
   private handleMessage(message: WebSocketMessage): void {
+    console.log('WebSocket received message:', message.type, message.data)
+    
     // Handle specific message types
     switch (message.type) {
       case 'state_change':
         this.notifyStateChangeHandlers(message.data)
         break
       case 'transcription':
+      case 'transcription_result':
+      case 'transcription_partial':
         this.notifyTranscriptionHandlers(message.data)
         break
       case 'error':
@@ -162,6 +166,7 @@ class WebSocketClient {
   }
 
   private notifyConnectionHandlers(connected: boolean): void {
+    console.log(`Notifying ${this.connectionHandlers.length} connection handlers: ${connected}`)
     this.connectionHandlers.forEach(handler => handler(connected))
   }
 

@@ -304,9 +304,13 @@ async def create_and_process_entry(
                 )
                 job_ids.append({"mode": mode.value, "job_id": job_id})
         
+        # Create a master job ID that combines all jobs for easier tracking
+        master_job_id = f"master_{created_entry.id}_{datetime.now().timestamp()}"
+        
         return {
             "message": "Entry created and queued for processing",
             "entry_id": created_entry.id,
+            "job_id": master_job_id,  # Add this for frontend compatibility
             "jobs": job_ids,
             "raw_entry": {
                 "id": created_entry.id,
@@ -325,6 +329,44 @@ async def get_processing_job_status(job_id: str = Path(..., description="Job ID"
     """Get the status of a processing job"""
     try:
         processing_queue = await get_processing_queue()
+        
+        # Handle master job IDs (format: master_{entry_id}_{timestamp})
+        if job_id.startswith("master_"):
+            parts = job_id.split("_")
+            if len(parts) >= 3:
+                entry_id = int(parts[1])
+                
+                # Get the entry to check current state
+                entry = await EntryRepository.get_by_id(entry_id)
+                if not entry:
+                    raise HTTPException(status_code=404, detail="Entry not found")
+                
+                # Check if both enhanced and structured are complete
+                has_enhanced = entry.enhanced_text is not None
+                has_structured = entry.structured_summary is not None
+                
+                if has_enhanced and has_structured:
+                    # Both processing modes complete
+                    return {
+                        "id": job_id,
+                        "entry_id": entry_id,
+                        "status": "completed",
+                        "result": {
+                            "entry_id": entry_id,
+                            "enhanced": entry.enhanced_text,
+                            "structured": entry.structured_summary
+                        }
+                    }
+                else:
+                    # Still processing
+                    return {
+                        "id": job_id,
+                        "entry_id": entry_id,
+                        "status": "processing",
+                        "result": None
+                    }
+        
+        # Handle regular job IDs
         job = processing_queue.get_job(job_id)
         
         if not job:
