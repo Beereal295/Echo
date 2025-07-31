@@ -613,7 +613,8 @@ function NewEntryPage() {
   }
 
   return (
-    <div className="h-screen flex flex-col p-4 md:p-6 max-w-6xl mx-auto overflow-hidden relative">
+    <div className="h-screen flex flex-col p-4 md:p-6 overflow-hidden relative">
+      <div className="max-w-6xl mx-auto w-full flex flex-col flex-1">
       {/* Header - Always shown */}
       <div className="flex items-center justify-between mb-4 min-h-[40px]">
         <h2 className="text-2xl font-bold text-white">New Entry</h2>
@@ -748,9 +749,9 @@ function NewEntryPage() {
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
             transition={{ duration: 0.4, ease: "easeInOut" }}
-            className="flex-1 flex items-center justify-center"
+            className="flex-1 flex items-center justify-center px-4"
           >
-            <div className="text-center space-y-6">
+            <div className="text-center space-y-6 max-w-md mx-auto">
               <motion.div
                 animate={{ 
                   rotate: 360,
@@ -786,7 +787,7 @@ function NewEntryPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, ease: "easeOut" }}
-            className="flex-1 flex flex-col overflow-visible px-4 py-4"
+            className="flex-1 flex flex-col overflow-visible"
           >
             <div className="grid md:grid-cols-3 gap-6 flex-1 mb-6">
               {viewModes.map((mode, index) => {
@@ -1026,6 +1027,7 @@ function NewEntryPage() {
           </motion.div>
         )}
       </AnimatePresence>
+      </div>
     </div>
   )
 }

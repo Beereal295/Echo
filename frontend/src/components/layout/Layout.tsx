@@ -3,6 +3,12 @@ import { Link, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { 
   Plus, 
   FileText, 
@@ -11,7 +17,9 @@ import {
   Calendar, 
   Settings,
   Flame,
-  Sparkles
+  Sparkles,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react'
 
 interface LayoutProps {
@@ -20,7 +28,11 @@ interface LayoutProps {
 
 function Layout({ children }: LayoutProps) {
   const [showPatterns, setShowPatterns] = useState(false)
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    // Load collapsed state from localStorage
+    const saved = localStorage.getItem('sidebarCollapsed')
+    return saved ? JSON.parse(saved) : false
+  })
   const location = useLocation()
 
   useEffect(() => {
@@ -39,20 +51,16 @@ function Layout({ children }: LayoutProps) {
     }
     
     checkEntryCount()
-
-    // Handle responsive sidebar collapse on smaller screens
-    const handleResize = () => {
-      if (window.innerWidth < 1024) {
-        setSidebarCollapsed(true)
-      } else {
-        setSidebarCollapsed(false)
-      }
-    }
-
-    handleResize()
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
   }, [])
+
+  // Save collapsed state to localStorage
+  useEffect(() => {
+    localStorage.setItem('sidebarCollapsed', JSON.stringify(sidebarCollapsed))
+  }, [sidebarCollapsed])
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed(!sidebarCollapsed)
+  }
 
   const navItems = [
     {
@@ -96,55 +104,76 @@ function Layout({ children }: LayoutProps) {
   ]
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden">
+    <TooltipProvider delayDuration={0}>
+      <div className="flex h-screen bg-background overflow-hidden relative">
       {/* Left Sidebar - Responsive with Glass Effect */}
       <motion.aside 
-        initial={{ x: -256, opacity: 0 }}
+        initial={{ x: -300 }}
         animate={{ 
-          x: 0, 
-          opacity: 1,
-          width: sidebarCollapsed ? 80 : 256
-        }}
-        transition={{ 
-          duration: 0.6, 
-          ease: "easeOut",
-          delay: 0.2
+          x: 0,
+          transition: {
+            duration: 0.4,
+            ease: "easeOut"
+          }
         }}
         className={`${
-          sidebarCollapsed ? 'w-20' : 'w-64'
-        } border-r border-border/50 bg-card/90 backdrop-blur-xl flex flex-col relative transition-all duration-300`}
+          sidebarCollapsed ? 'w-20' : 'w-60'
+        } border-r border-border/50 bg-card/90 backdrop-blur-xl flex flex-col relative transition-[width] duration-200 ease-out`}
       >
         {/* Ambient gradient overlay */}
         <motion.div 
           className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-accent/5 pointer-events-none"
-          animate={{ 
-            opacity: [0.3, 0.6, 0.3]
-          }}
-          transition={{ 
-            duration: 4, 
-            repeat: Infinity, 
-            ease: "easeInOut" 
-          }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 1, delay: 0.5 }}
         />
         
         {/* Logo/Title */}
-        <div className={`${sidebarCollapsed ? 'p-4' : 'p-6'} border-b border-border/50 relative transition-all duration-300`}>
-          <Link to="/" className="block">
-            <motion.div
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              className={`flex items-center ${sidebarCollapsed ? 'justify-center' : 'space-x-3'}`}
-            >
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg">
-                <Sparkles className="w-4 h-4" style={{color: 'white'}} />
-              </div>
-              {!sidebarCollapsed && (
-                <h1 className="font-bold text-xl bg-gradient-to-r from-white via-purple-400 to-blue-400 bg-clip-text text-transparent">
-                  Echo Journal
-                </h1>
-              )}
-            </motion.div>
-          </Link>
+        <div className="px-4 py-3 h-16 border-b border-border/50 relative flex items-center transition-all duration-200">
+          {sidebarCollapsed ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Link to="/" className="block">
+                  <motion.div
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="flex items-center justify-center w-full"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
+                      <Sparkles className="w-4 h-4 text-white drop-shadow-md" />
+                    </div>
+                  </motion.div>
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={20} className="z-[200]">
+                <p>Echo Journal</p>
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <Link to="/" className="block">
+              <motion.div
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className="flex items-center space-x-3 w-full"
+              >
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
+                  <Sparkles className="w-4 h-4 text-white drop-shadow-md" />
+                </div>
+                <AnimatePresence mode="wait">
+                  <motion.h1 
+                    key="logo-text"
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -10 }}
+                    transition={{ duration: 0.2, ease: "easeOut" }}
+                    className="font-bold text-xl bg-gradient-to-r from-white via-purple-400 to-blue-400 bg-clip-text text-transparent whitespace-nowrap"
+                  >
+                    Echo Journal
+                  </motion.h1>
+                </AnimatePresence>
+              </motion.div>
+            </Link>
+          )}
         </div>
 
         {/* Navigation */}
@@ -155,17 +184,15 @@ function Layout({ children }: LayoutProps) {
               
               const isActive = location.pathname === item.path
               
-              return (
-                <div key={item.path}>
-                  <Link to={item.path}>
-                    <Button 
-                      className={`w-full ${sidebarCollapsed ? 'justify-center px-2' : 'justify-start'} relative overflow-hidden group transition-all duration-300 ${
-                        isActive 
-                          ? 'bg-primary/10 text-primary border border-primary/20 shadow-lg shadow-primary/10' 
-                          : 'hover:bg-muted/50 hover:scale-[1.02] hover:shadow-md text-white hover:text-white'
-                      }`}
-                      variant="ghost"
-                    >
+              const buttonContent = (
+                <Button 
+                  className={`w-full ${sidebarCollapsed ? 'justify-center px-2' : 'justify-start'} relative overflow-hidden group transition-all duration-200 ${
+                    isActive 
+                      ? 'bg-primary/10 text-primary border border-primary/20 shadow-lg shadow-primary/10 hover:bg-primary/20 hover:text-primary' 
+                      : 'hover:bg-muted/50 hover:shadow-md text-white hover:text-white'
+                  }`}
+                  variant="ghost"
+                >
                       {/* Animated background for active state */}
                       {isActive && (
                         <motion.div
@@ -177,21 +204,32 @@ function Layout({ children }: LayoutProps) {
                       )}
                       
                       <div className={`relative flex items-center ${sidebarCollapsed ? 'justify-center' : ''}`}>
-                        <item.icon className={`${sidebarCollapsed ? '' : 'mr-3'} h-5 w-5 transition-all duration-300 ${
-                          isActive ? 'text-primary' : 'text-white'
+                        <item.icon className={`${sidebarCollapsed ? '' : 'mr-3'} h-5 w-5 transition-colors duration-200 ${
+                          isActive ? 'text-primary group-hover:text-primary' : 'text-white group-hover:text-white'
                         } ${item.special ? 'text-primary' : ''}`} />
-                        {!sidebarCollapsed && (
-                          <>
-                            <span className={`transition-all duration-300 ${
-                              isActive ? 'text-primary font-medium' : 'text-white'
-                            }`}>
+                        <AnimatePresence mode="wait">
+                          {!sidebarCollapsed && (
+                            <motion.span 
+                              key={`text-${index}`}
+                              initial={{ opacity: 0, x: -10 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              exit={{ opacity: 0, x: -10 }}
+                              transition={{ duration: 0.2, ease: "easeOut" }}
+                              className={`text-[15px] whitespace-nowrap ${
+                                isActive ? 'text-primary font-medium group-hover:text-primary' : 'text-white group-hover:text-white'
+                              }`}
+                            >
                               {item.label}
-                            </span>
+                            </motion.span>
+                          )}
+                        </AnimatePresence>
                             
-                            {item.special && showPatterns && (
+                            {item.special && showPatterns && !sidebarCollapsed && (
                               <motion.div
-                                initial={{ scale: 0, rotate: -180 }}
-                                animate={{ scale: 1, rotate: 0 }}
+                                initial={{ scale: 0, rotate: -180, opacity: 0 }}
+                                animate={{ scale: 1, rotate: 0, opacity: 1 }}
+                                exit={{ scale: 0, rotate: -180, opacity: 0 }}
+                                transition={{ duration: 0.3, delay: 0.1 }}
                                 className="ml-auto"
                               >
                                 <Badge className="bg-primary/20 text-primary border-primary/30 text-xs">
@@ -199,28 +237,105 @@ function Layout({ children }: LayoutProps) {
                                 </Badge>
                               </motion.div>
                             )}
-                          </>
-                        )}
                       </div>
-                    </Button>
-                  </Link>
+                </Button>
+              )
+              
+              return (
+                <div key={item.path}>
+                  {sidebarCollapsed ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Link to={item.path}>
+                          {buttonContent}
+                        </Link>
+                      </TooltipTrigger>
+                      <TooltipContent side="right" sideOffset={20} className="z-[200]">
+                        <p>{item.label}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : (
+                    <Link to={item.path}>
+                      {buttonContent}
+                    </Link>
+                  )}
                 </div>
               )
             })}
           </div>
         </nav>
 
+        {/* Toggle Button */}
+        <div className="p-4 border-t border-border/50">
+          {sidebarCollapsed ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={toggleSidebar}
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-center hover:bg-muted/50 text-white hover:text-white"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={20} className="z-[200]">
+                <p>Expand sidebar</p>
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <Button
+              onClick={toggleSidebar}
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start hover:bg-muted/50 text-white hover:text-white"
+            >
+              <ChevronLeft className="h-4 w-4 mr-2" />
+              <AnimatePresence mode="wait">
+                <motion.span 
+                  key="collapse-text"
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  transition={{ duration: 0.2, ease: "easeOut" }}
+                  className="text-[15px] whitespace-nowrap"
+                >
+                  Collapse
+                </motion.span>
+              </AnimatePresence>
+            </Button>
+          )}
+        </div>
+
         {/* Bottom Section - Streak */}
         <div className="p-4 border-t border-border/50 relative">
           {sidebarCollapsed ? (
-            <div className="flex justify-center">
-              <Badge className="bg-primary/10 text-primary border border-primary/20 font-medium hover:bg-primary/20 hover:text-primary transition-colors duration-300 group">
-                <Flame className="h-3 w-3 text-primary group-hover:text-primary transition-colors duration-300" />
-              </Badge>
-            </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex justify-center">
+                  <Badge className="bg-primary/10 text-primary border border-primary/20 font-medium hover:bg-primary/20 hover:text-primary transition-colors duration-300 group cursor-pointer">
+                    <Flame className="h-3 w-3 text-primary group-hover:text-primary transition-colors duration-300" />
+                  </Badge>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={20} className="z-[200]">
+                <p>Daily Streak: 0 days</p>
+              </TooltipContent>
+            </Tooltip>
           ) : (
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-300 font-medium">Daily Streak</span>
+            <div className="flex items-center justify-between">
+              <AnimatePresence mode="wait">
+                <motion.span 
+                  key="streak-text"
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  transition={{ duration: 0.2, ease: "easeOut" }}
+                  className="text-gray-300 font-medium text-[15px] whitespace-nowrap"
+                >
+                  Daily Streak
+                </motion.span>
+              </AnimatePresence>
               <Badge className="bg-primary/10 text-primary border border-primary/20 font-medium hover:bg-primary/20 hover:text-primary transition-colors duration-300 group">
                 <Flame className="mr-1 h-3 w-3 text-primary group-hover:text-primary transition-colors duration-300" />
                 0 days
@@ -268,13 +383,14 @@ function Layout({ children }: LayoutProps) {
                 transition={{ type: "spring", stiffness: 400, damping: 17 }}
                 className="flex items-center justify-center cursor-pointer focus:outline-none outline-none"
               >
-                <Plus className="h-16 w-16 stroke-2" style={{color: 'white'}} />
+                <Plus className="h-16 w-16 stroke-2 text-white" />
               </motion.div>
             </Link>
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+      </div>
+    </TooltipProvider>
   )
 }
 
