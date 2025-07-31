@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Calendar as CalendarComponent } from '@/components/ui/calendar'
 import { 
   ChevronDown, 
   ChevronUp, 
@@ -88,6 +89,17 @@ function ViewEntriesPage() {
   const [editedContent, setEditedContent] = useState('')
   const [saving, setSaving] = useState(false)
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const [showDateFilter, setShowDateFilter] = useState(false)
+  const [dateFilterType, setDateFilterType] = useState<'all' | 'before' | 'after' | 'between' | 'on' | 'last-days-months'>('all')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [showBeforeCalendar, setShowBeforeCalendar] = useState(false)
+  const [showAfterCalendar, setShowAfterCalendar] = useState(false)
+  const [showOnCalendar, setShowOnCalendar] = useState(false)
+  const [showBetweenStartCalendar, setShowBetweenStartCalendar] = useState(false)
+  const [showBetweenEndCalendar, setShowBetweenEndCalendar] = useState(false)
+  const [lastPeriodValue, setLastPeriodValue] = useState(1)
+  const [lastPeriodUnit, setLastPeriodUnit] = useState<'days' | 'months'>('months')
 
   // Load entries on component mount and when page changes
   useEffect(() => {
@@ -260,16 +272,73 @@ Word Count: ${entry.word_count}
     return text.slice(0, maxLength) + '...'
   }
 
-  // Filter entries based on search query (client-side for now)
+  // Filter entries based on search query and date filter
   const filteredEntries = useMemo(() => {
-    if (!searchQuery) return entries
-    
-    return entries.filter(entry => 
-      entry.raw_text.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      entry.enhanced_text?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      entry.structured_summary?.toLowerCase().includes(searchQuery.toLowerCase())
-    )
-  }, [entries, searchQuery])
+    let filtered = entries
+
+    // Apply search filter
+    if (searchQuery) {
+      filtered = filtered.filter(entry => 
+        entry.raw_text.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        entry.enhanced_text?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        entry.structured_summary?.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    }
+
+    // Apply date filter
+    if (dateFilterType !== 'all') {
+      filtered = filtered.filter(entry => {
+        const entryDate = new Date(entry.timestamp)
+        const today = new Date()
+        
+        switch (dateFilterType) {
+          case 'before':
+            return startDate ? entryDate < new Date(startDate) : true
+          case 'after':
+            return startDate ? entryDate > new Date(startDate) : true
+          case 'on':
+            if (startDate) {
+              const selectedDate = new Date(startDate)
+              const entryDateOnly = new Date(entryDate.getFullYear(), entryDate.getMonth(), entryDate.getDate())
+              const selectedDateOnly = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate())
+              return entryDateOnly.getTime() === selectedDateOnly.getTime()
+            }
+            return true
+          case 'between':
+            if (startDate && endDate) {
+              return entryDate >= new Date(startDate) && entryDate <= new Date(endDate)
+            }
+            return true
+          case 'last-days-months':
+            const periodAgo = new Date()
+            if (lastPeriodUnit === 'days') {
+              periodAgo.setDate(today.getDate() - lastPeriodValue)
+            } else {
+              periodAgo.setMonth(today.getMonth() - lastPeriodValue)
+            }
+            return entryDate >= periodAgo
+          default:
+            return true
+        }
+      })
+    }
+
+    return filtered
+  }, [entries, searchQuery, dateFilterType, startDate, endDate, lastPeriodValue, lastPeriodUnit])
+
+  // Auto-close preview when no filtered entries
+  useEffect(() => {
+    if (selectedEntry && filteredEntries.length === 0) {
+      setSelectedEntry(null)
+      setEditing(false)
+      setEditedContent('')
+    } else if (selectedEntry && !filteredEntries.find(entry => entry.id === selectedEntry.id)) {
+      // Close preview if selected entry is not in filtered results
+      setSelectedEntry(null)
+      setEditing(false)
+      setEditedContent('')
+    }
+  }, [filteredEntries, selectedEntry])
 
   // Edit functionality
   const startEditing = () => {
@@ -344,6 +413,19 @@ Word Count: ${entry.word_count}
     }
   }, [notification])
 
+  // Close date filter popup when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element
+      if (showDateFilter && !target.closest('.date-filter-popup')) {
+        setShowDateFilter(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showDateFilter])
+
   // Pagination controls
   const goToPage = (page: number) => {
     if (page >= 1 && page <= totalPages) {
@@ -379,6 +461,290 @@ Word Count: ${entry.word_count}
         <div className="flex items-center justify-between mb-6 flex-shrink-0">
           <h2 className="text-2xl font-bold text-white">Your Entries</h2>
           <div className="flex items-center gap-4">
+            {/* Date Filter Button */}
+            <div className="relative">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowDateFilter(!showDateFilter)}
+                className="flex items-center gap-2 relative overflow-hidden group transition-all duration-200 bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 hover:text-primary"
+              >
+                {/* Animated background for consistent styling */}
+                <motion.div
+                  layoutId="activeDateFilterBg"
+                  className="absolute inset-0 bg-primary/10"
+                  initial={false}
+                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                />
+                
+                <div className="relative flex items-center gap-2">
+                  <Calendar className="h-4 w-4" />
+                  {dateFilterType === 'all' ? 'All Time' : 
+                   dateFilterType === 'last-days-months' ? `Last ${lastPeriodValue} ${lastPeriodUnit.charAt(0).toUpperCase() + lastPeriodUnit.slice(1)}` :
+                   dateFilterType === 'before' ? 'Before Date' :
+                   dateFilterType === 'after' ? 'After Date' :
+                   dateFilterType === 'on' ? 'On Date' : 'Between Dates'}
+                </div>
+              </Button>
+
+              {/* Date Filter Popup */}
+              {showDateFilter && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="date-filter-popup absolute top-full right-0 mt-2 w-96 bg-card border border-border rounded-lg shadow-xl z-50 p-4"
+                >
+                  <div className="space-y-4">
+                    <h3 className="font-semibold text-white text-sm">Filter by Date</h3>
+                    
+                    {/* Filter Type Selection */}
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="dateFilter"
+                          checked={dateFilterType === 'all'}
+                          onChange={() => setDateFilterType('all')}
+                          className="text-primary focus:ring-primary/20"
+                        />
+                        <span className="text-white text-sm">All time</span>
+                      </label>
+                      
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="dateFilter"
+                          checked={dateFilterType === 'last-days-months'}
+                          onChange={() => setDateFilterType('last-days-months')}
+                          className="text-primary focus:ring-primary/20"
+                        />
+                        <span className="text-white text-sm">Last</span>
+                        <input
+                          type="number"
+                          min="1"
+                          max="31"
+                          value={lastPeriodValue}
+                          onChange={(e) => {
+                            const value = Math.max(1, Math.min(31, parseInt(e.target.value) || 1))
+                            setLastPeriodValue(value)
+                          }}
+                          disabled={dateFilterType !== 'last-days-months'}
+                          className="bg-background border border-border rounded px-2 py-1 text-white text-sm w-16 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20"
+                        />
+                        <div className="relative calendar-container">
+                          <select
+                            value={lastPeriodUnit}
+                            onChange={(e) => setLastPeriodUnit(e.target.value as 'days' | 'months')}
+                            disabled={dateFilterType !== 'last-days-months'}
+                            className="bg-background border border-border rounded px-2 py-1 pr-6 text-white text-sm focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20 appearance-none"
+                          >
+                            <option value="days">Days</option>
+                            <option value="months">Months</option>
+                          </select>
+                          <ChevronDown className="absolute right-1 top-1/2 transform -translate-y-1/2 h-3 w-3 text-muted-foreground pointer-events-none" />
+                        </div>
+                      </label>
+                      
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="dateFilter"
+                          checked={dateFilterType === 'before'}
+                          onChange={() => setDateFilterType('before')}
+                          className="text-primary focus:ring-primary/20"
+                        />
+                        <span className="text-white text-sm">Before</span>
+                        <div className="relative calendar-container">
+                          <button
+                            type="button"
+                            onClick={() => setShowBeforeCalendar(!showBeforeCalendar)}
+                            disabled={dateFilterType !== 'before'}
+                            className="bg-background border border-border rounded px-2 py-1 text-white text-sm w-32 text-left hover:bg-muted/50 disabled:opacity-50"
+                          >
+                            {startDate ? new Date(startDate).toLocaleDateString() : 'Select date'}
+                          </button>
+                          {showBeforeCalendar && dateFilterType === 'before' && (
+                            <div className="absolute top-full left-0 mt-2 z-[100] min-w-[280px]">
+                              <CalendarComponent
+                                selected={startDate}
+                                onSelect={(date) => {
+                                  setStartDate(date)
+                                  setShowBeforeCalendar(false)
+                                }}
+                                className="shadow-2xl border-2 border-border"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </label>
+                      
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="dateFilter"
+                          checked={dateFilterType === 'after'}
+                          onChange={() => setDateFilterType('after')}
+                          className="text-primary focus:ring-primary/20"
+                        />
+                        <span className="text-white text-sm">After</span>
+                        <div className="relative calendar-container">
+                          <button
+                            type="button"
+                            onClick={() => setShowAfterCalendar(!showAfterCalendar)}
+                            disabled={dateFilterType !== 'after'}
+                            className="bg-background border border-border rounded px-2 py-1 text-white text-sm w-32 text-left hover:bg-muted/50 disabled:opacity-50"
+                          >
+                            {startDate ? new Date(startDate).toLocaleDateString() : 'Select date'}
+                          </button>
+                          {showAfterCalendar && dateFilterType === 'after' && (
+                            <div className="absolute top-full left-0 mt-2 z-[100] min-w-[280px]">
+                              <CalendarComponent
+                                selected={startDate}
+                                onSelect={(date) => {
+                                  setStartDate(date)
+                                  setShowAfterCalendar(false)
+                                }}
+                                className="shadow-2xl border-2 border-border"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </label>
+                      
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="dateFilter"
+                          checked={dateFilterType === 'on'}
+                          onChange={() => setDateFilterType('on')}
+                          className="text-primary focus:ring-primary/20"
+                        />
+                        <span className="text-white text-sm">On</span>
+                        <div className="relative calendar-container">
+                          <button
+                            type="button"
+                            onClick={() => setShowOnCalendar(!showOnCalendar)}
+                            disabled={dateFilterType !== 'on'}
+                            className="bg-background border border-border rounded px-2 py-1 text-white text-sm w-32 text-left hover:bg-muted/50 disabled:opacity-50"
+                          >
+                            {startDate ? new Date(startDate).toLocaleDateString() : 'Select date'}
+                          </button>
+                          {showOnCalendar && dateFilterType === 'on' && (
+                            <div className="absolute top-full left-0 mt-2 z-[100] min-w-[280px]">
+                              <CalendarComponent
+                                selected={startDate}
+                                onSelect={(date) => {
+                                  setStartDate(date)
+                                  setShowOnCalendar(false)
+                                }}
+                                className="shadow-2xl border-2 border-border"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </label>
+                      
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="dateFilter"
+                          checked={dateFilterType === 'between'}
+                          onChange={() => setDateFilterType('between')}
+                          className="text-primary focus:ring-primary/20"
+                        />
+                        <span className="text-white text-sm">Between</span>
+                      </label>
+                      
+                      {dateFilterType === 'between' && (
+                        <div className="ml-6 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-muted-foreground text-sm w-12">From:</span>
+                            <div className="relative flex-1">
+                              <button
+                                type="button"
+                                onClick={() => setShowBetweenStartCalendar(!showBetweenStartCalendar)}
+                                className="bg-background border border-border rounded px-2 py-1 text-white text-sm w-full text-left hover:bg-muted/50"
+                              >
+                                {startDate ? new Date(startDate).toLocaleDateString() : 'Select date'}
+                              </button>
+                              {showBetweenStartCalendar && (
+                                <div className="absolute top-full left-0 mt-2 z-[100] min-w-[280px]">
+                                  <CalendarComponent
+                                    selected={startDate}
+                                    onSelect={(date) => {
+                                      setStartDate(date)
+                                      setShowBetweenStartCalendar(false)
+                                    }}
+                                    className="shadow-2xl border-2 border-border"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-muted-foreground text-sm w-12">To:</span>
+                            <div className="relative flex-1">
+                              <button
+                                type="button"
+                                onClick={() => setShowBetweenEndCalendar(!showBetweenEndCalendar)}
+                                className="bg-background border border-border rounded px-2 py-1 text-white text-sm w-full text-left hover:bg-muted/50"
+                              >
+                                {endDate ? new Date(endDate).toLocaleDateString() : 'Select date'}
+                              </button>
+                              {showBetweenEndCalendar && (
+                                <div className="absolute top-full right-0 mt-2 z-[100] min-w-[280px]">
+                                  <CalendarComponent
+                                    selected={endDate}
+                                    onSelect={(date) => {
+                                      setEndDate(date)
+                                      setShowBetweenEndCalendar(false)
+                                    }}
+                                    className="shadow-2xl border-2 border-border"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Action Buttons */}
+                    <div className="flex justify-end gap-2 pt-2 border-t border-border">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setDateFilterType('all')
+                          setStartDate('')
+                          setEndDate('')
+                          setLastPeriodValue(1)
+                          setLastPeriodUnit('months')
+                          // Close all calendar popups
+                          setShowBeforeCalendar(false)
+                          setShowAfterCalendar(false)
+                          setShowOnCalendar(false)
+                          setShowBetweenStartCalendar(false)
+                          setShowBetweenEndCalendar(false)
+                        }}
+                        className="text-white hover:bg-muted/50"
+                      >
+                        Clear
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowDateFilter(false)}
+                        className="bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 hover:text-primary"
+                      >
+                        Apply
+                      </Button>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </div>
+
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               {searching && (
@@ -399,10 +765,10 @@ Word Count: ${entry.word_count}
         </div>
 
         {/* Main Content - Split View */}
-        <div className="flex-1 flex gap-6 overflow-hidden">
+        <div className={`flex-1 flex gap-6 overflow-hidden ${showDateFilter ? 'blur-sm pointer-events-none' : ''} transition-all duration-200`}>
           {/* Entry List - Left Side */}
           <div className="w-96 flex flex-col overflow-hidden">
-            <div className="flex-1 overflow-y-auto space-y-3 pr-2">
+            <div className="flex-1 overflow-y-auto space-y-3 pr-2 pt-1">
               {loading ? (
                 <div className="flex items-center justify-center h-64">
                   <div className="text-center space-y-4">
@@ -612,11 +978,11 @@ Word Count: ${entry.word_count}
             {!searchQuery && totalPages > 1 && (
               <div className="mt-4 flex items-center justify-between border-t border-border pt-4 flex-shrink-0">
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
                   onClick={() => goToPage(currentPage - 1)}
                   disabled={currentPage === 1 || loading}
-                  className="flex items-center gap-2"
+                  className="flex items-center gap-2 bg-card border border-border text-yellow-400 hover:bg-card/80 hover:text-yellow-300 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <ChevronLeft className="h-4 w-4" />
                   Previous
@@ -628,11 +994,11 @@ Word Count: ${entry.word_count}
                 </div>
                 
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
                   onClick={() => goToPage(currentPage + 1)}
                   disabled={currentPage === totalPages || loading}
-                  className="flex items-center gap-2"
+                  className="flex items-center gap-2 bg-card border border-border text-yellow-400 hover:bg-card/80 hover:text-yellow-300 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Next
                   <ChevronRight className="h-4 w-4" />
@@ -808,6 +1174,11 @@ Word Count: ${entry.word_count}
           </div>
         </div>
       </div>
+
+      {/* Date Filter Overlay */}
+      {showDateFilter && (
+        <div className="fixed inset-0 bg-black/20 z-40" />
+      )}
 
       {/* Expanded View Modal */}
       <AnimatePresence>
