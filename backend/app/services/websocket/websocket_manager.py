@@ -4,6 +4,7 @@ Main WebSocket manager integrating with STT service
 
 import asyncio
 import logging
+import time
 from typing import Optional, Dict, Any, Callable
 from fastapi import WebSocket, WebSocketDisconnect
 import json
@@ -170,11 +171,18 @@ class WebSocketManager:
         if command == "start_recording":
             # Start recording via WebSocket command
             if self.stt_service:
+                # Check current state before attempting to start
+                current_state = self.stt_service.state_manager.get_state()
+                if not self.stt_service.state_manager.can_start_recording():
+                    # Don't send error for duplicate start commands - just ignore silently
+                    logger.debug(f"Ignoring start_recording command - already in state: {current_state}")
+                    return
+                
                 success = self.stt_service.start_recording()
                 if not success:
                     await connection.send_message(
                         create_error_message(
-                            error="Failed to start recording",
+                            error=f"Failed to start STT recording",
                             error_type="recording_error",
                             session_id=connection.session_id
                         )
@@ -387,6 +395,76 @@ class WebSocketManager:
             "hotkey_subscribers": len(self.connection_manager.get_channel_subscribers(self.CHANNEL_HOTKEY)),
             "active_recording": self.current_recording_session is not None
         }
+    
+    def on_stt_state_change(self, new_state: RecordingState):
+        """Callback for STT state changes"""
+        logger.info(f"WebSocket manager received STT state change: {new_state.value}")
+        
+        # Create state message
+        state_message = create_state_message(
+            state=new_state.value,
+            additional_data={
+                "message": self._get_state_message(new_state),
+                "timestamp": time.time()
+            }
+        )
+        
+        # Broadcast to STT channel
+        try:
+            asyncio.create_task(
+                self.connection_manager.broadcast_to_channel(
+                    self.CHANNEL_STT,
+                    state_message
+                )
+            )
+        except Exception as e:
+            logger.error(f"Failed to broadcast STT state change: {e}")
+    
+    def on_transcription_result(self, result: Dict[str, Any]):
+        """Callback for transcription results"""
+        logger.info(f"WebSocket manager received transcription result: {result.get('text', 'NO TEXT') if result else 'NO RESULT'}")
+        
+        # Create transcription message
+        transcription_message = create_transcription_message(
+            text=result.get("text", ""),
+            language=result.get("language", "unknown"),
+            confidence=result.get("confidence", 0.0),
+            segments=result.get("segments", []),
+            processing_time=result.get("processing_time")
+        )
+        
+        # Broadcast to transcription channel
+        try:
+            asyncio.create_task(
+                self.connection_manager.broadcast_to_channel(
+                    self.CHANNEL_TRANSCRIPTION,
+                    transcription_message
+                )
+            )
+        except Exception as e:
+            logger.error(f"Failed to broadcast transcription result: {e}")
+    
+    def on_stt_error(self, error: str):
+        """Callback for STT errors"""
+        logger.error(f"WebSocket manager received STT error: {error}")
+        
+        # Create error message
+        error_message = create_error_message(
+            error=error,
+            error_type="stt_error",
+            recoverable=True
+        )
+        
+        # Broadcast to STT channel
+        try:
+            asyncio.create_task(
+                self.connection_manager.broadcast_to_channel(
+                    self.CHANNEL_STT,
+                    error_message
+                )
+            )
+        except Exception as e:
+            logger.error(f"Failed to broadcast STT error: {e}")
     
     async def cleanup(self):
         """Clean up WebSocket manager"""

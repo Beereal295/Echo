@@ -165,6 +165,13 @@ class HotkeyService:
                 if not self.stt_service:
                     raise Exception("STT service not available")
                 
+                # Check if we can start recording before attempting
+                if not self.stt_service.state_manager.can_start_recording():
+                    logger.debug(f"Ignoring hotkey start - already in state: {self.stt_service.state_manager.get_state()}")
+                    # Sync our internal state with STT service state
+                    self.is_recording = self.stt_service.state_manager.get_state().value == "recording"
+                    return
+                
                 # Start STT recording
                 success = self.stt_service.start_recording()
                 if not success:
@@ -186,13 +193,26 @@ class HotkeyService:
     async def _async_recording_end(self, duration: float):
         """Async handler for recording end"""
         with self.recording_lock:
-            if not self.is_recording:
-                logger.warning("No recording in progress")
+            # Check actual STT service state instead of just our internal flag
+            if not self.is_recording and not self.stt_service.state_manager.can_stop_recording():
+                logger.debug("No recording in progress - hotkey released but no active recording")
                 return
             
             try:
                 if not self.stt_service:
                     raise Exception("STT service not available")
+                
+                # Check if we can actually stop recording
+                current_state = self.stt_service.state_manager.get_state()
+                if not self.stt_service.state_manager.can_stop_recording():
+                    # If already processing/transcribing, the recording was already stopped
+                    if current_state.value in ["processing", "transcribing"]:
+                        logger.debug(f"Recording already stopped and processing - state: {current_state}")
+                        self.is_recording = False
+                        return
+                    else:
+                        logger.debug(f"Cannot stop recording in state: {current_state}")
+                        return
                 
                 # Stop STT recording
                 success = self.stt_service.stop_recording()
