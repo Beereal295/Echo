@@ -682,7 +682,7 @@ function NewEntryPage() {
         // Show initial success toast
         safeToast({
           title: "Entry created!",
-          description: "Processing enhanced versions...",
+          description: "Processing enhanced versions and generating embeddings...",
         })
       } else {
         throw new Error(response.error || 'Failed to create entry')
@@ -696,6 +696,52 @@ function NewEntryPage() {
       })
       setIsProcessing(false)
     }
+  }
+
+  const pollEmbeddingStatus = async (entryId: number) => {
+    const maxAttempts = 20 // 20 seconds max
+    const pollInterval = 1000 // Check every second
+    let attempts = 0
+
+    const poll = async () => {
+      if (attempts >= maxAttempts) {
+        // Timeout - embeddings are taking too long
+        safeToast({
+          title: "⏱️ Embeddings processing",
+          description: "Embedding generation is taking longer than expected, but will complete in the background",
+        })
+        return
+      }
+
+      attempts++
+
+      try {
+        const response = await api.getEntry(entryId)
+        if (response.success && response.data) {
+          const entry = response.data
+          
+          // Check if embeddings are now available
+          if (entry.embeddings && entry.embeddings.length > 0) {
+            // Embeddings are ready!
+            safeToast({
+              title: "✨ Embeddings ready!",
+              description: "Your entry has been indexed for semantic search and pattern analysis",
+            })
+            return
+          }
+        }
+        
+        // Still no embeddings, continue polling
+        setTimeout(poll, pollInterval)
+      } catch (error) {
+        // Silent fail - don't spam user with embedding polling errors
+        console.error('Failed to check embedding status:', error)
+        return
+      }
+    }
+
+    // Start polling after a short delay to let the backend start processing
+    setTimeout(poll, 2000)
   }
 
   const pollJobStatus = async (jobId: string) => {
@@ -762,9 +808,18 @@ function NewEntryPage() {
                       <span className="text-sm">Structured summary generated</span>
                     </div>
                   )}
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-3 w-3 animate-spin text-blue-400" />
+                    <span className="text-sm text-blue-400">Generating embeddings...</span>
+                  </div>
                 </div>
               ),
             })
+            
+            // Start polling for embedding completion
+            if (result.entry_id) {
+              pollEmbeddingStatus(result.entry_id)
+            }
             
             // Clear for next entry
             setText('')

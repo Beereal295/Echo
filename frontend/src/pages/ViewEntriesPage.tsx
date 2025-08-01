@@ -4,6 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Calendar as CalendarComponent } from '@/components/ui/calendar'
+import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
 import { 
   ChevronDown, 
   ChevronUp, 
@@ -79,6 +81,10 @@ function ViewEntriesPage() {
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [searching, setSearching] = useState(false)
+  const [semanticResults, setSemanticResults] = useState<Entry[]>([])
+  const [isSemanticSearch, setIsSemanticSearch] = useState(false)
+  const [useSemanticSearch, setUseSemanticSearch] = useState(true)
+  const [isRegenerating, setIsRegenerating] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [totalEntries, setTotalEntries] = useState(0)
@@ -106,26 +112,337 @@ function ViewEntriesPage() {
     loadEntries()
   }, [currentPage])
 
-  // Reload entries when not searching
+  // Reload entries when clearing search
   useEffect(() => {
     if (!searchQuery) {
+      setIsSemanticSearch(false)
+      setSemanticResults([])
       setCurrentPage(1)
       loadEntries()
     }
   }, [searchQuery])
 
-  // Handle search with debouncing
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (searchQuery !== '') {
-        setSearching(true)
-        setTimeout(() => setSearching(false), 500) // Simulate search time
+  // Handle Enter key for search (semantic or normal)
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      if (useSemanticSearch) {
+        performSemanticSearch(searchQuery)
+      } else {
+        performNormalSearch(searchQuery)
       }
-      setCurrentPage(1) // Reset to first page when searching
-    }, 300)
+    }
+  }
 
-    return () => clearTimeout(timer)
-  }, [searchQuery])
+  // Test embedding similarity function
+  const testEmbeddingSimilarity = async (query: string) => {
+    console.log(`🧪 TESTING EMBEDDING SIMILARITY for query: "${query}"`)
+    
+    try {
+      // First, let's check if embeddings were really regenerated with BGE
+      const dbStateResponse = await api.debugDatabaseState()
+      if (dbStateResponse.success && dbStateResponse.data) {
+        const dbData = dbStateResponse.data.data || dbStateResponse.data
+        console.log(`📊 Database has ${dbData.entries_with_embeddings} entries with embeddings`)
+      }
+      
+      // Perform semantic search
+      const searchResponse = await api.semanticSearch(query, 10, 0.1) // Lower threshold to see more results
+      
+      if (searchResponse.success && searchResponse.data) {
+        const searchData = searchResponse.data.data || searchResponse.data
+        const results = searchData.results || []
+        
+        console.log(`\n🔍 SEARCH RESULTS for "${query}": Found ${results.length} matches`)
+        console.log('Total searchable entries:', searchData.total_searchable_entries)
+        
+        results.forEach((result: any, index: number) => {
+          console.log(`\n${index + 1}. Entry ${result.entry_id} - Similarity: ${(result.similarity * 100).toFixed(2)}%`)
+          console.log(`   Title: ${result.title}`)
+          console.log(`   Content: ${result.content.substring(0, 150)}...`)
+        })
+        
+        // Also show what SHOULD match
+        console.log(`\n📝 EXPECTED MATCHES for "${query}":`)
+        console.log('- Look for entries mentioning hiking, mountains, trails, nature, walking, etc.')
+        console.log('- The Raj/soccer entry should have LOW similarity for "hiking"')
+        
+      } else {
+        console.error('Search failed:', searchResponse.error)
+      }
+      
+    } catch (error) {
+      console.error('Test failed:', error)
+    }
+  }
+
+  // Debug function - temporary
+  const debugEmbeddings = async () => {
+    console.log('🔧 DEBUG: Enhanced BGE Embedding Analysis...')
+    
+    try {
+      // Get all entries by fetching multiple pages
+      let allEntries = []
+      let currentPage = 1
+      let hasMorePages = true
+      
+      while (hasMorePages && currentPage <= 10) { // Limit to 10 pages max
+        console.log(`Fetching page ${currentPage}...`)
+        const response = await api.getEntries(currentPage, 50)
+        
+        if (response.success && response.data) {
+          allEntries.push(...response.data.entries)
+          hasMorePages = response.data.has_next
+          currentPage++
+        } else {
+          hasMorePages = false
+        }
+      }
+      
+      console.log(`Total entries fetched: ${allEntries.length}`)
+      
+      // Search for Raj in all entries
+      const rajEntries = allEntries.filter(entry => 
+        entry.raw_text.toLowerCase().includes('raj') ||
+        entry.enhanced_text?.toLowerCase().includes('raj') ||
+        entry.structured_summary?.toLowerCase().includes('raj')
+      )
+      
+      console.log('📋 ENTRIES CONTAINING "RAJ":')
+      rajEntries.forEach((entry, index) => {
+        console.log(`\n--- Entry ${index + 1} (ID: ${entry.id}) ---`)
+        console.log('Raw:', entry.raw_text)
+        console.log('Enhanced:', entry.enhanced_text || 'N/A')
+        console.log('Structured:', entry.structured_summary || 'N/A')
+        console.log('Has embeddings:', entry.embeddings && entry.embeddings.length > 0 ? `Yes (${entry.embeddings.length}D)` : 'No')
+        
+        // Check which text would be used for embedding (priority order)
+        let selectedText = 'None'
+        if (entry.structured_summary && entry.structured_summary.trim()) {
+          selectedText = `Structured: "${entry.structured_summary}"`
+        } else if (entry.enhanced_text && entry.enhanced_text.trim()) {
+          selectedText = `Enhanced: "${entry.enhanced_text}"`
+        } else if (entry.raw_text && entry.raw_text.trim()) {
+          selectedText = `Raw: "${entry.raw_text}"`
+        }
+        console.log('Text used for embedding:', selectedText)
+      })
+      
+      // Test semantic search for "Raj" and show detailed results
+      console.log('\n🔍 TESTING SEMANTIC SEARCH FOR "RAJ":')
+      const searchResponse = await api.semanticSearch('Raj', 10, 0.1)
+      
+      if (searchResponse.success && searchResponse.data) {
+        const results = searchResponse.data.results || []
+        console.log(`Found ${results.length} semantic matches:`)
+        
+        results.forEach((result, index) => {
+          console.log(`\nMatch ${index + 1}:`)
+          console.log('- Entry ID:', result.entry_id)
+          console.log('- Similarity:', `${(result.similarity * 100).toFixed(2)}%`)
+          console.log('- Title:', result.title)
+          console.log('- Content Preview:', result.content.substring(0, 100) + '...')
+          
+          // Find the full entry details
+          const fullEntry = allEntries.find(e => e.id === result.entry_id)
+          if (fullEntry) {
+            const containsRaj = 
+              fullEntry.raw_text.toLowerCase().includes('raj') ||
+              fullEntry.enhanced_text?.toLowerCase().includes('raj') ||
+              fullEntry.structured_summary?.toLowerCase().includes('raj')
+            console.log('- Actually contains "Raj":', containsRaj ? '✅ YES' : '❌ NO')
+          }
+        })
+        
+        // Check if any Raj entries are missing from results
+        const resultEntryIds = results.map(r => r.entry_id)
+        const missingRajEntries = rajEntries.filter(entry => !resultEntryIds.includes(entry.id))
+        
+        if (missingRajEntries.length > 0) {
+          console.log('\n⚠️ RAJ ENTRIES NOT IN SEARCH RESULTS:')
+          missingRajEntries.forEach(entry => {
+            console.log(`- Entry ${entry.id}: Has embeddings = ${entry.embeddings && entry.embeddings.length > 0}`)
+          })
+        }
+      } else {
+        console.error('Semantic search failed:', searchResponse.error)
+      }
+      
+      if (rajEntries.length === 0) {
+        console.log('❌ NO ENTRIES FOUND containing "Raj"')
+        console.log('🔍 Double-check: Are you sure there is an entry with "Raj"?')
+      } else {
+        console.log(`✅ FOUND ${rajEntries.length} entries containing "Raj":`)
+        
+        rajEntries.forEach(entry => {
+          const hasEmbeddings = entry.embeddings && entry.embeddings.length > 0
+          const rawContainsRaj = entry.raw_text.toLowerCase().includes('raj')
+          const enhancedContainsRaj = entry.enhanced_text?.toLowerCase().includes('raj')
+          const structuredContainsRaj = entry.structured_summary?.toLowerCase().includes('raj')
+          
+          console.log(`\n📝 Entry ${entry.id}: ${hasEmbeddings ? '✅ INDEXED' : '❌ NO EMBEDDINGS'}`)
+          console.log(`Raw contains "Raj": ${rawContainsRaj}`)
+          console.log(`Enhanced contains "Raj": ${enhancedContainsRaj}`)
+          console.log(`Structured contains "Raj": ${structuredContainsRaj}`)
+          console.log(`Raw: "${entry.raw_text.substring(0, 100)}..."`)
+          if (entry.enhanced_text) console.log(`Enhanced: "${entry.enhanced_text.substring(0, 100)}..."`)
+          if (entry.structured_summary) console.log(`Structured: "${entry.structured_summary.substring(0, 100)}..."`)
+          console.log('---')
+        })
+      }
+      
+    } catch (error) {
+      console.error('Debug search failed:', error)
+    }
+  }
+
+  // Regenerate all embeddings with BGE improvements
+  const regenerateAllEmbeddings = async () => {
+    console.log('🔄 Starting complete embedding regeneration with BGE improvements...')
+    
+    try {
+      const response = await api.regenerateAllEmbeddings()
+      
+      if (response.success) {
+        console.log('✅ Regeneration started successfully!')
+        console.log('📝 Status:', response.data?.message)
+        console.log('🗑️ Embeddings cleared:', response.data?.embeddings_cleared || 0)
+        console.log('⏱️ Estimated time:', response.data?.estimated_time)
+        console.log('🔄 This will regenerate ALL embeddings with:')
+        console.log('  • Proper BGE document formatting')
+        console.log('  • Text prioritization (structured > enhanced > raw)')
+        console.log('  • Improved semantic search quality')
+        console.log('\n📊 Monitoring progress...')
+        
+        // Set regenerating state to show processing badges
+        setIsRegenerating(true)
+        
+        // Poll for status updates
+        const pollStatus = async () => {
+          try {
+            const statusResponse = await api.getRegenerationStatus()
+            if (statusResponse.success && statusResponse.data) {
+              const status = statusResponse.data
+              
+              if (status.is_running) {
+                console.log(`🔄 Progress: ${status.progress}/${status.total} (${status.percentage}%) - ${status.current_step}`)
+                
+                // Show recent logs
+                if (status.logs && status.logs.length > 0) {
+                  const recentLogs = status.logs.slice(-5) // Show last 5 logs
+                  recentLogs.forEach((log: string) => console.log(`  ${log}`))
+                }
+                
+                // Continue polling every 2 seconds
+                setTimeout(pollStatus, 2000)
+              } else {
+                console.log('🎉 Regeneration completed!')
+                console.log('📊 Final status:')
+                console.log(`Progress: ${status.progress}/${status.total}`)
+                
+                if (status.logs && status.logs.length > 0) {
+                  console.log('\n📜 REGENERATION LOGS:')
+                  status.logs.forEach((log: string) => console.log(log))
+                } else {
+                  console.log('⚠️ No logs available from regeneration process')
+                }
+                
+                // Clear regenerating state and refresh entries
+                setIsRegenerating(false)
+                console.log('🔄 Refreshing entries list...')
+                loadEntries()
+              }
+            }
+          } catch (error) {
+            console.error('❌ Status polling failed:', error)
+          }
+        }
+        
+        // Start polling after a short delay
+        setTimeout(pollStatus, 1000)
+        
+      } else {
+        console.error('❌ Regeneration failed:', response.error)
+      }
+      
+    } catch (error) {
+      console.error('❌ Regeneration request failed:', error)
+    }
+  }
+
+  // Database state debug function
+  const debugDatabaseState = async () => {
+    console.log('🗄️ DEBUG: Checking database state...')
+    
+    try {
+      const response = await api.debugDatabaseState()
+      
+      if (response.success && response.data) {
+        // The actual data is nested inside response.data.data due to SuccessResponse wrapper
+        const data = response.data.data || response.data
+        
+        console.log('📊 DATABASE STATE:')
+        console.log(`Total entries: ${data.total_entries}`)
+        console.log(`Entries with embeddings: ${data.entries_with_embeddings}`)
+        console.log(`Entries without embeddings: ${data.entries_without_embeddings}`)
+        
+        // Check regeneration status
+        if (data.regeneration_status) {
+          console.log('\n🔄 REGENERATION STATUS:')
+          console.log(`Is running: ${data.regeneration_status.is_running}`)
+          console.log(`Progress: ${data.regeneration_status.progress}/${data.regeneration_status.total}`)
+          console.log(`Current step: ${data.regeneration_status.current_step}`)
+        }
+        
+        // Show Raj entries if found
+        if (data.raj_entries && data.raj_entries.length > 0) {
+          console.log(`\n📌 ENTRIES CONTAINING "RAJ": ${data.raj_entries_found}`)
+          data.raj_entries.forEach((entry: any, index: number) => {
+            console.log(`\n--- Raj Entry ${index + 1} (ID: ${entry.id}) ---`)
+            console.log(`Has embeddings: ${entry.has_embeddings} (${entry.embedding_dimension}D)`)
+            if (entry.raw_text_snippet) {
+              console.log(`Raw: "${entry.raw_text_snippet}"`)
+            }
+            if (entry.structured_snippet) {
+              console.log(`Structured: "${entry.structured_snippet}"`)
+            }
+            if (entry.selected_text) {
+              console.log(`Text for embedding: "${entry.selected_text}"`)
+            }
+          })
+        } else {
+          console.log('\n⚠️ No entries containing "Raj" found in database')
+        }
+        
+        if (data.sample_entries && data.sample_entries.length > 0) {
+          console.log('\n📝 SAMPLE ENTRIES:')
+          data.sample_entries.forEach((entry: any, index: number) => {
+            console.log(`\n--- Entry ${index + 1} (ID: ${entry.id}) ---`)
+            console.log(`Has raw text: ${entry.has_raw}`)
+            console.log(`Has enhanced: ${entry.has_enhanced}`)
+            console.log(`Has structured: ${entry.has_structured}`)
+            console.log(`Has embeddings: ${entry.has_embeddings} (${entry.embedding_dimension}D)`)
+            
+            if (entry.best_text_for_embedding) {
+              console.log(`Best text for embedding: "${entry.best_text_for_embedding}"`)
+            }
+          })
+        }
+        
+        // Summary message
+        const embeddingPercentage = data.total_entries > 0 
+          ? Math.round((data.entries_with_embeddings / data.total_entries) * 100) 
+          : 0
+        console.log(`\n📊 SUMMARY: ${embeddingPercentage}% of entries have embeddings (${data.entries_with_embeddings}/${data.total_entries})`)
+        
+      } else {
+        console.error('❌ Failed to get database state:', response.error)
+      }
+      
+    } catch (error) {
+      console.error('❌ Database debug failed:', error)
+    }
+  }
 
   const loadEntries = async () => {
     try {
@@ -145,6 +462,122 @@ function ViewEntriesPage() {
       setEntries([])
     } finally {
       setLoading(false)
+    }
+  }
+
+  const performSemanticSearch = async (query: string) => {
+    if (!query.trim()) {
+      setIsSemanticSearch(false)
+      setSemanticResults([])
+      return
+    }
+
+    try {
+      setSearching(true)
+      console.log('🔍 Starting semantic search for:', query)
+      
+      const response = await api.semanticSearch(query, 20, 0.3) // Higher threshold for better matches
+      
+      console.log('📡 Semantic search response:', response)
+      
+      if (response.success && response.data) {
+        // Handle nested data structure from SuccessResponse
+        const searchData = response.data.data || response.data
+        const results = searchData.results || []
+        console.log('📊 Search results:', results)
+        
+        if (results.length === 0) {
+          console.log('⚠️ No semantic search results found')
+          setSemanticResults([])
+          setIsSemanticSearch(true)
+          setCurrentPage(1)
+          return
+        }
+        
+        // Convert semantic search results to Entry objects
+        console.log('🔄 Fetching entry details for', results.length, 'results')
+        
+        const entryPromises = results.map(async (result: any) => {
+          console.log('📝 Fetching entry:', result.entry_id, 'similarity:', result.similarity)
+          const entryResponse = await api.getEntry(result.entry_id)
+          if (entryResponse.success && entryResponse.data) {
+            return {
+              ...entryResponse.data,
+              similarity: result.similarity // Add similarity score
+            }
+          }
+          console.log('❌ Failed to fetch entry:', result.entry_id)
+          return null
+        })
+        
+        const entries = (await Promise.all(entryPromises)).filter(Boolean) as Entry[]
+        console.log('✅ Successfully fetched', entries.length, 'entries with similarities:', entries.map(e => (e as any).similarity))
+        
+        setSemanticResults(entries)
+        setIsSemanticSearch(true)
+        setCurrentPage(1) // Reset to first page for search results
+      } else {
+        console.error('❌ Semantic search failed:', response.error || response.data)
+        setSemanticResults([])
+        setIsSemanticSearch(false)
+      }
+    } catch (error) {
+      console.error('💥 Semantic search error:', error)
+      setSemanticResults([])
+      setIsSemanticSearch(false)
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  const performNormalSearch = async (query: string) => {
+    if (!query.trim()) {
+      setIsSemanticSearch(false)
+      setSemanticResults([])
+      return
+    }
+
+    try {
+      setSearching(true)
+      console.log('🔍 Starting normal text search for:', query)
+      
+      // Use the existing text search API endpoint
+      const response = await api.request('/entries/search', {
+        method: 'POST',
+        body: JSON.stringify({
+          query: query,
+          limit: 50
+        })
+      })
+      
+      console.log('📡 Normal search response:', response)
+      
+      if (response.success && response.data) {
+        const results = response.data || []
+        console.log('📊 Normal search results:', results)
+        
+        if (results.length === 0) {
+          console.log('⚠️ No normal search results found')
+          setSemanticResults([])
+          setIsSemanticSearch(true) // Use this flag to indicate search mode is active
+          setCurrentPage(1)
+          return
+        }
+        
+        setSemanticResults(results) // Reuse the same state for both search types
+        setIsSemanticSearch(true) // Indicate we're in search mode
+        setCurrentPage(1)
+      } else {
+        console.error('❌ Normal search failed:', response.error || response.data)
+        setSemanticResults([])
+        setIsSemanticSearch(false)
+      }
+    } catch (error) {
+      console.error('💥 Normal search error:', error)
+      setSemanticResults([])
+      setIsSemanticSearch(false)
+    } finally {
+      setSearching(false)
     }
   }
 
@@ -285,18 +718,10 @@ Word Count: ${entry.word_count}
 
   // Filter entries based on search query and date filter
   const filteredEntries = useMemo(() => {
-    let filtered = entries
+    // Use semantic search results if available, otherwise use regular entries
+    let filtered = isSemanticSearch ? semanticResults : entries
 
-    // Apply search filter
-    if (searchQuery) {
-      filtered = filtered.filter(entry => 
-        entry.raw_text.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        entry.enhanced_text?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        entry.structured_summary?.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    }
-
-    // Apply date filter
+    // Apply date filter (but not text search since semantic search replaces it)
     if (dateFilterType !== 'all') {
       filtered = filtered.filter(entry => {
         const entryDate = new Date(entry.timestamp)
@@ -335,7 +760,7 @@ Word Count: ${entry.word_count}
     }
 
     return filtered
-  }, [entries, searchQuery, dateFilterType, startDate, endDate, lastPeriodValue, lastPeriodUnit])
+  }, [entries, semanticResults, isSemanticSearch, dateFilterType, startDate, endDate, lastPeriodValue, lastPeriodUnit])
 
   // Auto-close preview when no filtered entries
   useEffect(() => {
@@ -756,22 +1181,60 @@ Word Count: ${entry.word_count}
               )}
             </div>
 
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              {searching && (
-                <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-primary animate-spin" />
-              )}
-              <input
-                type="text"
-                placeholder="Search entries..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 pr-10 py-2 bg-background border border-border rounded-md text-white placeholder:text-muted-foreground focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all duration-200"
-              />
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                {searching && (
+                  <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-primary animate-spin" />
+                )}
+                <input
+                  type="text"
+                  placeholder={useSemanticSearch ? "Semantic search..." : "Text search..."}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={handleSearchKeyDown}
+                  className="pl-10 pr-10 py-2 bg-background border border-border rounded-md text-white placeholder:text-muted-foreground focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all duration-200"
+                />
+              </div>
+              
+              {/* Search Mode Toggle */}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setUseSemanticSearch(!useSemanticSearch)}
+                className="flex items-center gap-2 relative overflow-hidden group transition-all duration-200 bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 hover:text-primary"
+              >
+                {/* Animated background for consistent styling */}
+                <motion.div
+                  layoutId="activeSearchModeBg"
+                  className="absolute inset-0 bg-primary/10"
+                  initial={false}
+                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                />
+                
+                <div className="relative flex items-center gap-2">
+                  <span className="text-sm font-medium whitespace-nowrap">
+                    {useSemanticSearch ? 'Semantic' : 'Text'}
+                  </span>
+                  <Switch
+                    id="search-mode"
+                    checked={useSemanticSearch}
+                    onCheckedChange={setUseSemanticSearch}
+                    className="data-[state=checked]:bg-primary"
+                  />
+                </div>
+              </Button>
             </div>
-            <Badge className="bg-primary/10 text-primary border-primary/20">
-              {searchQuery ? filteredEntries.length : totalEntries} entries
-            </Badge>
+            <div className="flex items-center gap-2">
+              {isSemanticSearch && (
+                <Badge className={useSemanticSearch ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-blue-500/10 text-blue-400 border-blue-500/20"}>
+                  {useSemanticSearch ? 'Semantic Search' : 'Text Search'}
+                </Badge>
+              )}
+              <Badge className="bg-primary/10 text-primary border-primary/20">
+                {searchQuery ? filteredEntries.length : totalEntries} entries
+              </Badge>
+            </div>
           </div>
         </div>
 
@@ -883,9 +1346,30 @@ Word Count: ${entry.word_count}
                               {truncateText(getEntryContent(entry, 'enhanced'))}
                             </p>
                             <div className="flex items-center justify-between mt-2">
-                              <Badge className="bg-purple-500/10 text-purple-400 border-purple-500/20 text-xs">
-                                Enhanced
-                              </Badge>
+                              <div className="flex items-center gap-2">
+                                <Badge className="bg-purple-500/10 text-purple-400 border-purple-500/20 text-xs">
+                                  Enhanced
+                                </Badge>
+                                {/* Embedding indicator */}
+                                {isRegenerating ? (
+                                  <Badge className="bg-yellow-500/10 text-yellow-400 border-yellow-500/20 text-xs">
+                                    Regenerating
+                                  </Badge>
+                                ) : entry.embeddings && Array.isArray(entry.embeddings) && entry.embeddings.length > 0 ? (
+                                  <Badge className="bg-cyan-500/10 text-cyan-400 border-cyan-500/20 text-xs">
+                                    Indexed
+                                  </Badge>
+                                ) : (
+                                  <Badge className="bg-orange-500/10 text-orange-400 border-orange-500/20 text-xs">
+                                    No Embeddings
+                                  </Badge>
+                                )}
+                                {isSemanticSearch && (entry as any).similarity && (
+                                  <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-xs">
+                                    {Math.round((entry as any).similarity * 100)}% match
+                                  </Badge>
+                                )}
+                              </div>
                               <span className="text-muted-foreground text-xs">
                                 {entry.word_count} words
                               </span>

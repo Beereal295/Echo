@@ -1,12 +1,14 @@
 from pydantic import BaseModel
-from typing import Optional, Any
+from typing import Optional, Any, TypeVar, Generic
+
+T = TypeVar('T')
 
 
-class SuccessResponse(BaseModel):
+class SuccessResponse(BaseModel, Generic[T]):
     """Standard success response"""
     success: bool = True
     message: str = "Operation completed successfully"
-    data: Optional[Any] = None
+    data: Optional[T] = None
     
     class Config:
         json_schema_extra = {

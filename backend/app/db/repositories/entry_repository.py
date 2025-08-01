@@ -125,3 +125,109 @@ class EntryRepository:
         return await EntryRepository.get_by_date_range(
             start_date, datetime.now()
         )
+    
+    @staticmethod
+    async def get_entries_without_embeddings(limit: int = 100) -> List[Entry]:
+        """Get entries that don't have embeddings yet"""
+        rows = await db.fetch_all(
+            """SELECT * FROM entries 
+               WHERE embeddings IS NULL OR embeddings = '[]' OR embeddings = ''
+               ORDER BY timestamp DESC
+               LIMIT ?""",
+            (limit,)
+        )
+        return [Entry.from_dict(row) for row in rows]
+    
+    @staticmethod
+    async def get_entries_with_embeddings(limit: int = 100, offset: int = 0) -> List[Entry]:
+        """Get entries that have embeddings for similarity search"""
+        rows = await db.fetch_all(
+            """SELECT * FROM entries 
+               WHERE embeddings IS NOT NULL AND embeddings != '[]' AND embeddings != ''
+               ORDER BY timestamp DESC
+               LIMIT ? OFFSET ?""",
+            (limit, offset)
+        )
+        return [Entry.from_dict(row) for row in rows]
+    
+    @staticmethod
+    async def update_embedding(entry_id: int, embeddings: List[float]) -> bool:
+        """Update only the embeddings field for an entry"""
+        import json
+        embeddings_json = json.dumps(embeddings)
+        
+        await db.execute(
+            "UPDATE entries SET embeddings = ? WHERE id = ?",
+            (embeddings_json, entry_id)
+        )
+        await db.commit()
+        return True
+    
+    @staticmethod
+    async def count_entries_with_embeddings() -> int:
+        """Count entries that have embeddings"""
+        result = await db.fetch_one(
+            """SELECT COUNT(*) as count FROM entries 
+               WHERE embeddings IS NOT NULL AND embeddings != '[]' AND embeddings != '' AND LENGTH(embeddings) > 2"""
+        )
+        return result["count"] if result else 0
+    
+    @staticmethod
+    async def count_entries_without_embeddings() -> int:
+        """Count entries that don't have embeddings"""
+        result = await db.fetch_one(
+            """SELECT COUNT(*) as count FROM entries 
+               WHERE embeddings IS NULL OR embeddings = '[]' OR embeddings = ''"""
+        )
+        return result["count"] if result else 0
+    
+    @staticmethod
+    async def clear_all_embeddings() -> int:
+        """Clear all embeddings from all entries. Returns count of affected rows."""
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # First, count how many entries have embeddings
+        before_count = await EntryRepository.count_entries_with_embeddings()
+        logger.info(f"Before clearing: {before_count} entries have embeddings")
+        
+        if before_count == 0:
+            logger.warning("No entries have embeddings to clear!")
+            return 0
+        
+        # Clear all embeddings - try multiple approaches
+        try:
+            # Method 1: Update with NULL
+            await db.execute(
+                "UPDATE entries SET embeddings = NULL WHERE embeddings IS NOT NULL"
+            )
+            await db.commit()
+            
+            # Method 2: Also clear empty arrays and empty strings
+            await db.execute(
+                "UPDATE entries SET embeddings = NULL WHERE embeddings = '[]' OR embeddings = ''"
+            )
+            await db.commit()
+            
+        except Exception as e:
+            logger.error(f"Error clearing embeddings: {e}")
+            # Try direct approach
+            await db.execute("UPDATE entries SET embeddings = NULL")
+            await db.commit()
+        
+        # Verify they were cleared
+        after_count = await EntryRepository.count_entries_with_embeddings()
+        logger.info(f"After clearing: {after_count} entries have embeddings")
+        
+        return before_count  # Return how many were cleared
+    
+    @staticmethod
+    async def get_all_entries_for_embedding_generation() -> List[Entry]:
+        """Get all entries for embedding generation (no pagination)"""
+        rows = await db.fetch_all(
+            """SELECT id, raw_text, enhanced_text, structured_summary, mode, 
+                      embeddings, timestamp, mood_tags, word_count, processing_metadata
+               FROM entries 
+               ORDER BY id ASC"""
+        )
+        return [Entry.from_dict(row) for row in rows]

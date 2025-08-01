@@ -8,7 +8,8 @@ from app.api.routes import (
     hotkey_router,
     websocket_router,
     ollama_router,
-    drafts_router
+    drafts_router,
+    embeddings_router
 )
 from app.core.config import settings
 
@@ -24,3 +25,4 @@ api_router.include_router(hotkey_router)
 api_router.include_router(websocket_router)
 api_router.include_router(ollama_router)
 api_router.include_router(drafts_router)
+api_router.include_router(embeddings_router)

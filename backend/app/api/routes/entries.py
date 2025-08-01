@@ -1,6 +1,7 @@
-from fastapi import APIRouter, HTTPException, Query, Path
+from fastapi import APIRouter, HTTPException, Query, Path, BackgroundTasks
 from typing import Optional, List
 from datetime import datetime
+import logging
 
 from app.api.schemas import (
     EntryCreate,
@@ -17,12 +18,60 @@ from app.schemas.entry import ProcessingMode, EntryProcessRequest, EntryCreateAn
 # Note: Using our newer schema definitions that include ProcessingMode enum
 from app.services.entry_processing import get_entry_processing_service
 from app.services.processing_queue import get_processing_queue
+from app.services.embedding_service import get_embedding_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/entries", tags=["entries"])
 
 
+async def _generate_embedding_for_entry(entry_id: int, text: str = None):
+    """Background task to generate embedding for an entry"""
+    try:
+        logger.info(f"Generating embedding for entry {entry_id}")
+        embedding_service = get_embedding_service()
+        
+        # If no text provided, get the entry and determine best text to use
+        if text is None:
+            entry = await EntryRepository.get_by_id(entry_id)
+            if not entry:
+                logger.error(f"Entry {entry_id} not found for embedding generation")
+                return
+            text = _select_best_text_for_embedding(entry)
+        
+        if not text or not text.strip():
+            logger.warning(f"No suitable text found for embedding generation for entry {entry_id}")
+            return
+        
+        # Generate embedding with BGE document formatting
+        embedding = await embedding_service.generate_embedding(text.strip(), normalize=True, is_query=False)
+        
+        # Update entry with embedding
+        await EntryRepository.update_embedding(entry_id, embedding)
+        
+        logger.info(f"Successfully generated embedding for entry {entry_id} using text: '{text[:50]}...'")
+        
+    except Exception as e:
+        logger.error(f"Failed to generate embedding for entry {entry_id}: {e}")
+
+
+def _select_best_text_for_embedding(entry) -> str:
+    """
+    Select the best text content for embedding generation.
+    ALWAYS use raw_text for reliable semantic search - no LLM processing can alter the original content
+    """
+    # ALWAYS use raw text - it's the user's original words and most reliable for search
+    if entry.raw_text and entry.raw_text.strip():
+        logger.debug(f"Using raw_text for embedding (entry {entry.id})")
+        return entry.raw_text.strip()
+    
+    # No raw text found (should not happen)
+    logger.warning(f"No raw text found for embedding in entry {entry.id}")
+    return ""
+
+
 @router.post("/", response_model=EntryResponse, status_code=201)
-async def create_entry(entry_data: EntryCreate):
+async def create_entry(entry_data: EntryCreate, background_tasks: BackgroundTasks):
     """Create a new journal entry"""
     try:
         # Create entry model with basic data
@@ -37,6 +86,13 @@ async def create_entry(entry_data: EntryCreate):
         
         # Save to database first
         created_entry = await EntryRepository.create(entry)
+        
+        # Generate embedding in background - will use best available text
+        background_tasks.add_task(
+            _generate_embedding_for_entry,
+            created_entry.id
+        )
+        logger.info(f"Queued embedding generation for entry {created_entry.id}")
         
         # Convert to response format
         return EntryResponse(
@@ -138,7 +194,8 @@ async def get_entry(entry_id: int = Path(..., description="Entry ID")):
 @router.put("/{entry_id}", response_model=EntryResponse)
 async def update_entry(
     entry_id: int = Path(..., description="Entry ID"),
-    entry_data: EntryUpdate = ...
+    entry_data: EntryUpdate = ...,
+    background_tasks: BackgroundTasks = None
 ):
     """Update a journal entry"""
     try:
@@ -148,10 +205,14 @@ async def update_entry(
         if not entry:
             raise HTTPException(status_code=404, detail="Entry not found")
         
+        # Track if raw_text was updated (for embedding regeneration)
+        text_updated = False
+        
         # Update fields that were provided
         if entry_data.raw_text is not None:
             entry.raw_text = entry_data.raw_text
             entry.word_count = len(entry_data.raw_text.split())
+            text_updated = True
         
         if entry_data.enhanced_text is not None:
             entry.enhanced_text = entry_data.enhanced_text
@@ -167,6 +228,16 @@ async def update_entry(
         
         # Save updates
         updated_entry = await EntryRepository.update(entry)
+        
+        # Regenerate embedding if any text was updated and we have background tasks
+        if (text_updated or 
+            entry_data.enhanced_text is not None or 
+            entry_data.structured_summary is not None) and background_tasks:
+            background_tasks.add_task(
+                _generate_embedding_for_entry,
+                updated_entry.id
+            )
+            logger.info(f"Queued embedding regeneration for updated entry {updated_entry.id}")
         
         return EntryResponse(
             id=updated_entry.id,
@@ -277,7 +348,8 @@ async def process_entry(
 
 @router.post("/create-and-process", response_model=dict)
 async def create_and_process_entry(
-    request: EntryCreateAndProcessRequest
+    request: EntryCreateAndProcessRequest,
+    background_tasks: BackgroundTasks
 ):
     """Create a new entry and queue it for processing in specified modes"""
     try:
@@ -290,6 +362,13 @@ async def create_and_process_entry(
         )
         
         created_entry = await EntryRepository.create(entry)
+        
+        # Generate embedding in background - will use best available text
+        background_tasks.add_task(
+            _generate_embedding_for_entry,
+            created_entry.id
+        )
+        logger.info(f"Queued embedding generation for entry {created_entry.id}")
         
         # Queue for processing in each requested mode
         processing_queue = await get_processing_queue()

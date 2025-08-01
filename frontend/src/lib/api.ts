@@ -235,6 +235,76 @@ class ApiClient {
   async getEntryCount(): Promise<ApiResponse<{ total_entries: number }>> {
     return this.request('/entries/stats/count')
   }
+
+  // Semantic search
+  async semanticSearch(query: string, limit: number = 10, similarityThreshold: number = 0.3): Promise<ApiResponse<any>> {
+    return this.request('/embeddings/semantic-search', {
+      method: 'POST',
+      body: JSON.stringify({
+        query,
+        limit,
+        similarity_threshold: similarityThreshold
+      })
+    })
+  }
+
+  // Regenerate all embeddings with BGE improvements
+  async regenerateAllEmbeddings(): Promise<ApiResponse<any>> {
+    return this.request('/embeddings/regenerate-all', {
+      method: 'POST'
+    })
+  }
+
+  // Get regeneration status
+  async getRegenerationStatus(): Promise<ApiResponse<any>> {
+    return this.request('/embeddings/regeneration-status')
+  }
+
+  // Debug database state
+  async debugDatabaseState(): Promise<ApiResponse<any>> {
+    return this.request('/embeddings/debug-database')
+  }
+
+  // Test embeddings directly
+  async testEmbeddings(): Promise<ApiResponse<any>> {
+    return this.request('/embeddings/test-embeddings')
+  }
+
+  // Force clear all embeddings
+  async forceClearEmbeddings(): Promise<ApiResponse<any>> {
+    return this.request('/embeddings/force-clear-embeddings', {
+      method: 'POST'
+    })
+  }
+
+  // Synchronous regeneration (for testing)
+  async regenerateSync(): Promise<ApiResponse<any>> {
+    return this.request('/embeddings/regenerate-sync', {
+      method: 'POST'
+    })
+  }
+
+  // Debug search
+  async debugSearch(query: string): Promise<ApiResponse<any>> {
+    return this.request('/embeddings/debug-search', {
+      method: 'POST',
+      body: JSON.stringify({ query })
+    })
+  }
+
+  // Fix hiking entries
+  async fixHikingEntries(): Promise<ApiResponse<any>> {
+    return this.request('/embeddings/fix-hiking-entries', {
+      method: 'POST'
+    })
+  }
+
+  // Regenerate all embeddings with raw text only (final fix)
+  async regenerateAllRawText(): Promise<ApiResponse<any>> {
+    return this.request('/embeddings/regenerate-all-raw-text', {
+      method: 'POST'
+    })
+  }
 }
 
 // Export singleton instance

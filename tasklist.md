@@ -215,18 +215,18 @@ This document serves as the project management tool for Echo development. All ta
 
 ## Phase 5: Advanced Features
 
-### Task 5.1: Embedding System ⏳
+### Task 5.1: Embedding System ✅
 **Description:** Implement embedding generation and storage for semantic search
 **Sub-tasks:**
-- [ ] 5.1.1: Integrate BGE-small model for embedding generation
-- [ ] 5.1.2: Create embedding service with caching
-- [ ] 5.1.3: Implement batch processing for existing entries
-- [ ] 5.1.4: Add embedding storage and retrieval from database
-- [ ] 5.1.5: Create similarity search functionality
+- [x] 5.1.1: Integrate BGE-small-en-v1.5 model for embedding generation
+- [x] 5.1.2: Create embedding service with caching and lazy loading
+- [x] 5.1.3: Implement batch processing for existing entries without embeddings
+- [x] 5.1.4: Add embedding storage and retrieval from database with repository methods
+- [x] 5.1.5: Create similarity search functionality with cosine similarity and semantic search
 
 **Dependencies:** Task 3.3
 **Testing Criteria:** Embeddings are generated and stored for all entries
-**Status:** ⏳
+**Status:** ✅ **Ready for Testing**
 
 ### Task 5.2: Pattern Detection System ⏳
 **Description:** Implement pattern analysis and detection after 30 entries

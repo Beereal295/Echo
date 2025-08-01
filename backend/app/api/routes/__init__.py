@@ -6,6 +6,7 @@ from .hotkey import router as hotkey_router
 from .websocket import router as websocket_router
 from .ollama import router as ollama_router
 from .drafts import router as drafts_router
+from .embeddings import router as embeddings_router
 
 __all__ = [
     "entries_router",
@@ -15,5 +16,6 @@ __all__ = [
     "hotkey_router",
     "websocket_router",
     "ollama_router",
-    "drafts_router"
+    "drafts_router",
+    "embeddings_router"
 ]
