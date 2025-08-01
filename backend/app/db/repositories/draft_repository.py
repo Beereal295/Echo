@@ -66,20 +66,46 @@ class DraftRepository:
     
     @staticmethod
     async def save_or_update(content: str, metadata: Optional[dict] = None) -> Draft:
-        """Save draft content, updating existing draft if recent enough"""
+        """Save draft content, always updating the latest draft (one draft at a time)"""
+        # Clean up - ensure only one draft exists
+        await DraftRepository.cleanup_old_drafts_keep_one()
+        
         latest = await DraftRepository.get_latest()
         
-        # If there's a recent draft (within last 5 minutes), update it
-        if latest and latest.created_at:
-            time_diff = datetime.now() - latest.created_at
-            if time_diff.total_seconds() < 300:  # 5 minutes
-                latest.content = content
-                latest.metadata = metadata or latest.metadata
-                return await DraftRepository.update(latest)
+        # If there's any existing draft, update it
+        if latest:
+            latest.content = content
+            # Always update metadata - new metadata takes precedence
+            if metadata is not None:
+                latest.metadata = metadata
+            return await DraftRepository.update(latest)
         
-        # Otherwise create a new draft
+        # Otherwise create a new draft (first time)
         draft = Draft(content=content, metadata=metadata)
         return await DraftRepository.create(draft)
+    
+    @staticmethod
+    async def cleanup_old_drafts_keep_one() -> int:
+        """Keep only the most recent draft, delete all others"""
+        # Get all drafts ordered by most recent first
+        rows = await db.fetch_all(
+            """SELECT id FROM drafts 
+               ORDER BY updated_at DESC, created_at DESC"""
+        )
+        
+        if len(rows) <= 1:
+            return 0  # Nothing to clean up
+        
+        # Keep the first (most recent), delete the rest
+        draft_ids_to_delete = [row["id"] for row in rows[1:]]
+        
+        deleted_count = 0
+        for draft_id in draft_ids_to_delete:
+            await db.execute("DELETE FROM drafts WHERE id = ?", (draft_id,))
+            deleted_count += 1
+        
+        await db.commit()
+        return deleted_count
     
     @staticmethod
     async def delete(draft_id: int) -> bool:

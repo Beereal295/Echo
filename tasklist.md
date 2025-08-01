@@ -386,6 +386,27 @@ This document serves as the project management tool for Echo development. All ta
 
 ---
 
+## Additional Features
+
+### Task 9.1: Theme System Implementation ⏳
+**Description:** Implement multiple theme options (Light, Dark, System) for the application
+**Sub-tasks:**
+- [ ] 9.1.1: Create theme provider and context for React
+- [ ] 9.1.2: Implement CSS variables for theme colors
+- [ ] 9.1.3: Create light theme color palette
+- [ ] 9.1.4: Create dark theme color palette (current default)
+- [ ] 9.1.5: Add system theme detection and auto-switching
+- [ ] 9.1.6: Update all components to use theme variables
+- [ ] 9.1.7: Add smooth theme transition animations
+- [ ] 9.1.8: Persist theme preference in database
+- [ ] 9.1.9: Test theme consistency across all pages
+
+**Dependencies:** Task 4.5 (Settings Page)
+**Testing Criteria:** All themes work correctly with smooth transitions and proper persistence
+**Status:** ⏳
+
+---
+
 ## Development Notes
 
 **Task Completion Protocol:**

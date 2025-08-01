@@ -203,16 +203,19 @@ function SettingsPage() {
   const testOllamaConnection = async () => {
     setTestingOllama(true)
     try {
-      // Save Ollama settings first
-      await handleSaveOllama()
+      toast({
+        title: 'Testing connection...',
+        description: 'Connecting to Ollama service'
+      })
       
-      // Test connection
+      // Test connection using saved settings (not current form values)
       const response = await api.testOllamaConnection()
+      
       if (response.success && response.data?.data?.service_ready) {
         setOllamaConnected(true)
         toast({
           title: 'Connection successful',
-          description: 'Ollama is connected and ready'
+          description: response.data?.message || 'Ollama is connected and ready'
         })
         // Reload models
         await loadOllamaModels()
@@ -220,7 +223,7 @@ function SettingsPage() {
         setOllamaConnected(false)
         toast({
           title: 'Connection failed',
-          description: 'Unable to connect to Ollama',
+          description: response.error || 'Unable to connect to Ollama',
           variant: 'destructive'
         })
       }

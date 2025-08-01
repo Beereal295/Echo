@@ -92,7 +92,11 @@ function NewEntryPage() {
   const [autoSaveInterval, setAutoSaveInterval] = useState(30) // seconds
   const [lastAutoSave, setLastAutoSave] = useState<Date | null>(null)
   const [isAutoSaving, setIsAutoSaving] = useState(false)
+  const [autoSaveCountdown, setAutoSaveCountdown] = useState<number | null>(null)
+  const [hasDraftLoaded, setHasDraftLoaded] = useState(false)
+  const [isManualSaving, setIsManualSaving] = useState(false)
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null)
   
   // New state for UI flow
   const [showInputUI, setShowInputUI] = useState(true)
@@ -215,7 +219,12 @@ function NewEntryPage() {
     })
 
     // Load current preferences (hotkey and auto-save)
-    loadPreferences()
+    const initialize = async () => {
+      await loadPreferences()
+      // Load draft after preferences are loaded
+      setTimeout(() => loadLatestDraft(), 100)
+    }
+    initialize()
 
     // Cleanup on unmount
     return () => {
@@ -293,8 +302,72 @@ function NewEntryPage() {
   }
 
   // Auto-save functionality
+  const loadLatestDraft = async () => {
+    if (hasDraftLoaded) return // Only load once per session
+    
+    try {
+      // Try to load from backend first
+      try {
+        const response = await api.request('/drafts/latest')
+        console.log('Backend draft response:', response)
+        
+        if (response.success && response.data?.content) {
+          const draftSource = response.data.metadata?.source || 'unknown'
+          const draftTime = response.data.updated_at || response.data.created_at
+          
+          setText(response.data.content)
+          setLastAutoSave(new Date(draftTime))
+          setHasDraftLoaded(true)
+          
+          console.log(`Loaded ${draftSource} draft from backend:`, {
+            content_length: response.data.content.length,
+            created_at: response.data.created_at,
+            updated_at: response.data.updated_at,
+            source: draftSource
+          })
+          
+          toast({
+            title: 'Draft loaded',
+            description: `Your previous ${draftSource} draft has been restored`
+          })
+          return
+        } else {
+          console.log('No valid draft found in backend response')
+        }
+      } catch (backendError) {
+        console.log('Backend draft not available, checking localStorage:', backendError)
+      }
+      
+      // Fallback to localStorage
+      const draftData = localStorage.getItem('echo_draft_new_entry')
+      if (draftData) {
+        const draft = JSON.parse(draftData)
+        if (draft.content && draft.content.trim()) {
+          const draftSource = draft.source || 'unknown'
+          setText(draft.content)
+          setLastAutoSave(new Date(draft.timestamp))
+          setHasDraftLoaded(true)
+          
+          console.log(`Loaded ${draftSource} draft from localStorage:`, {
+            content_length: draft.content.length,
+            timestamp: draft.timestamp,
+            source: draftSource
+          })
+          
+          toast({
+            title: 'Draft loaded',
+            description: `Your previous ${draftSource} draft has been restored`
+          })
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load draft:', error)
+      // Silently fail - don't disrupt user experience
+    }
+  }
+
   const performAutoSave = async (content: string) => {
-    if (!content.trim() || isAutoSaving) return
+    if (!content.trim() || isAutoSaving || isManualSaving) return
     
     setIsAutoSaving(true)
     try {
@@ -304,23 +377,25 @@ function NewEntryPage() {
           method: 'POST',
           body: JSON.stringify({
             content: content.trim(),
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            metadata: { source: 'auto' } // Mark as auto save
           })
         })
         
         if (response.success) {
           setLastAutoSave(new Date())
-          console.log('Auto-saved to backend successfully')
+          console.log('Auto-saved to backend successfully:', response.data)
           return
         }
       } catch (backendError) {
         console.log('Backend auto-save not available, using localStorage')
-      }
+      }     
       
       // Fallback to localStorage
       const draftData = {
         content: content.trim(),
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        source: 'auto'
       }
       localStorage.setItem('echo_draft_new_entry', JSON.stringify(draftData))
       setLastAutoSave(new Date())
@@ -334,26 +409,171 @@ function NewEntryPage() {
     }
   }
 
-  // Auto-save effect - triggers when text changes
-  useEffect(() => {
-    if (!autoSaveEnabled || !text.trim() || isProcessing) {
-      return
+  const clearAllDrafts = async () => {
+    // Clear the text
+    setText('')
+    setAutoSaveCountdown(null)
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current)
     }
-
-    // Clear existing timeout
     if (autoSaveTimeoutRef.current) {
       clearTimeout(autoSaveTimeoutRef.current)
     }
+    
+    // Mark that user has intentionally cleared - prevent auto-loading
+    setHasDraftLoaded(true)
+    
+    // Clear drafts from backend and localStorage
+    try {
+      // Try to clear from backend
+      try {
+        const response = await api.request('/drafts/latest')
+        if (response.success && response.data?.id) {
+          await api.request(`/drafts/${response.data.id}`, {
+            method: 'DELETE'
+          })
+          console.log('Cleared draft from backend successfully')
+        }
+      } catch (backendError) {
+        console.log('Backend draft clear not available')
+      }
+      
+      // Clear from localStorage
+      localStorage.removeItem('echo_draft_new_entry')
+      console.log('Cleared draft from localStorage')
+      
+      // Reset auto-save state
+      setLastAutoSave(null)
+      setIsAutoSaving(false)
+      
+      toast({
+        title: 'All cleared',
+        description: 'Content and drafts have been cleared'
+      })
+      
+    } catch (error) {
+      console.error('Failed to clear drafts:', error)
+      // Still show success since text was cleared
+      toast({
+        title: 'Content cleared',
+        description: 'Text cleared, but draft cleanup may be incomplete'
+      })
+    }
+  }
 
-    // Set new timeout for auto-save
+  const performManualSave = async () => {
+    if (!text.trim() || isManualSaving) return
+    
+    setIsManualSaving(true)
+    
+    // Cancel any pending auto-save to avoid conflicts
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current)
+    }
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current)
+    }
+    setAutoSaveCountdown(null)
+    
+    try {
+      // Try to save to backend first, fallback to localStorage
+      try {
+        const response = await api.request('/drafts/save', {
+          method: 'POST',
+          body: JSON.stringify({
+            content: text.trim(),
+            timestamp: new Date().toISOString(),
+            metadata: { source: 'manual' } // Mark as manual save
+          })
+        })
+        
+        if (response.success) {
+          setLastAutoSave(new Date())
+          console.log('Manual save to backend successfully:', response.data)
+          toast({
+            title: 'Draft saved',
+            description: 'Your draft has been saved successfully'
+          })
+          return
+        }
+      } catch (backendError) {
+        console.log('Backend manual save not available, using localStorage')
+      }
+      
+      // Fallback to localStorage
+      const draftData = {
+        content: text.trim(),
+        timestamp: new Date().toISOString(),
+        source: 'manual'
+      }
+      localStorage.setItem('echo_draft_new_entry', JSON.stringify(draftData))
+      setLastAutoSave(new Date())
+      console.log('Manual save to localStorage successfully')
+      toast({
+        title: 'Draft saved',
+        description: 'Your draft has been saved to local storage'
+      })
+      
+    } catch (error) {
+      console.error('Manual save failed completely:', error)
+      toast({
+        title: 'Save failed',
+        description: 'Failed to save draft',
+        variant: 'destructive'
+      })
+    } finally {
+      setIsManualSaving(false)
+    }
+  }
+
+  // Auto-save effect - triggers when text changes
+  useEffect(() => {
+    if (!autoSaveEnabled || !text.trim() || isProcessing) {
+      // Clear countdown when not auto-saving
+      setAutoSaveCountdown(null)
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current)
+      }
+      return
+    }
+
+    // Clear existing timeout and countdown
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current)
+    }
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current)
+    }
+
+    // Start countdown
+    setAutoSaveCountdown(autoSaveInterval)
+    
+    // Update countdown every second
+    countdownIntervalRef.current = setInterval(() => {
+      setAutoSaveCountdown(prev => {
+        if (prev === null || prev <= 1) {
+          return null
+        }
+        return prev - 1
+      })
+    }, 1000)
+
+    // Set timeout for auto-save
     autoSaveTimeoutRef.current = setTimeout(() => {
       performAutoSave(text)
+      setAutoSaveCountdown(null)
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current)
+      }
     }, autoSaveInterval * 1000) // Convert seconds to milliseconds
 
     // Cleanup function
     return () => {
       if (autoSaveTimeoutRef.current) {
         clearTimeout(autoSaveTimeoutRef.current)
+      }
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current)
       }
     }
   }, [text, autoSaveEnabled, autoSaveInterval, isProcessing])
@@ -587,8 +807,14 @@ function NewEntryPage() {
     // Reset auto-save state
     setLastAutoSave(null)
     setIsAutoSaving(false)
+    setAutoSaveCountdown(null)
+    setHasDraftLoaded(false) // Allow draft loading again
+    setIsManualSaving(false)
     if (autoSaveTimeoutRef.current) {
       clearTimeout(autoSaveTimeoutRef.current)
+    }
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current)
     }
   }
 
@@ -813,6 +1039,13 @@ function NewEntryPage() {
                         <Loader2 className="h-3 w-3 animate-spin" />
                         <span className="text-xs">Saving...</span>
                       </div>
+                    ) : autoSaveCountdown !== null && text.trim() ? (
+                      <div className="flex items-center gap-1 text-yellow-400">
+                        <div className="h-3 w-3 rounded-full bg-yellow-400 animate-pulse" />
+                        <span className="text-xs">
+                          Auto-save in {autoSaveCountdown}s
+                        </span>
+                      </div>
                     ) : lastAutoSave && text.trim() ? (
                       <div className="flex items-center gap-1 text-green-400">
                         <CheckCircle className="h-3 w-3" />
@@ -823,11 +1056,6 @@ function NewEntryPage() {
                           })}
                         </span>
                       </div>
-                    ) : text.trim() ? (
-                      <div className="flex items-center gap-1 text-yellow-400">
-                        <div className="h-3 w-3 rounded-full bg-yellow-400 animate-pulse" />
-                        <span className="text-xs">Auto-save in {autoSaveInterval}s</span>
-                      </div>
                     ) : null}
                   </div>
                 )}
@@ -835,16 +1063,36 @@ function NewEntryPage() {
 
               {/* Action Buttons */}
               <div className="mt-4 flex justify-between items-center">
-                <button 
-                  onClick={() => setText('')}
-                  disabled={isProcessing || recordingState !== RecordingState.IDLE}
-                  className="relative overflow-hidden group px-6 py-3 rounded-md font-medium shadow-md hover:shadow-lg hover:scale-[1.02] transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-gray-500/10 border border-gray-500/20 text-gray-400 hover:bg-gray-500/20 hover:text-gray-300"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-r from-gray-500/10 to-gray-400/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                  <span className="relative z-10 font-medium transition-colors duration-300">
-                    Clear All
-                  </span>
-                </button>
+                <div className="flex gap-3">
+                  <button 
+                    onClick={clearAllDrafts}
+                    disabled={isProcessing || recordingState !== RecordingState.IDLE}
+                    className="relative overflow-hidden group px-5 py-2.5 rounded-lg font-semibold shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-gray-600/20 border-2 border-gray-500/30 text-gray-200 hover:bg-gray-500/30 hover:text-white hover:border-gray-400/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-r from-gray-500/20 to-gray-400/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                    <span className="relative z-10 font-semibold transition-colors duration-300">
+                      Clear All
+                    </span>
+                  </button>
+
+                  <button 
+                    onClick={performManualSave}
+                    disabled={isManualSaving || !text.trim() || recordingState !== RecordingState.IDLE}
+                    className="relative overflow-hidden group px-5 py-2.5 rounded-lg font-semibold shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-green-600/20 border-2 border-green-500/30 text-green-200 hover:bg-green-500/30 hover:text-green-100 hover:border-green-400/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-r from-green-500/20 to-emerald-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                    <span className="relative z-10 font-semibold transition-colors duration-300 flex items-center">
+                      {isManualSaving ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        'Save Draft'
+                      )}
+                    </span>
+                  </button>
+                </div>
 
                 <button 
                   onClick={createEntries}
@@ -854,7 +1102,7 @@ function NewEntryPage() {
                   <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                   <span className="relative z-10 text-primary font-medium group-hover:text-primary transition-colors duration-300 flex items-center">
                     {isProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Create All Three Entries
+                    Create Entry
                   </span>
                 </button>
               </div>
