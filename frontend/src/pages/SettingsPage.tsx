@@ -590,7 +590,7 @@ function SettingsPage() {
                             step={0.1}
                             value={[parseFloat(ollamaTemperature)]}
                             onValueChange={(value) => setOllamaTemperature(value[0].toString())}
-                            className="flex-1"
+                            className="flex-1 [&>*:first-child]:bg-muted/30 [&>*:first-child]:border-border/50"
                           />
                           <span className="w-10 text-sm text-white font-mono bg-background/50 px-1.5 py-0.5 rounded">
                             {ollamaTemperature}
