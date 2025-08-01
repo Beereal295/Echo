@@ -87,6 +87,13 @@ function NewEntryPage() {
   const [processingJobId, setProcessingJobId] = useState<string | null>(null)
   const [recordingSource, setRecordingSource] = useState<'hotkey' | 'button' | null>(null)
   
+  // Auto-save state
+  const [autoSaveEnabled, setAutoSaveEnabled] = useState(true)
+  const [autoSaveInterval, setAutoSaveInterval] = useState(30) // seconds
+  const [lastAutoSave, setLastAutoSave] = useState<Date | null>(null)
+  const [isAutoSaving, setIsAutoSaving] = useState(false)
+  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  
   // New state for UI flow
   const [showInputUI, setShowInputUI] = useState(true)
   const [showResults, setShowResults] = useState(false)
@@ -207,8 +214,8 @@ function NewEntryPage() {
       setRecordingState(RecordingState.IDLE)
     })
 
-    // Load current hotkey from preferences
-    loadHotkeyPreference()
+    // Load current preferences (hotkey and auto-save)
+    loadPreferences()
 
     // Cleanup on unmount
     return () => {
@@ -216,6 +223,10 @@ function NewEntryPage() {
       unsubscribeState()
       unsubscribeTranscription()
       unsubscribeError()
+      // Cleanup auto-save timeout
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current)
+      }
     }
   }, [toast])
 
@@ -255,19 +266,97 @@ function NewEntryPage() {
     }
   }, [currentHotkey, recordingState])
 
-  const loadHotkeyPreference = async () => {
+  const loadPreferences = async () => {
     try {
       const response = await api.getPreferences()
       if (response.success && response.data && response.data.preferences) {
-        const hotkey = response.data.preferences.find((pref: any) => pref.key === 'recording_hotkey')
-        if (hotkey && hotkey.value) {
-          setCurrentHotkey(hotkey.value)
+        // Load hotkey preference
+        const hotkey = response.data.preferences.find((pref: any) => pref.key === 'hotkey')
+        if (hotkey && hotkey.typed_value) {
+          setCurrentHotkey(hotkey.typed_value)
+        }
+        
+        // Load auto-save preferences
+        const autoSavePref = response.data.preferences.find((pref: any) => pref.key === 'auto_save')
+        if (autoSavePref && autoSavePref.typed_value !== undefined) {
+          setAutoSaveEnabled(autoSavePref.typed_value)
+        }
+        
+        const autoSaveIntervalPref = response.data.preferences.find((pref: any) => pref.key === 'auto_save_interval')
+        if (autoSaveIntervalPref && autoSaveIntervalPref.typed_value) {
+          setAutoSaveInterval(autoSaveIntervalPref.typed_value)
         }
       }
     } catch (error) {
-      console.error('Failed to load hotkey preference:', error)
+      console.error('Failed to load preferences:', error)
     }
   }
+
+  // Auto-save functionality
+  const performAutoSave = async (content: string) => {
+    if (!content.trim() || isAutoSaving) return
+    
+    setIsAutoSaving(true)
+    try {
+      // Try to save to backend first, fallback to localStorage
+      try {
+        const response = await api.request('/drafts/save', {
+          method: 'POST',
+          body: JSON.stringify({
+            content: content.trim(),
+            timestamp: new Date().toISOString()
+          })
+        })
+        
+        if (response.success) {
+          setLastAutoSave(new Date())
+          console.log('Auto-saved to backend successfully')
+          return
+        }
+      } catch (backendError) {
+        console.log('Backend auto-save not available, using localStorage')
+      }
+      
+      // Fallback to localStorage
+      const draftData = {
+        content: content.trim(),
+        timestamp: new Date().toISOString()
+      }
+      localStorage.setItem('echo_draft_new_entry', JSON.stringify(draftData))
+      setLastAutoSave(new Date())
+      console.log('Auto-saved to localStorage successfully')
+      
+    } catch (error) {
+      console.error('Auto-save failed completely:', error)
+      // Silently fail - don't disrupt user experience
+    } finally {
+      setIsAutoSaving(false)
+    }
+  }
+
+  // Auto-save effect - triggers when text changes
+  useEffect(() => {
+    if (!autoSaveEnabled || !text.trim() || isProcessing) {
+      return
+    }
+
+    // Clear existing timeout
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current)
+    }
+
+    // Set new timeout for auto-save
+    autoSaveTimeoutRef.current = setTimeout(() => {
+      performAutoSave(text)
+    }, autoSaveInterval * 1000) // Convert seconds to milliseconds
+
+    // Cleanup function
+    return () => {
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current)
+      }
+    }
+  }, [text, autoSaveEnabled, autoSaveInterval, isProcessing])
 
   const startRecording = async () => {
     // Only proceed if we're truly idle and not already starting
@@ -495,6 +584,12 @@ function NewEntryPage() {
     setCurrentLoadingMessage('')
     setEditingCard(null)
     setShowOverlay(false)
+    // Reset auto-save state
+    setLastAutoSave(null)
+    setIsAutoSaving(false)
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current)
+    }
   }
 
   const backToEdit = () => {
@@ -706,9 +801,36 @@ function NewEntryPage() {
                 </div>
               </div>
 
-              {/* Word count */}
-              <div className="mt-2 text-sm text-muted-foreground">
-                {text.trim().split(/\s+/).filter(Boolean).length} words
+              {/* Word count and auto-save status */}
+              <div className="mt-2 flex items-center justify-between text-sm text-muted-foreground">
+                <span>{text.trim().split(/\s+/).filter(Boolean).length} words</span>
+                
+                {/* Auto-save status */}
+                {autoSaveEnabled && (
+                  <div className="flex items-center gap-2">
+                    {isAutoSaving ? (
+                      <div className="flex items-center gap-1 text-blue-400">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        <span className="text-xs">Saving...</span>
+                      </div>
+                    ) : lastAutoSave && text.trim() ? (
+                      <div className="flex items-center gap-1 text-green-400">
+                        <CheckCircle className="h-3 w-3" />
+                        <span className="text-xs">
+                          Saved {new Date(lastAutoSave).toLocaleTimeString([], { 
+                            hour: '2-digit', 
+                            minute: '2-digit' 
+                          })}
+                        </span>
+                      </div>
+                    ) : text.trim() ? (
+                      <div className="flex items-center gap-1 text-yellow-400">
+                        <div className="h-3 w-3 rounded-full bg-yellow-400 animate-pulse" />
+                        <span className="text-xs">Auto-save in {autoSaveInterval}s</span>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
               </div>
 
               {/* Action Buttons */}

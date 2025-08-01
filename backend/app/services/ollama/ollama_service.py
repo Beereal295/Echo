@@ -206,9 +206,13 @@ class OllamaService:
         # Build options
         options = {
             "temperature": temperature,
-            "num_ctx": 16384,  # Increase context length from default 2048 to 16384
             **kwargs
         }
+        
+        # Set context window - use from kwargs if provided, otherwise default
+        if "num_ctx" not in options:
+            options["num_ctx"] = 4096  # Default context length
+        
         if max_tokens:
             options["num_predict"] = max_tokens
         
@@ -272,9 +276,13 @@ class OllamaService:
         # Build options
         options = {
             "temperature": temperature,
-            "num_ctx": 16384,  # Increase context length from default 2048 to 16384
             **kwargs
         }
+        
+        # Set context window - use from kwargs if provided, otherwise default
+        if "num_ctx" not in options:
+            options["num_ctx"] = 4096  # Default context length
+        
         if max_tokens:
             options["num_predict"] = max_tokens
         

@@ -14,6 +14,7 @@ from app.core.config import settings
 from app.services.ollama import OllamaService, get_ollama_service
 from app.models.entry import Entry
 from app.schemas.entry import ProcessingMode
+from app.db.repositories.preferences_repository import PreferencesRepository
 
 logger = logging.getLogger(__name__)
 
@@ -86,10 +87,11 @@ Do not include any introductory text, closing remarks, or signatures in your res
             elif mode == ProcessingMode.ENHANCED:
                 processed_text = await self._process_enhanced_style(raw_text)
                 processing_time = (datetime.now() - start_time).total_seconds() * 1000
+                model_used = await PreferencesRepository.get_value('ollama_model', settings.OLLAMA_DEFAULT_MODEL)
                 processing_metadata = {
                     "mode": mode.value,
                     "processing_time_ms": processing_time,
-                    "model_used": settings.OLLAMA_DEFAULT_MODEL,
+                    "model_used": model_used,
                     "timestamp": start_time.isoformat(),
                     "system_prompt_used": "enhanced_style"
                 }
@@ -97,10 +99,11 @@ Do not include any introductory text, closing remarks, or signatures in your res
             elif mode == ProcessingMode.STRUCTURED:
                 processed_text = await self._process_structured_summary(raw_text)
                 processing_time = (datetime.now() - start_time).total_seconds() * 1000
+                model_used = await PreferencesRepository.get_value('ollama_model', settings.OLLAMA_DEFAULT_MODEL)
                 processing_metadata = {
                     "mode": mode.value,
                     "processing_time_ms": processing_time,
-                    "model_used": settings.OLLAMA_DEFAULT_MODEL,
+                    "model_used": model_used,
                     "timestamp": start_time.isoformat(),
                     "system_prompt_used": "structured_summary"
                 }
@@ -135,10 +138,17 @@ Do not include any introductory text, closing remarks, or signatures in your res
     async def _process_enhanced_style(self, raw_text: str) -> str:
         """Process text using enhanced style mode."""
         try:
+            # Get preferences from database
+            model = await PreferencesRepository.get_value('ollama_model', settings.OLLAMA_DEFAULT_MODEL)
+            temperature = await PreferencesRepository.get_value('ollama_temperature', 0.7)
+            context_window = await PreferencesRepository.get_value('ollama_context_window', 4096)
+            
             response = await self.ollama_service.generate(
                 prompt=raw_text,
                 system=self._enhanced_system_prompt,
-                model=settings.OLLAMA_DEFAULT_MODEL
+                model=model,
+                temperature=temperature,
+                num_ctx=context_window
             )
             return response.response.strip()
         except Exception as e:
@@ -148,10 +158,17 @@ Do not include any introductory text, closing remarks, or signatures in your res
     async def _process_structured_summary(self, raw_text: str) -> str:
         """Process text using structured summary mode."""
         try:
+            # Get preferences from database
+            model = await PreferencesRepository.get_value('ollama_model', settings.OLLAMA_DEFAULT_MODEL)
+            temperature = await PreferencesRepository.get_value('ollama_temperature', 0.7)
+            context_window = await PreferencesRepository.get_value('ollama_context_window', 4096)
+            
             response = await self.ollama_service.generate(
                 prompt=raw_text,
                 system=self._structured_system_prompt,
-                model=settings.OLLAMA_DEFAULT_MODEL
+                model=model,
+                temperature=temperature,
+                num_ctx=context_window
             )
             return response.response.strip()
         except Exception as e:
