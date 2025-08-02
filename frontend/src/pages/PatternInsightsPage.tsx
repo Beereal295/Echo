@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Calendar as CalendarComponent } from '@/components/ui/calendar'
 import { useToast } from '@/components/ui/use-toast'
 import { api } from '@/lib/api'
 import { 
@@ -18,7 +19,11 @@ import {
   RefreshCw,
   ChevronRight,
   Clock,
-  Hash
+  Hash,
+  Filter,
+  X,
+  ChevronDown,
+  ChevronLeft
 } from 'lucide-react'
 import { format } from 'date-fns'
 
@@ -46,37 +51,41 @@ function PatternInsightsPage() {
   const [refreshing, setRefreshing] = useState(false)
   const [selectedPattern, setSelectedPattern] = useState<Pattern | null>(null)
   const [showUnlockAnimation, setShowUnlockAnimation] = useState(false)
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize] = useState(12) // 12 patterns per page for grid layout
+  
+  // Date filtering state (exact same as ViewEntriesPage)
+  const [showDateFilter, setShowDateFilter] = useState(false)
+  const [dateFilterType, setDateFilterType] = useState<'all' | 'before' | 'after' | 'between' | 'on' | 'last-days-months'>('all')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [showBeforeCalendar, setShowBeforeCalendar] = useState(false)
+  const [showAfterCalendar, setShowAfterCalendar] = useState(false)
+  const [showOnCalendar, setShowOnCalendar] = useState(false)
+  const [showBetweenStartCalendar, setShowBetweenStartCalendar] = useState(false)
+  const [showBetweenEndCalendar, setShowBetweenEndCalendar] = useState(false)
+  const [lastPeriodValue, setLastPeriodValue] = useState(1)
+  const [lastPeriodUnit, setLastPeriodUnit] = useState<'days' | 'months'>('months')
 
   useEffect(() => {
-    checkAndLoadPatterns()
+    loadExistingPatterns()
   }, [])
 
-  const checkAndLoadPatterns = async () => {
+  const loadExistingPatterns = async () => {
     setLoading(true)
     try {
-      // Check if threshold is met
-      const thresholdResponse = await api.checkPatternThreshold()
-      if (thresholdResponse.success && thresholdResponse.data) {
-        if (!thresholdResponse.data.threshold_met) {
-          // Show message about needing more entries
-          toast({
-            title: 'More entries needed',
-            description: `You need ${thresholdResponse.data.remaining} more entries to unlock pattern insights.`,
-            variant: 'default'
-          })
-          setLoading(false)
-          return
-        }
-      }
-
-      // Load patterns
+      // Load existing patterns without checking threshold
       const patternsResponse = await api.getPatterns()
       if (patternsResponse.success && patternsResponse.data) {
-        setPatterns(patternsResponse.data.patterns)
+        // Backend wraps data in SuccessResponse, so access nested data
+        const patternsData = patternsResponse.data.data || patternsResponse.data
+        setPatterns(patternsData.patterns || [])
         
         // Check if this is the first time viewing patterns
         const hasViewedPatterns = localStorage.getItem('hasViewedPatterns')
-        if (!hasViewedPatterns && patternsResponse.data.patterns.length > 0) {
+        if (!hasViewedPatterns && (patternsData.patterns || []).length > 0) {
           setShowUnlockAnimation(true)
           localStorage.setItem('hasViewedPatterns', 'true')
         }
@@ -93,21 +102,43 @@ function PatternInsightsPage() {
     }
   }
 
-  const refreshPatterns = async () => {
+  const generateInsights = async () => {
     setRefreshing(true)
     try {
+      // Check if threshold is met before generating
+      const thresholdResponse = await api.checkPatternThreshold()
+      
+      if (thresholdResponse.success && thresholdResponse.data) {
+        // Backend wraps data in SuccessResponse, so access nested data
+        const thresholdData = thresholdResponse.data.data || thresholdResponse.data
+        
+        if (!thresholdData.threshold_met) {
+          // Show message about needing more entries
+          toast({
+            title: 'More entries needed',
+            description: `You need ${thresholdData.remaining} more entries to unlock pattern insights.`,
+            variant: 'default'
+          })
+          setRefreshing(false)
+          return
+        }
+      }
+
+      // Generate new patterns
       const response = await api.analyzePatterns()
       if (response.success) {
+        // Backend wraps data in SuccessResponse, so access nested data
+        const analyzeData = response.data?.data || response.data
         toast({
-          title: 'Patterns refreshed',
-          description: `Found ${response.data?.patterns_found || 0} patterns`,
+          title: 'Insights generated',
+          description: `Found ${analyzeData?.patterns_found || 0} patterns`,
         })
-        await checkAndLoadPatterns()
+        await loadExistingPatterns()
       }
     } catch (error) {
-      console.error('Failed to refresh patterns:', error)
+      console.error('Failed to generate insights:', error)
       toast({
-        title: 'Error refreshing patterns',
+        title: 'Error generating insights',
         description: 'Failed to analyze your entries',
         variant: 'destructive'
       })
@@ -116,21 +147,72 @@ function PatternInsightsPage() {
     }
   }
 
+  const refreshPatterns = async () => {
+    await generateInsights()
+  }
+
+  // Filter patterns based on date (exact same logic as ViewEntriesPage)
+  const filteredPatterns = useMemo(() => {
+    let filtered = patterns
+
+    // Apply date filter
+    if (dateFilterType !== 'all') {
+      filtered = filtered.filter(pattern => {
+        const patternDate = new Date(pattern.last_seen) // Use last_seen as primary date
+        const today = new Date()
+        
+        switch (dateFilterType) {
+          case 'before':
+            return startDate ? patternDate < new Date(startDate) : true
+          case 'after':
+            return startDate ? patternDate > new Date(startDate) : true
+          case 'on':
+            if (startDate) {
+              const selectedDate = new Date(startDate)
+              const patternDateOnly = new Date(patternDate.getFullYear(), patternDate.getMonth(), patternDate.getDate())
+              const selectedDateOnly = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate())
+              return patternDateOnly.getTime() === selectedDateOnly.getTime()
+            }
+            return true
+          case 'between':
+            if (startDate && endDate) {
+              return patternDate >= new Date(startDate) && patternDate <= new Date(endDate)
+            }
+            return true
+          case 'last-days-months':
+            const periodAgo = new Date()
+            if (lastPeriodUnit === 'days') {
+              periodAgo.setDate(today.getDate() - lastPeriodValue)
+            } else {
+              periodAgo.setMonth(today.getMonth() - lastPeriodValue)
+            }
+            return patternDate >= periodAgo
+          default:
+            return true
+        }
+      })
+    }
+
+    return filtered
+  }, [patterns, dateFilterType, startDate, endDate, lastPeriodValue, lastPeriodUnit])
+
   // Generate word cloud data from all patterns
   const wordCloudData = useMemo(() => {
     const wordFrequency: Record<string, number> = {}
     
-    patterns.forEach(pattern => {
-      pattern.keywords.forEach(keyword => {
-        wordFrequency[keyword] = (wordFrequency[keyword] || 0) + pattern.frequency
-      })
+    filteredPatterns.forEach(pattern => {
+      if (pattern.keywords) {
+        pattern.keywords.forEach(keyword => {
+          wordFrequency[keyword] = (wordFrequency[keyword] || 0) + pattern.frequency
+        })
+      }
     })
 
     return Object.entries(wordFrequency)
       .map(([text, value]) => ({ text, value }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 50) // Top 50 words
-  }, [patterns])
+  }, [filteredPatterns])
 
   // Group patterns by type
   const patternsByType = useMemo(() => {
@@ -141,14 +223,51 @@ function PatternInsightsPage() {
       behavior: []
     }
     
-    patterns.forEach(pattern => {
+    filteredPatterns.forEach(pattern => {
       if (grouped[pattern.pattern_type]) {
         grouped[pattern.pattern_type].push(pattern)
       }
     })
     
     return grouped
-  }, [patterns])
+  }, [filteredPatterns])
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredPatterns.length / pageSize)
+  const paginatedPatterns = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize
+    return filteredPatterns.slice(startIndex, startIndex + pageSize)
+  }, [filteredPatterns, currentPage, pageSize])
+
+  // Reset pagination when filters change  
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [dateFilterType, startDate, endDate, lastPeriodValue, lastPeriodUnit])
+
+  // Close date filter popup when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element
+      if (showDateFilter && !target.closest('.date-filter-popup')) {
+        setShowDateFilter(false)
+        setShowBeforeCalendar(false)
+        setShowAfterCalendar(false)
+        setShowOnCalendar(false)
+        setShowBetweenStartCalendar(false)
+        setShowBetweenEndCalendar(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showDateFilter])
+
+  // Pagination controls
+  const goToPage = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page)
+    }
+  }
 
   const getPatternIcon = (type: string) => {
     switch (type) {
@@ -218,7 +337,7 @@ function PatternInsightsPage() {
               Keep journaling to discover insights about your life
             </p>
             <Button 
-              onClick={refreshPatterns} 
+              onClick={generateInsights} 
               disabled={refreshing}
               variant="ghost"
               size="sm"
@@ -229,12 +348,12 @@ function PatternInsightsPage() {
                 {refreshing ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Analyzing...
+                    Generating...
                   </>
                 ) : (
                   <>
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                    Analyze Entries
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    Generate Insights
                   </>
                 )}
               </span>
@@ -246,10 +365,10 @@ function PatternInsightsPage() {
   }
 
   return (
-    <div className="h-screen flex flex-col p-4 md:p-6 overflow-hidden">
+    <div className="h-screen flex flex-col p-4 md:p-6 relative">
       <div className="max-w-6xl mx-auto w-full flex flex-col flex-1">
         {/* Header */}
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-4 flex items-center justify-between flex-shrink-0">
           <div>
             <h2 className="text-2xl font-bold text-white mb-1 flex items-center gap-2">
               <Diamond className="h-6 w-6 text-purple-500" />
@@ -259,41 +378,289 @@ function PatternInsightsPage() {
               Discover themes and patterns in your journal entries
             </p>
           </div>
-          <Button 
-            onClick={refreshPatterns} 
-            disabled={refreshing}
-            variant="ghost"
-            size="sm"
-            className="relative overflow-hidden group transition-all duration-200 bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 hover:text-primary disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-            <span className="relative z-10 flex items-center font-medium">
-              {refreshing ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Refreshing...
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  Refresh
-                </>
+          <div className="flex items-center gap-2">
+            {/* Date Filter Button */}
+            <div className="relative">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowDateFilter(!showDateFilter)}
+                className="flex items-center gap-2 relative overflow-hidden group transition-all duration-200 bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 hover:text-primary"
+              >
+                <div className="relative flex items-center gap-2">
+                  <Calendar className="h-4 w-4" />
+                  {dateFilterType === 'all' ? 'All Time' : 
+                   dateFilterType === 'last-days-months' ? `Last ${lastPeriodValue} ${lastPeriodUnit.charAt(0).toUpperCase() + lastPeriodUnit.slice(1)}` :
+                   dateFilterType === 'before' ? 'Before Date' :
+                   dateFilterType === 'after' ? 'After Date' :
+                   dateFilterType === 'on' ? 'On Date' : 'Between Dates'}
+                </div>
+              </Button>
+
+              {/* Date Filter Popup */}
+              {showDateFilter && (
+                <div className="date-filter-popup absolute top-full right-0 mt-2 w-96 bg-card border border-border rounded-lg shadow-xl z-50 p-4">
+                  <div className="space-y-4">
+                    <h3 className="font-semibold text-white text-sm">Filter by Date</h3>
+                    
+                    {/* Filter Type Selection */}
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="dateFilter"
+                          checked={dateFilterType === 'all'}
+                          onChange={() => setDateFilterType('all')}
+                          className="text-primary focus:ring-primary/20"
+                        />
+                        <span className="text-white text-sm">All time</span>
+                      </label>
+                      
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="dateFilter"
+                          checked={dateFilterType === 'last-days-months'}
+                          onChange={() => setDateFilterType('last-days-months')}
+                          className="text-primary focus:ring-primary/20"
+                        />
+                        <span className="text-white text-sm">Last</span>
+                        <input
+                          type="number"
+                          min="1"
+                          max="31"
+                          value={lastPeriodValue}
+                          onChange={(e) => {
+                            const value = Math.max(1, Math.min(31, parseInt(e.target.value) || 1))
+                            setLastPeriodValue(value)
+                          }}
+                          disabled={dateFilterType !== 'last-days-months'}
+                          className="bg-background border border-border rounded px-2 py-1 text-white text-sm w-16 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20"
+                        />
+                        <div className="relative calendar-container">
+                          <select
+                            value={lastPeriodUnit}
+                            onChange={(e) => setLastPeriodUnit(e.target.value as 'days' | 'months')}
+                            disabled={dateFilterType !== 'last-days-months'}
+                            className="bg-background border border-border rounded px-2 py-1 pr-6 text-white text-sm focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20 appearance-none"
+                          >
+                            <option value="days">Days</option>
+                            <option value="months">Months</option>
+                          </select>
+                          <ChevronDown className="absolute right-1 top-1/2 transform -translate-y-1/2 h-3 w-3 text-muted-foreground pointer-events-none" />
+                        </div>
+                      </label>
+                      
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="dateFilter"
+                          checked={dateFilterType === 'before'}
+                          onChange={() => setDateFilterType('before')}
+                          className="text-primary focus:ring-primary/20"
+                        />
+                        <span className="text-white text-sm">Before</span>
+                        <div className="relative calendar-container">
+                          <button
+                            type="button"
+                            onClick={() => setShowBeforeCalendar(!showBeforeCalendar)}
+                            disabled={dateFilterType !== 'before'}
+                            className="bg-background border border-border rounded px-2 py-1 text-white text-sm w-32 text-left hover:bg-muted/50 disabled:opacity-50"
+                          >
+                            {startDate ? new Date(startDate).toLocaleDateString() : 'Select date'}
+                          </button>
+                          {showBeforeCalendar && dateFilterType === 'before' && (
+                            <div className="absolute top-full left-0 mt-2 z-[100] min-w-[280px]">
+                              <CalendarComponent
+                                selected={startDate}
+                                onSelect={(date) => {
+                                  setStartDate(date)
+                                  setShowBeforeCalendar(false)
+                                }}
+                                className="shadow-2xl border-2 border-border"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </label>
+                      
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="dateFilter"
+                          checked={dateFilterType === 'after'}
+                          onChange={() => setDateFilterType('after')}
+                          className="text-primary focus:ring-primary/20"
+                        />
+                        <span className="text-white text-sm">After</span>
+                        <div className="relative calendar-container">
+                          <button
+                            type="button"
+                            onClick={() => setShowAfterCalendar(!showAfterCalendar)}
+                            disabled={dateFilterType !== 'after'}
+                            className="bg-background border border-border rounded px-2 py-1 text-white text-sm w-32 text-left hover:bg-muted/50 disabled:opacity-50"
+                          >
+                            {startDate ? new Date(startDate).toLocaleDateString() : 'Select date'}
+                          </button>
+                          {showAfterCalendar && dateFilterType === 'after' && (
+                            <div className="absolute top-full left-0 mt-2 z-[100] min-w-[280px]">
+                              <CalendarComponent
+                                selected={startDate}
+                                onSelect={(date) => {
+                                  setStartDate(date)
+                                  setShowAfterCalendar(false)
+                                }}
+                                className="shadow-2xl border-2 border-border"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </label>
+                      
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="dateFilter"
+                          checked={dateFilterType === 'on'}
+                          onChange={() => setDateFilterType('on')}
+                          className="text-primary focus:ring-primary/20"
+                        />
+                        <span className="text-white text-sm">On</span>
+                        <div className="relative calendar-container">
+                          <button
+                            type="button"
+                            onClick={() => setShowOnCalendar(!showOnCalendar)}
+                            disabled={dateFilterType !== 'on'}
+                            className="bg-background border border-border rounded px-2 py-1 text-white text-sm w-32 text-left hover:bg-muted/50 disabled:opacity-50"
+                          >
+                            {startDate ? new Date(startDate).toLocaleDateString() : 'Select date'}
+                          </button>
+                          {showOnCalendar && dateFilterType === 'on' && (
+                            <div className="absolute top-full left-0 mt-2 z-[100] min-w-[280px]">
+                              <CalendarComponent
+                                selected={startDate}
+                                onSelect={(date) => {
+                                  setStartDate(date)
+                                  setShowOnCalendar(false)
+                                }}
+                                className="shadow-2xl border-2 border-border"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </label>
+                      
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="dateFilter"
+                          checked={dateFilterType === 'between'}
+                          onChange={() => setDateFilterType('between')}
+                          className="text-primary focus:ring-primary/20"
+                        />
+                        <span className="text-white text-sm">Between</span>
+                      </label>
+                      
+                      {dateFilterType === 'between' && (
+                        <div className="ml-6 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-muted-foreground text-sm w-12">From:</span>
+                            <div className="relative flex-1">
+                              <button
+                                type="button"
+                                onClick={() => setShowBetweenStartCalendar(!showBetweenStartCalendar)}
+                                className="bg-background border border-border rounded px-2 py-1 text-white text-sm w-full text-left hover:bg-muted/50"
+                              >
+                                {startDate ? new Date(startDate).toLocaleDateString() : 'Select date'}
+                              </button>
+                              {showBetweenStartCalendar && (
+                                <div className="absolute top-full left-0 mt-2 z-[100] min-w-[280px]">
+                                  <CalendarComponent
+                                    selected={startDate}
+                                    onSelect={(date) => {
+                                      setStartDate(date)
+                                      setShowBetweenStartCalendar(false)
+                                    }}
+                                    className="shadow-2xl border-2 border-border"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-muted-foreground text-sm w-12">To:</span>
+                            <div className="relative flex-1">
+                              <button
+                                type="button"
+                                onClick={() => setShowBetweenEndCalendar(!showBetweenEndCalendar)}
+                                className="bg-background border border-border rounded px-2 py-1 text-white text-sm w-full text-left hover:bg-muted/50"
+                              >
+                                {endDate ? new Date(endDate).toLocaleDateString() : 'Select date'}
+                              </button>
+                              {showBetweenEndCalendar && (
+                                <div className="absolute top-full right-0 mt-2 z-[100] min-w-[280px]">
+                                  <CalendarComponent
+                                    selected={endDate}
+                                    onSelect={(date) => {
+                                      setEndDate(date)
+                                      setShowBetweenEndCalendar(false)
+                                    }}
+                                    className="shadow-2xl border-2 border-border"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
               )}
-            </span>
-          </Button>
+            </div>
+
+            <Button 
+              onClick={generateInsights} 
+              disabled={refreshing}
+              variant="ghost"
+              size="sm"
+              className="relative overflow-hidden group transition-all duration-200 bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 hover:text-primary disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+              <span className="relative z-10 flex items-center font-medium">
+                {refreshing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    Generate Insights
+                  </>
+                )}
+              </span>
+            </Button>
+          </div>
         </div>
 
-        <Tabs defaultValue="wordcloud" className="flex-1 flex flex-col overflow-hidden">
-          <TabsList className="grid w-full max-w-md grid-cols-3 mb-4 bg-card/50 backdrop-blur-sm border border-border/50">
+        <Tabs defaultValue="wordcloud" className="flex-1 flex flex-col">
+          <TabsList className="grid w-full max-w-md grid-cols-3 mb-4 bg-card/50 backdrop-blur-sm border border-border/50 flex-shrink-0">
             <TabsTrigger value="wordcloud">Word Cloud</TabsTrigger>
             <TabsTrigger value="patterns">All Patterns</TabsTrigger>
             <TabsTrigger value="timeline">Timeline</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="wordcloud" className="flex-1 overflow-hidden">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-full">
-              <Card className="lg:col-span-2 bg-card/50 backdrop-blur-sm border-border/50 flex flex-col">
-                <CardHeader>
+          <TabsContent value="wordcloud" className="flex-1">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+              className="grid grid-cols-1 lg:grid-cols-4 gap-4" 
+              style={{ minHeight: '600px' }}
+            >
+              <Card className="lg:col-span-3 bg-card/50 backdrop-blur-sm border-border/50 flex flex-col" style={{ minHeight: '600px' }}>
+                <CardHeader className="flex-shrink-0">
                   <CardTitle className="text-white flex items-center gap-2">
                     <Sparkles className="h-5 w-5" />
                     Your Journal Keywords
@@ -302,19 +669,22 @@ function PatternInsightsPage() {
                     Click on words to see related patterns
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="flex-1 min-h-[400px]">
+                <CardContent className="flex-1" style={{ minHeight: '500px' }}>
                   {wordCloudData.length > 0 && (
-                    <WordCloud
-                      words={wordCloudData}
-                      onWordClick={handleWordClick}
-                    />
+                    <div className="w-full h-full" style={{ minHeight: '500px' }}>
+                      <WordCloud
+                        words={wordCloudData}
+                        onWordClick={handleWordClick}
+                        height={500}
+                      />
+                    </div>
                   )}
                 </CardContent>
               </Card>
 
-              <Card className="bg-card/50 backdrop-blur-sm border-border/50 overflow-hidden">
-                <CardHeader>
-                  <CardTitle className="text-white">Pattern Summary</CardTitle>
+              <Card className="bg-card/50 backdrop-blur-sm border-border/50 overflow-hidden max-h-96">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-white text-lg">Pattern Summary</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {Object.entries(patternsByType).map(([type, typePatterns]) => {
@@ -329,7 +699,7 @@ function PatternInsightsPage() {
                           <span className="text-sm font-medium text-white capitalize">
                             {type} Patterns
                           </span>
-                          <Badge variant="secondary" className="ml-auto">
+                          <Badge variant="secondary" className="ml-auto px-2 py-1 text-xs font-semibold">
                             {typePatterns.length}
                           </Badge>
                         </div>
@@ -343,7 +713,7 @@ function PatternInsightsPage() {
                               <p className="text-sm text-gray-300 truncate">
                                 {pattern.description}
                               </p>
-                              <p className="text-xs text-gray-500">
+                              <p className="text-xs text-gray-500 font-medium">
                                 {pattern.frequency} occurrences
                               </p>
                             </button>
@@ -354,12 +724,18 @@ function PatternInsightsPage() {
                   })}
                 </CardContent>
               </Card>
-            </div>
+            </motion.div>
           </TabsContent>
 
-          <TabsContent value="patterns" className="flex-1 overflow-y-auto">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {patterns.map(pattern => {
+          <TabsContent value="patterns" className="flex-1 flex flex-col overflow-hidden">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+              className="flex-1 overflow-y-auto p-1"
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-full">
+                {paginatedPatterns.map(pattern => {
                 const Icon = getPatternIcon(pattern.pattern_type)
                 const colorClass = getPatternColor(pattern.pattern_type)
                 
@@ -369,15 +745,16 @@ function PatternInsightsPage() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     whileHover={{ scale: 1.02 }}
+                    className="min-w-0 w-full"
                   >
                     <Card 
-                      className="bg-card/50 backdrop-blur-sm border-border/50 hover:bg-card/70 cursor-pointer transition-all"
+                      className="bg-card/50 backdrop-blur-sm border-border/50 hover:bg-card/70 cursor-pointer transition-all w-full min-w-0 h-full flex flex-col"
                       onClick={() => setSelectedPattern(pattern)}
                     >
                       <CardHeader>
                         <div className="flex items-start justify-between">
                           <Icon className={`h-5 w-5 ${colorClass}`} />
-                          <Badge variant="outline" className="text-xs">
+                          <Badge className="bg-purple-500/10 text-purple-400 border-purple-500/20 text-xs">
                             {pattern.pattern_type}
                           </Badge>
                         </div>
@@ -385,7 +762,7 @@ function PatternInsightsPage() {
                           {pattern.description}
                         </CardTitle>
                       </CardHeader>
-                      <CardContent>
+                      <CardContent className="flex-1">
                         <div className="space-y-2">
                           <div className="flex items-center justify-between text-sm">
                             <span className="text-gray-400">Frequency</span>
@@ -408,12 +785,12 @@ function PatternInsightsPage() {
                         </div>
                         <div className="mt-3 flex flex-wrap gap-1">
                           {pattern.keywords.slice(0, 3).map((keyword, idx) => (
-                            <Badge key={idx} variant="secondary" className="text-xs">
+                            <Badge key={idx} className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-xs">
                               {keyword}
                             </Badge>
                           ))}
                           {pattern.keywords.length > 3 && (
-                            <Badge variant="secondary" className="text-xs">
+                            <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-xs">
                               +{pattern.keywords.length - 3}
                             </Badge>
                           )}
@@ -423,52 +800,164 @@ function PatternInsightsPage() {
                   </motion.div>
                 )
               })}
-            </div>
+              </div>
+            
+              {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-4 pt-4 border-t border-border/50 flex-shrink-0">
+                <div className="text-sm text-muted-foreground">
+                  Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, filteredPatterns.length)} of {filteredPatterns.length} patterns
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => goToPage(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="px-3"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  
+                  {/* Page numbers */}
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                      let pageNum;
+                      if (totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (currentPage <= 3) {
+                        pageNum = i + 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        pageNum = totalPages - 4 + i;
+                      } else {
+                        pageNum = currentPage - 2 + i;
+                      }
+                      
+                      return (
+                        <Button
+                          key={pageNum}
+                          variant={currentPage === pageNum ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => goToPage(pageNum)}
+                          className="w-8 h-8 p-0"
+                        >
+                          {pageNum}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => goToPage(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="px-3"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+            </motion.div>
           </TabsContent>
 
-          <TabsContent value="timeline" className="flex-1 overflow-y-auto">
-            <Card className="bg-card/50 backdrop-blur-sm border-border/50">
-              <CardHeader>
-                <CardTitle className="text-white flex items-center gap-2">
+          <TabsContent value="timeline" className="flex-1">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+              className="flex flex-col"
+            >
+              <div className="flex-shrink-0 mb-3">
+                <h3 className="text-white text-lg font-semibold flex items-center gap-2">
                   <Clock className="h-5 w-5" />
                   Pattern Timeline
-                </CardTitle>
-                <CardDescription className="text-gray-400">
+                </h3>
+                <p className="text-gray-400 text-sm">
                   When patterns appear in your journal
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {patterns
+                </p>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                <div className="space-y-3">
+                  {paginatedPatterns
                     .sort((a, b) => new Date(b.last_seen).getTime() - new Date(a.last_seen).getTime())
                     .map(pattern => {
                       const Icon = getPatternIcon(pattern.pattern_type)
                       const colorClass = getPatternColor(pattern.pattern_type)
                       
                       return (
-                        <div 
+                        <Card 
                           key={pattern.id}
-                          className="flex items-center gap-4 p-3 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
+                          className="bg-card/50 backdrop-blur-sm border-border/50 hover:bg-card/70 cursor-pointer transition-colors"
                           onClick={() => setSelectedPattern(pattern)}
                         >
-                          <div className={`p-2 rounded-lg bg-muted/50`}>
-                            <Icon className={`h-4 w-4 ${colorClass}`} />
-                          </div>
-                          <div className="flex-1">
-                            <p className="text-white font-medium">
-                              {pattern.description}
-                            </p>
-                            <p className="text-sm text-gray-400">
-                              {format(new Date(pattern.first_seen), 'MMM d')} - {format(new Date(pattern.last_seen), 'MMM d, yyyy')}
-                            </p>
-                          </div>
-                          <ChevronRight className="h-4 w-4 text-gray-400" />
-                        </div>
+                          <CardContent className="p-4">
+                            <div className="flex items-center gap-4">
+                              <div className={`p-2 rounded-lg bg-muted/50`}>
+                                <Icon className={`h-4 w-4 ${colorClass}`} />
+                              </div>
+                              <div className="flex-1">
+                                <p className="text-white font-medium">
+                                  {pattern.description}
+                                </p>
+                                <p className="text-sm text-gray-400">
+                                  {format(new Date(pattern.first_seen), 'MMM d')} - {format(new Date(pattern.last_seen), 'MMM d, yyyy')}
+                                </p>
+                                {pattern.keywords && pattern.keywords.length > 0 && (
+                                  <div className="mt-2 flex flex-wrap gap-1">
+                                    {pattern.keywords.slice(0, 3).map((keyword, idx) => (
+                                      <Badge key={idx} className="bg-cyan-500/10 text-cyan-400 border-cyan-500/20 text-xs">
+                                        {keyword}
+                                      </Badge>
+                                    ))}
+                                    {pattern.keywords.length > 3 && (
+                                      <Badge className="bg-cyan-500/10 text-cyan-400 border-cyan-500/20 text-xs">
+                                        +{pattern.keywords.length - 3}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                              <ChevronRight className="h-4 w-4 text-gray-400" />
+                            </div>
+                          </CardContent>
+                        </Card>
                       )
                     })}
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+              
+              {/* Timeline Pagination */}
+              {totalPages > 1 && (
+                <div className="border-t border-border/50 p-4 flex items-center justify-between bg-card/30 flex-shrink-0">
+                  <div className="text-sm text-muted-foreground">
+                    Page {currentPage} of {totalPages}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => goToPage(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      className="px-3"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => goToPage(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                      className="px-3"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </motion.div>
           </TabsContent>
         </Tabs>
       </div>

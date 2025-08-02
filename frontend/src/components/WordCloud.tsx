@@ -62,13 +62,13 @@ function WordCloud({ words, onWordClick, width = 800, height = 400 }: WordCloudP
       const textHeight = size
       
       // Try to place word using spiral pattern
-      let placed = false
+      let isPlaced = false
       let angle = 0
       let radius = 0
       const angleStep = 0.1
       const radiusStep = 2
       
-      while (!placed && radius < Math.max(dimensions.width, dimensions.height)) {
+      while (!isPlaced && radius < Math.max(dimensions.width, dimensions.height)) {
         const x = center.x + radius * Math.cos(angle)
         const y = center.y + radius * Math.sin(angle)
         
@@ -103,7 +103,7 @@ function WordCloud({ words, onWordClick, width = 800, height = 400 }: WordCloudP
               y,
               rotate: index % 3 === 0 ? -90 : 0 // Some vertical words
             })
-            placed = true
+            isPlaced = true
           }
         }
         
