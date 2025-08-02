@@ -6,12 +6,16 @@ from typing import Optional, List
 class EntryCreate(BaseModel):
     """Schema for creating a new entry"""
     raw_text: str = Field(..., min_length=1, description="Raw journal text")
+    enhanced_text: Optional[str] = Field(None, description="Enhanced version of the text")
+    structured_summary: Optional[str] = Field(None, description="Structured summary of the text")
     mode: str = Field(default="raw", description="Processing mode")
     
     class Config:
         json_schema_extra = {
             "example": {
                 "raw_text": "Today was a great day. I learned something new.",
+                "enhanced_text": "Today was an excellent day. I learned something fascinating.",
+                "structured_summary": "• Had a positive day\n• Learned something new",
                 "mode": "raw"
             }
         }

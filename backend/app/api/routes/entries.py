@@ -14,7 +14,7 @@ from app.api.schemas import (
 )
 from app.db import EntryRepository
 from app.models.entry import Entry
-from app.schemas.entry import ProcessingMode, EntryProcessRequest, EntryCreateAndProcessRequest
+from app.schemas.entry import ProcessingMode, EntryProcessRequest, EntryCreateAndProcessRequest, EntryProcessOnlyRequest
 # Note: Using our newer schema definitions that include ProcessingMode enum
 from app.services.entry_processing import get_entry_processing_service
 from app.services.processing_queue import get_processing_queue
@@ -74,11 +74,13 @@ def _select_best_text_for_embedding(entry) -> str:
 async def create_entry(entry_data: EntryCreate, background_tasks: BackgroundTasks):
     """Create a new journal entry"""
     try:
-        # Create entry model with basic data
+        # Create entry model with all provided data
         # Handle mode as string (from API schema) 
         mode_str = entry_data.mode if isinstance(entry_data.mode, str) else entry_data.mode.value
         entry = Entry(
             raw_text=entry_data.raw_text,
+            enhanced_text=entry_data.enhanced_text,
+            structured_summary=entry_data.structured_summary,
             mode=mode_str,
             timestamp=datetime.now(),
             word_count=len(entry_data.raw_text.split())
@@ -401,6 +403,48 @@ async def create_and_process_entry(
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create and process entry: {str(e)}")
+
+
+@router.post("/process-only", response_model=dict)
+async def process_text_only(request: EntryProcessOnlyRequest):
+    """Process text without saving to database - for preview purposes"""
+    try:
+        # Get processing service
+        processing_service = await get_entry_processing_service()
+        
+        results = {}
+        
+        # Process for each requested mode
+        for mode in request.modes:
+            if mode == ProcessingMode.RAW:
+                # Raw mode just returns the original text
+                results[mode.value] = {
+                    "processed_text": request.raw_text,
+                    "word_count": len(request.raw_text.split()),
+                    "processing_metadata": {
+                        "mode": mode.value,
+                        "processing_time_ms": 0,
+                        "model_used": None,
+                        "timestamp": datetime.now().isoformat()
+                    }
+                }
+            else:
+                # Process with AI
+                result = await processing_service.process_entry(
+                    raw_text=request.raw_text,
+                    mode=mode,
+                    existing_entry=None
+                )
+                results[mode.value] = result
+        
+        return {
+            "message": "Text processed successfully",
+            "raw_text": request.raw_text,
+            "results": results
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to process text: {str(e)}")
 
 
 @router.get("/processing/job/{job_id}", response_model=dict)

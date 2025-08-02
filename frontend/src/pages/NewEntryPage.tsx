@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
-import { Mic, MicOff, Loader2, Keyboard, CheckCircle, Plus, FileText, Pen, BookOpen, Sparkles, Edit3, Save, X } from 'lucide-react'
+import { Mic, MicOff, Loader2, Keyboard, CheckCircle, Plus, FileText, Pen, BookOpen, Sparkles, Edit3, Save, X, Star, Lightbulb } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
 import { motion, AnimatePresence } from 'framer-motion'
 import { api } from '@/lib/api'
@@ -78,6 +78,7 @@ interface CreatedEntries {
 
 function NewEntryPage() {
   const location = useLocation()
+  const navigate = useNavigate()
   const [text, setText] = useState('')
   const [recordingState, setRecordingState] = useState(RecordingState.IDLE)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -653,45 +654,56 @@ function NewEntryPage() {
     setCreatedEntries(null)
     
     try {
-      // Create entry with all three modes
-      const response = await api.createAndProcessEntry(
+      // Process text only (no database operations)
+      const response = await api.processTextOnly(
         text.trim(),
-        ['enhanced', 'structured']
+        ['raw', 'enhanced', 'structured']
       )
       
       if (response.success && response.data) {
-        const { raw_entry, job_id } = response.data
+        const { results, raw_text } = response.data
         
-        // Store initial entry data
+        // Store processed results in state for display
         setCreatedEntries({
           raw: {
-            id: raw_entry.id,
-            raw_text: raw_entry.raw_text,
-            timestamp: raw_entry.timestamp
-          }
+            id: 0, // Temporary ID since not in database yet
+            raw_text: raw_text,
+            timestamp: new Date().toISOString()
+          },
+          enhanced: results.enhanced ? {
+            id: 0,
+            enhanced_text: results.enhanced.processed_text
+          } : undefined,
+          structured: results.structured ? {
+            id: 0,
+            structured_summary: results.structured.processed_text
+          } : undefined
         })
         
-        // Store job ID for status tracking (use master job ID)
-        setProcessingJobId(job_id)
+        // Show results immediately
+        setRecordingState(RecordingState.SUCCESS)
+        setShowResults(true)
+        setTimeout(() => setRecordingState(RecordingState.IDLE), 2000)
         
-        // Poll for job completion
-        if (job_id) {
-          pollJobStatus(job_id)
-        }
-        
-        // Show initial success toast
+        // Show success toast
         safeToast({
-          title: "Entry created!",
-          description: "Processing enhanced versions and generating embeddings...",
+          title: "✓ Entries processed!",
+          description: "Review your entries and click 'Add to Diary' to save them.",
         })
+        
+        // Clear processing state
+        setText('')
+        setIsProcessing(false)
+        setProcessingJobId(null)
+        
       } else {
-        throw new Error(response.error || 'Failed to create entry')
+        throw new Error(response.error || 'Failed to process entries')
       }
     } catch (error) {
       setRecordingState(RecordingState.IDLE)
       safeToast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create entries",
+        description: error instanceof Error ? error.message : "Failed to process entries",
         variant: "destructive"
       })
       setIsProcessing(false)
@@ -926,22 +938,51 @@ function NewEntryPage() {
     if (!createdEntries) return
     
     try {
-      // Here you would implement the API call to save final entries to database
-      // For now, just show success message
-      safeToast({
-        title: "✓ Added to diary!",
-        description: "Your entries have been saved successfully",
-      })
+      // Save entry to database with all three texts (same logic as before)
+      const response = await api.createEntryWithAllTexts(
+        createdEntries.raw.raw_text,
+        createdEntries.enhanced?.enhanced_text,
+        createdEntries.structured?.structured_summary,
+        'raw'
+      )
       
-      // Reset to start new entry
-      setTimeout(() => {
-        startNewEntry()
-      }, 2000)
+      if (response.success && response.data) {
+        const createdEntry = response.data
+        
+        safeToast({
+          title: "✓ Added to diary!",
+          description: (
+            <div className="space-y-1 mt-2">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="h-3 w-3 text-green-500" />
+                <span className="text-sm">Entry saved to database</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-3 w-3 animate-spin text-blue-400" />
+                <span className="text-sm text-blue-400">Generating embeddings...</span>
+              </div>
+            </div>
+          ),
+        })
+        
+        // Start polling for embedding completion
+        if (createdEntry.id) {
+          pollEmbeddingStatus(createdEntry.id)
+        }
+        
+        // Redirect to view entries page to see the saved entry
+        setTimeout(() => {
+          navigate('/entries')
+        }, 2000)
+        
+      } else {
+        throw new Error(response.error || 'Failed to save entry')
+      }
       
     } catch (error) {
       safeToast({
         title: "Error",
-        description: "Failed to add entries to diary",
+        description: error instanceof Error ? error.message : "Failed to add entries to diary",
         variant: "destructive"
       })
     }
@@ -1156,8 +1197,12 @@ function NewEntryPage() {
                 >
                   <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                   <span className="relative z-10 text-primary font-medium group-hover:text-primary transition-colors duration-300 flex items-center">
-                    {isProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Create Entry
+                    {isProcessing ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="mr-2 h-4 w-4" />
+                    )}
+                    Process Entries
                   </span>
                 </button>
               </div>
@@ -1214,6 +1259,26 @@ function NewEntryPage() {
             transition={{ duration: 0.6, ease: "easeOut" }}
             className="flex-1 flex flex-col overflow-visible"
           >
+            {/* AI Processing Tip */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+              className="mb-6 p-4 bg-yellow-400/5 border border-yellow-400/30 rounded-lg"
+            >
+              <div className="flex items-start gap-3">
+                <Lightbulb className="h-5 w-5 text-yellow-400 flex-shrink-0 mt-0.5 drop-shadow-[0_0_8px_rgba(250,204,21,0.6)] animate-pulse" />
+                <div>
+                  <p className="text-sm text-yellow-200 font-medium mb-1">
+                    TIP: Review Before Saving
+                  </p>
+                  <p className="text-xs text-gray-300">
+                    AI can make mistakes and voice processing might transcribe words incorrectly. Please review your entries and edit if needed before adding to your diary.
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+            
             <div className="grid md:grid-cols-3 gap-6 flex-1 mb-6">
               {viewModes.map((mode, index) => {
                 let content = ''

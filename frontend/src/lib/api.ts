@@ -105,6 +105,23 @@ class ApiClient {
     })
   }
 
+  async createEntryWithAllTexts(
+    rawText: string,
+    enhancedText?: string,
+    structuredSummary?: string,
+    mode: string = 'raw'
+  ): Promise<ApiResponse<Entry>> {
+    return this.request<Entry>('/entries/', {
+      method: 'POST',
+      body: JSON.stringify({
+        raw_text: rawText,
+        enhanced_text: enhancedText,
+        structured_summary: structuredSummary,
+        mode
+      })
+    })
+  }
+
   async getEntries(
     page: number = 1,
     pageSize: number = 20,
@@ -144,6 +161,19 @@ class ApiClient {
     return this.request(`/entries/process/${entryId}`, {
       method: 'POST',
       body: JSON.stringify({ mode })
+    })
+  }
+
+  async processTextOnly(
+    rawText: string,
+    modes: string[]
+  ): Promise<ApiResponse<any>> {
+    return this.request('/entries/process-only', {
+      method: 'POST',
+      body: JSON.stringify({
+        raw_text: rawText,
+        modes
+      })
     })
   }
 
