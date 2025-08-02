@@ -305,6 +305,50 @@ class ApiClient {
       method: 'POST'
     })
   }
+
+  // Pattern API methods
+  async checkPatternThreshold(): Promise<ApiResponse<{
+    threshold_met: boolean
+    threshold: number
+    entry_count: number
+    remaining: number
+  }>> {
+    return this.request('/patterns/check')
+  }
+
+  async analyzePatterns(): Promise<ApiResponse<{
+    patterns_found: number
+    pattern_types: Record<string, number>
+  }>> {
+    return this.request('/patterns/analyze', {
+      method: 'POST'
+    })
+  }
+
+  async getPatterns(): Promise<ApiResponse<{
+    patterns: Array<{
+      id: number
+      pattern_type: string
+      description: string
+      frequency: number
+      confidence: number
+      first_seen: string
+      last_seen: string
+      related_entries: number[]
+      keywords: string[]
+    }>
+    total: number
+  }>> {
+    return this.request('/patterns/')
+  }
+
+  async getPatternEntries(patternId: number): Promise<ApiResponse<{
+    entries: Entry[]
+    pattern_id: number
+    total: number
+  }>> {
+    return this.request(`/patterns/entries/${patternId}`)
+  }
 }
 
 // Export singleton instance

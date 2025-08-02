@@ -1198,12 +1198,7 @@ Word Count: ${entry.word_count}
               </div>
               
               {/* Search Mode Toggle */}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setUseSemanticSearch(!useSemanticSearch)}
-                className="flex items-center gap-2 relative overflow-hidden group transition-all duration-200 bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 hover:text-primary"
-              >
+              <div className="flex items-center gap-2 relative overflow-hidden group transition-all duration-200 bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 hover:text-primary px-3 py-2 rounded-md">
                 {/* Animated background for consistent styling */}
                 <motion.div
                   layoutId="activeSearchModeBg"
@@ -1213,9 +1208,12 @@ Word Count: ${entry.word_count}
                 />
                 
                 <div className="relative flex items-center gap-2">
-                  <span className="text-sm font-medium whitespace-nowrap">
+                  <Label 
+                    htmlFor="search-mode"
+                    className="text-sm font-medium whitespace-nowrap cursor-pointer"
+                  >
                     {useSemanticSearch ? 'Semantic' : 'Text'}
-                  </span>
+                  </Label>
                   <Switch
                     id="search-mode"
                     checked={useSemanticSearch}
@@ -1223,7 +1221,7 @@ Word Count: ${entry.word_count}
                     className="data-[state=checked]:bg-primary"
                   />
                 </div>
-              </Button>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               {isSemanticSearch && (

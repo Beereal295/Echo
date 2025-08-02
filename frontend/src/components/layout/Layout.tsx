@@ -21,6 +21,7 @@ import {
   ChevronLeft,
   ChevronRight
 } from 'lucide-react'
+import { api } from '@/lib/api'
 
 interface LayoutProps {
   children: React.ReactNode
@@ -36,21 +37,35 @@ function Layout({ children }: LayoutProps) {
   const location = useLocation()
 
   useEffect(() => {
-    // Check if user has 30+ entries
-    const checkEntryCount = async () => {
+    // Check if pattern threshold is met
+    const checkPatternThreshold = async () => {
       try {
-        // For demo purposes, patterns are hidden by default
-        // TODO: Replace with actual API call to check entry count
-        // const response = await api.getEntryCount()
-        // if (response.data.total_entries >= 30) {
-        //   setShowPatterns(true)
-        // }
+        const response = await api.checkPatternThreshold()
+        if (response.success && response.data && response.data.data) {
+          setShowPatterns(response.data.data.threshold_met)
+        }
       } catch (error) {
-        console.error('Failed to check entry count:', error)
+        console.error('Failed to check pattern threshold:', error)
       }
     }
     
-    checkEntryCount()
+    // Initial check
+    checkPatternThreshold()
+    
+    // Listen for settings updates
+    const handleSettingsUpdate = () => {
+      checkPatternThreshold()
+    }
+    
+    window.addEventListener('settingsUpdated', handleSettingsUpdate)
+    
+    // Check periodically to update when new entries are added
+    const interval = setInterval(checkPatternThreshold, 60000) // Check every minute
+    
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('settingsUpdated', handleSettingsUpdate)
+    }
   }, [])
 
   // Save collapsed state to localStorage
@@ -224,19 +239,6 @@ function Layout({ children }: LayoutProps) {
                           )}
                         </AnimatePresence>
                             
-                            {item.special && showPatterns && !sidebarCollapsed && (
-                              <motion.div
-                                initial={{ scale: 0, rotate: -180, opacity: 0 }}
-                                animate={{ scale: 1, rotate: 0, opacity: 1 }}
-                                exit={{ scale: 0, rotate: -180, opacity: 0 }}
-                                transition={{ duration: 0.3, delay: 0.1 }}
-                                className="ml-auto"
-                              >
-                                <Badge className="bg-primary/20 text-primary border-primary/30 text-xs">
-                                  NEW
-                                </Badge>
-                              </motion.div>
-                            )}
                       </div>
                 </Button>
               )

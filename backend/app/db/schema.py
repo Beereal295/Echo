@@ -26,7 +26,8 @@ CREATE TABLE IF NOT EXISTS patterns (
     confidence REAL DEFAULT 0.0,
     first_seen DATE,
     last_seen DATE,
-    related_entries TEXT  -- JSON array of entry IDs
+    related_entries TEXT,  -- JSON array of entry IDs
+    keywords TEXT  -- JSON array of keywords
 )
 """
 

@@ -40,6 +40,7 @@ function SettingsPage() {
   const [autoSave, setAutoSave] = useState(true)
   const [autoSaveInterval, setAutoSaveInterval] = useState('30')
   const [theme, setTheme] = useState('system')
+  const [patternThreshold, setPatternThreshold] = useState('30')
 
   // Load preferences on mount
   useEffect(() => {
@@ -97,6 +98,9 @@ function SettingsPage() {
               break
             case 'theme':
               setTheme(pref.typed_value || 'system')
+              break
+            case 'pattern_detection_threshold':
+              setPatternThreshold(String(pref.typed_value || '30'))
               break
           }
         })
@@ -195,9 +199,13 @@ function SettingsPage() {
     const preferences = [
       { key: 'auto_save', value: autoSave, value_type: 'bool' },
       { key: 'auto_save_interval', value: parseInt(autoSaveInterval), value_type: 'int' },
-      { key: 'theme', value: theme, value_type: 'string' }
+      { key: 'theme', value: theme, value_type: 'string' },
+      { key: 'pattern_detection_threshold', value: parseInt(patternThreshold), value_type: 'int' }
     ]
     await savePreferences(preferences)
+    
+    // Dispatch event to notify other components that settings were updated
+    window.dispatchEvent(new CustomEvent('settingsUpdated'))
   }
 
   const testOllamaConnection = async () => {
@@ -313,21 +321,21 @@ function SettingsPage() {
             <Card className="bg-card/50 backdrop-blur-sm border-border/50 h-full flex flex-col overflow-hidden">
               <CardHeader className="pb-2 flex-shrink-0">
                 <div className="flex items-center gap-2">
-                  <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
                     <Settings2 className="h-4 w-4 text-white" />
                   </div>
                   <div className="min-w-0">
-                    <CardTitle className="text-lg text-white">General Settings</CardTitle>
-                    <CardDescription className="text-gray-400 text-sm">
+                    <CardTitle className="text-base text-white">General Settings</CardTitle>
+                    <CardDescription className="text-gray-400 text-xs">
                       Configure general application preferences
                     </CardDescription>
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="flex-1 overflow-y-auto space-y-4 p-4">
+              <CardContent className="flex-1 overflow-y-auto space-y-3 p-3">
                 {/* Auto-save Setting */}
-                <div className="bg-muted/10 rounded-lg p-4 border border-border/50">
-                  <div className="flex items-center justify-between mb-3">
+                <div className="bg-muted/10 rounded-lg p-3 border border-border/50">
+                  <div className="flex items-center justify-between mb-2">
                     <div>
                       <Label htmlFor="auto-save" className="text-white font-medium">Auto-save entries</Label>
                       <p className="text-sm text-gray-400 mt-1">
@@ -362,8 +370,8 @@ function SettingsPage() {
                 </div>
 
                 {/* Theme Setting */}
-                <div className="bg-muted/10 rounded-lg p-4 border border-border/50">
-                  <Label htmlFor="theme" className="text-white font-medium mb-3 block">Theme</Label>
+                <div className="bg-muted/10 rounded-lg p-3 border border-border/50">
+                  <Label htmlFor="theme" className="text-white font-medium mb-2 block">Theme</Label>
                   <Select value={theme} onValueChange={setTheme}>
                     <SelectTrigger className="w-full max-w-xs bg-background/50 border-border text-white hover:bg-muted/50">
                       <SelectValue />
@@ -374,8 +382,28 @@ function SettingsPage() {
                       <SelectItem value="system" className="text-white hover:bg-muted/50 focus:bg-muted/50">System</SelectItem>
                     </SelectContent>
                   </Select>
-                  <p className="text-sm text-gray-400 mt-2">
+                  <p className="text-sm text-gray-400 mt-1">
                     Choose your preferred interface theme
+                  </p>
+                </div>
+
+                {/* Pattern Detection Threshold */}
+                <div className="bg-muted/10 rounded-lg p-3 border border-border/50">
+                  <Label htmlFor="pattern-threshold" className="text-white font-medium mb-2 block">Pattern Detection Threshold</Label>
+                  <div className="flex items-center gap-3">
+                    <Input
+                      id="pattern-threshold"
+                      type="number"
+                      min="5"
+                      max="100"
+                      value={patternThreshold}
+                      onChange={(e) => setPatternThreshold(e.target.value)}
+                      className="w-24 bg-background/50 border-border text-white placeholder:text-gray-500 focus:ring-0 focus:ring-offset-0 focus:border-primary/50"
+                    />
+                    <span className="text-sm text-gray-400">entries</span>
+                  </div>
+                  <p className="text-sm text-gray-400 mt-1">
+                    Number of journal entries required before pattern detection is enabled (default: 30)
                   </p>
                 </div>
 

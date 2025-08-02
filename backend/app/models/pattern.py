@@ -14,11 +14,14 @@ class Pattern:
     confidence: float = 0.0  # 0.0 to 1.0
     first_seen: Optional[date] = None
     last_seen: Optional[date] = None
-    related_entries: Optional[List[int]] = None
+    related_entries: Optional[List[int]] = None 
+    keywords: Optional[List[str]] = None  # Keywords associated with this pattern
     
     def __post_init__(self):
         if self.related_entries is None:
             self.related_entries = []
+        if self.keywords is None:
+            self.keywords = []
     
     def to_dict(self):
         """Convert to dictionary for database storage"""
@@ -30,7 +33,8 @@ class Pattern:
             "confidence": self.confidence,
             "first_seen": self.first_seen.isoformat() if self.first_seen else None,
             "last_seen": self.last_seen.isoformat() if self.last_seen else None,
-            "related_entries": json.dumps(self.related_entries) if self.related_entries else None
+            "related_entries": json.dumps(self.related_entries) if self.related_entries else None,
+            "keywords": json.dumps(self.keywords) if self.keywords else None
         }
     
     @classmethod
@@ -39,6 +43,8 @@ class Pattern:
         # Parse JSON fields
         if data.get("related_entries"):
             data["related_entries"] = json.loads(data["related_entries"])
+        if data.get("keywords"):
+            data["keywords"] = json.loads(data["keywords"])
         if data.get("first_seen"):
             data["first_seen"] = date.fromisoformat(data["first_seen"])
         if data.get("last_seen"):

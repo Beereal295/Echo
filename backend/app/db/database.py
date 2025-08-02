@@ -52,6 +52,11 @@ class Database:
         """Commit transaction"""
         if self._connection:
             await self._connection.commit()
+    
+    async def rollback(self):
+        """Rollback transaction"""
+        if self._connection:
+            await self._connection.rollback()
 
 
 # Global database instance
@@ -103,6 +108,7 @@ async def initialize_default_preferences():
         ("coffee_popup_shown", "false", "bool", "Whether coffee popup was shown"),
         ("coffee_popup_dismissed_date", "", "string", "Last date coffee popup was dismissed"),
         ("first_use_date", datetime.now().isoformat(), "string", "First use date of the application"),
+        ("pattern_detection_threshold", "30", "int", "Number of entries required for pattern detection"),
     ]
     
     for key, value, value_type, description in default_prefs:

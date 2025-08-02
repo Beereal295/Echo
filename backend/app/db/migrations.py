@@ -11,14 +11,12 @@ MIGRATIONS: List[Tuple[int, str, str, str]] = [
         """-- This migration is handled by schema.py create_tables()""",
         """-- Rollback not supported for initial schema"""
     ),
-    # Future migrations will be added here
-    # Example:
-    # (
-    #     2,
-    #     "Add user_id to entries",
-    #     "ALTER TABLE entries ADD COLUMN user_id INTEGER DEFAULT 1",
-    #     "ALTER TABLE entries DROP COLUMN user_id"
-    # ),
+    (
+        2,
+        "Add keywords column to patterns table",
+        """ALTER TABLE patterns ADD COLUMN keywords TEXT""",
+        """ALTER TABLE patterns DROP COLUMN keywords"""
+    ),
 ]
 
 
