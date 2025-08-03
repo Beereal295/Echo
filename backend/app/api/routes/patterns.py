@@ -176,3 +176,93 @@ async def get_pattern_entries(pattern_id: int):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get pattern entries: {str(e)}")
+
+
+@router.get("/keyword/{keyword}", response_model=SuccessResponse)
+async def get_entries_by_keyword(keyword: str):
+    """Get entries that contain a specific keyword"""
+    try:
+        from app.db.database import db
+        import json
+        
+        # Try multiple search approaches
+        search_terms = [keyword]
+        
+        # If it's a bigram, also search for individual words
+        if ' ' in keyword:
+            search_terms.extend(keyword.split())
+        
+        all_found_entries = []
+        
+        for term in search_terms:
+            # Simple substring search
+            entries = await db.fetch_all(
+                """SELECT DISTINCT id, raw_text, enhanced_text, structured_summary, 
+                          timestamp, mood_tags, word_count
+                   FROM entries 
+                   WHERE (raw_text IS NOT NULL AND LOWER(raw_text) LIKE LOWER(?))
+                      OR (enhanced_text IS NOT NULL AND LOWER(enhanced_text) LIKE LOWER(?))
+                      OR (structured_summary IS NOT NULL AND LOWER(structured_summary) LIKE LOWER(?))
+                   ORDER BY timestamp DESC
+                   LIMIT 20""",
+                (f"%{term}%", f"%{term}%", f"%{term}%")
+            )
+            
+            all_found_entries.extend(entries)
+        
+        # Remove duplicates by ID
+        seen_ids = set()
+        unique_entries = []
+        for entry in all_found_entries:
+            if entry['id'] not in seen_ids:
+                seen_ids.add(entry['id'])
+                unique_entries.append(entry)
+        
+        entries = unique_entries[:20]  # Limit to 20
+        
+        # If still no results, try word-based search
+        if not entries:
+            # Try searching for any word in the keyword
+            words = keyword.lower().split()
+            word_conditions = []
+            word_params = []
+            
+            for word in words:
+                if len(word) > 2:  # Skip very short words
+                    word_conditions.extend([
+                        "LOWER(raw_text) LIKE ?",
+                        "LOWER(enhanced_text) LIKE ?",
+                        "LOWER(structured_summary) LIKE ?"
+                    ])
+                    word_params.extend([f"%{word}%", f"%{word}%", f"%{word}%"])
+            
+            if word_conditions:
+                query = f"""
+                    SELECT DISTINCT id, raw_text, enhanced_text, structured_summary, 
+                           timestamp, mood_tags, word_count
+                    FROM entries 
+                    WHERE {' OR '.join(word_conditions)}
+                    ORDER BY timestamp DESC
+                    LIMIT 20
+                """
+                entries = await db.fetch_all(query, tuple(word_params))
+        
+        # Convert to response format
+        entry_data = []
+        for entry in entries:
+            data = dict(entry)
+            if data.get("mood_tags"):
+                data["mood_tags"] = json.loads(data["mood_tags"])
+            entry_data.append(data)
+        
+        return SuccessResponse(
+            message=f"Found {len(entry_data)} entries containing '{keyword}'",
+            data={
+                "entries": entry_data,
+                "keyword": keyword,
+                "total": len(entry_data)
+            }
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to search entries by keyword: {str(e)}")

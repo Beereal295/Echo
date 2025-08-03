@@ -380,6 +380,14 @@ class ApiClient {
   }>> {
     return this.request(`/patterns/entries/${patternId}`)
   }
+  
+  async getEntriesByKeyword(keyword: string): Promise<ApiResponse<{
+    entries: Entry[]
+    keyword: string
+    total: number
+  }>> {
+    return this.request(`/patterns/keyword/${encodeURIComponent(keyword)}`)
+  }
 }
 
 // Export singleton instance

@@ -29,6 +29,7 @@ import {
   CheckCircle
 } from 'lucide-react'
 import { api } from '@/lib/api'
+import { useLocation } from 'react-router-dom'
 
 // Types for entry data
 interface Entry {
@@ -74,8 +75,10 @@ const viewModes = [
 ]
 
 function ViewEntriesPage() {
+  const location = useLocation()
   const [entries, setEntries] = useState<Entry[]>([])
   const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null)
+  
   const [expandedDropdowns, setExpandedDropdowns] = useState<Set<number>>(new Set())
   const [selectedVersion, setSelectedVersion] = useState<'raw' | 'enhanced' | 'structured'>('enhanced')
   const [loading, setLoading] = useState(true)
@@ -112,6 +115,38 @@ function ViewEntriesPage() {
   useEffect(() => {
     loadEntries()
   }, [currentPage])
+
+  // Handle auto-selection when navigating from other pages (like pattern modals)
+  useEffect(() => {
+    const selectedEntryId = location.state?.selectedEntryId
+    
+    if (selectedEntryId) {
+      // Clear navigation state immediately to prevent duplicate runs
+      window.history.replaceState({}, document.title)
+      
+      // Check if entry is in current loaded entries first
+      if (entries.length > 0) {
+        const entryToSelect = entries.find(entry => entry.id === selectedEntryId)
+        if (entryToSelect) {
+          setSelectedEntry(entryToSelect)
+          return
+        }
+      }
+      
+      // Entry not in current page or no entries loaded yet, fetch directly
+      const fetchSelectedEntry = async () => {
+        try {
+          const response = await api.getEntry(selectedEntryId)
+          if (response.success && response.data) {
+            setSelectedEntry(response.data)
+          }
+        } catch (error) {
+          console.error('Failed to fetch selected entry:', error)
+        }
+      }
+      fetchSelectedEntry()
+    }
+  }, [location.state?.selectedEntryId])
 
   // Reload entries when clearing search
   useEffect(() => {
@@ -452,7 +487,8 @@ function ViewEntriesPage() {
       const response = await api.getEntries(currentPage, pageSize)
       
       if (response.success && response.data) {
-        setEntries(response.data.entries || [])
+        const loadedEntries = response.data.entries || []
+        setEntries(loadedEntries)
         setTotalEntries(response.data.total || 0)
         setTotalPages(Math.ceil((response.data.total || 0) / pageSize))
       } else {
@@ -793,19 +829,25 @@ Word Count: ${entry.word_count}
     return filtered
   }, [entries, semanticResults, isSemanticSearch, dateFilterType, startDate, endDate, lastPeriodValue, lastPeriodUnit])
 
-  // Auto-close preview when no filtered entries
+  // Auto-close preview when no filtered entries (but not for directly fetched entries)
   useEffect(() => {
     if (selectedEntry && filteredEntries.length === 0) {
-      setSelectedEntry(null)
-      setEditing(false)
-      setEditedContent('')
+      // Only clear if we're in search mode or have filters active
+      if (searchQuery || dateFilterType !== 'all') {
+        setSelectedEntry(null)
+        setEditing(false)
+        setEditedContent('')
+      }
     } else if (selectedEntry && !filteredEntries.find(entry => entry.id === selectedEntry.id)) {
-      // Close preview if selected entry is not in filtered results
-      setSelectedEntry(null)
-      setEditing(false)
-      setEditedContent('')
+      // Only close preview if we're in search/filter mode and entry is not in filtered results
+      // Don't clear entries that were specifically navigated to from other pages
+      if (searchQuery || dateFilterType !== 'all') {
+        setSelectedEntry(null)
+        setEditing(false)
+        setEditedContent('')
+      }
     }
-  }, [filteredEntries, selectedEntry])
+  }, [filteredEntries, selectedEntry, searchQuery, dateFilterType])
 
   // Edit functionality
   const startEditing = () => {

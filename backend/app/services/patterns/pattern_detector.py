@@ -6,7 +6,8 @@ from collections import Counter, defaultdict
 import re
 import json
 import time
-from sklearn.cluster import DBSCAN
+from sklearn.cluster import DBSCAN, KMeans
+from sklearn.metrics import silhouette_score
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
@@ -23,7 +24,7 @@ class PatternDetector:
         self.embedding_service = EmbeddingService()
         self.ollama_service = OllamaService()
         self.min_cluster_size = 3  # Minimum entries to form a pattern
-        self.similarity_threshold = 0.7  # Cosine similarity threshold
+        self.similarity_threshold = 0.5  # Cosine similarity threshold (lowered for more distinct clusters)
         
     async def analyze_entries(self, min_entries: int) -> List[Pattern]:
         """Analyze all entries and detect patterns"""
@@ -109,12 +110,75 @@ class PatternDetector:
                 
             embeddings = np.array(embeddings_list)
             
-            # Perform DBSCAN clustering
-            clustering = DBSCAN(
-                eps=1 - self.similarity_threshold,  # Convert similarity to distance
-                min_samples=self.min_cluster_size,
-                metric='cosine'
-            ).fit(embeddings)
+            # Try multiple clustering approaches to find distinct patterns
+            best_clustering = None
+            best_num_clusters = 0
+            
+            # Try different eps values to find optimal clustering
+            eps_values = [0.4, 0.5, 0.6, 0.7, 0.8]
+            
+            for eps in eps_values:
+                clustering = DBSCAN(
+                    eps=eps,
+                    min_samples=self.min_cluster_size,
+                    metric='cosine'
+                ).fit(embeddings)
+                
+                # Count valid clusters (ignore noise cluster -1)
+                unique_labels = set(clustering.labels_)
+                num_clusters = len([label for label in unique_labels if label != -1])
+                
+                # Count entries in each cluster
+                cluster_sizes = {}
+                for label in clustering.labels_:
+                    if label != -1:
+                        cluster_sizes[label] = cluster_sizes.get(label, 0) + 1
+                
+                print(f"DBSCAN eps={eps}: {num_clusters} clusters, sizes: {list(cluster_sizes.values())}")
+                
+                # Prefer clustering with 2-6 distinct clusters
+                if 2 <= num_clusters <= 6 and num_clusters > best_num_clusters:
+                    best_clustering = clustering
+                    best_num_clusters = num_clusters
+            
+            # If no good clustering found, try K-means with silhouette optimization
+            if best_clustering is None:
+                print("DBSCAN failed to find good clusters, trying K-means with silhouette optimization...")
+                
+                best_kmeans = None
+                best_silhouette = -1
+                max_k = min(10, len(valid_entries) // self.min_cluster_size + 1)
+                
+                for k in range(2, max_k):
+                    kmeans = KMeans(n_clusters=k, random_state=42, n_init=10).fit(embeddings)
+                    
+                    # Check if all clusters meet minimum size requirement
+                    cluster_sizes = {}
+                    for label in kmeans.labels_:
+                        cluster_sizes[label] = cluster_sizes.get(label, 0) + 1
+                    
+                    min_size = min(cluster_sizes.values())
+                    if min_size >= self.min_cluster_size:
+                        # Calculate silhouette score for this clustering
+                        silhouette = silhouette_score(embeddings, kmeans.labels_)
+                        print(f"K-means k={k}: silhouette={silhouette:.3f}, cluster sizes: {list(cluster_sizes.values())}")
+                        
+                        if silhouette > best_silhouette:
+                            best_kmeans = kmeans
+                            best_silhouette = silhouette
+                
+                if best_kmeans is not None:
+                    clustering = best_kmeans
+                    print(f"Selected optimal clustering with silhouette score: {best_silhouette:.3f}")
+                else:
+                    # Last resort: use simple DBSCAN
+                    clustering = DBSCAN(
+                        eps=0.5,
+                        min_samples=self.min_cluster_size,
+                        metric='cosine'
+                    ).fit(embeddings)
+            else:
+                clustering = best_clustering
             
         except Exception as e:
             return []
@@ -130,6 +194,10 @@ class PatternDetector:
             if len(entry_indices) >= self.min_cluster_size:
                 # Extract entries in this cluster
                 cluster_entries = [valid_entries[i] for i in entry_indices]
+                
+                # Skip if cluster is too large (likely everything got grouped together)
+                if len(cluster_entries) > len(valid_entries) * 0.7:
+                    continue
                 
                 # Generate pattern description using LLM
                 pattern_desc = await self._generate_pattern_description(
@@ -263,11 +331,18 @@ class PatternDetector:
             text = text[:200] + "..." if len(text) > 200 else text
             text_samples.append(text)
         
-        prompt = f"""Analyze these journal entry samples and identify the common theme or pattern:
+        prompt = f"""Analyze these journal entry samples and identify the SPECIFIC common theme or pattern:
 
 {chr(10).join(f'{i+1}. {text}' for i, text in enumerate(text_samples))}
 
-Describe the common pattern in one concise sentence (max 10 words). Focus on the main theme."""
+Create a specific, descriptive title for this topic pattern. Examples:
+- "Work stress and deadline pressure"
+- "Family relationships and communication"
+- "Health and fitness goals"
+- "Travel and adventure experiences"
+- "Creative projects and artistic pursuits"
+
+Respond with only the specific topic title (max 8 words). Be precise, not generic."""
 
         try:
             response = await self.ollama_service.generate(
@@ -305,10 +380,11 @@ Describe the common pattern in one concise sentence (max 10 words). Focus on the
         try:
             # Use TF-IDF to extract important terms
             vectorizer = TfidfVectorizer(
-                max_features=max_keywords,
+                max_features=max_keywords * 2,  # Get more candidates
                 stop_words='english',
                 ngram_range=(1, 2),  # Include bigrams
-                min_df=2  # Term must appear in at least 2 documents
+                min_df=1,  # Allow single occurrences for smaller clusters
+                max_df=0.8  # Ignore terms that appear in >80% of documents
             )
             
             tfidf_matrix = vectorizer.fit_transform(texts)

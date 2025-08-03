@@ -23,9 +23,11 @@ import {
   Filter,
   X,
   ChevronDown,
-  ChevronLeft
+  ChevronLeft,
+  ExternalLink
 } from 'lucide-react'
 import { format } from 'date-fns'
+import { useNavigate } from 'react-router-dom'
 
 interface Pattern {
   id: number
@@ -46,11 +48,22 @@ interface WordCloudWord {
 
 function PatternInsightsPage() {
   const { toast } = useToast()
+  const navigate = useNavigate()
   const [patterns, setPatterns] = useState<Pattern[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [selectedPattern, setSelectedPattern] = useState<Pattern | null>(null)
   const [showUnlockAnimation, setShowUnlockAnimation] = useState(false)
+  
+  // Keyword entries modal state
+  const [selectedKeyword, setSelectedKeyword] = useState<string | null>(null)
+  const [keywordEntries, setKeywordEntries] = useState<any[]>([])
+  const [loadingKeywordEntries, setLoadingKeywordEntries] = useState(false)
+  
+  // Pattern entries modal state
+  const [selectedPatternForEntries, setSelectedPatternForEntries] = useState<Pattern | null>(null)
+  const [patternEntries, setPatternEntries] = useState<any[]>([])
+  const [loadingPatternEntries, setLoadingPatternEntries] = useState(false)
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
@@ -130,16 +143,19 @@ function PatternInsightsPage() {
         // Backend wraps data in SuccessResponse, so access nested data
         const analyzeData = response.data?.data || response.data
         toast({
-          title: 'Insights generated',
-          description: `Found ${analyzeData?.patterns_found || 0} patterns`,
+          title: 'Pattern analysis complete',
+          description: `Found ${analyzeData.patterns_found || 0} new patterns`,
+          variant: 'default'
         })
+        
+        // Reload patterns
         await loadExistingPatterns()
       }
     } catch (error) {
-      console.error('Failed to generate insights:', error)
+      console.error('Failed to generate patterns:', error)
       toast({
-        title: 'Error generating insights',
-        description: 'Failed to analyze your entries',
+        title: 'Error generating patterns',
+        description: 'Failed to analyze your journal entries for patterns',
         variant: 'destructive'
       })
     } finally {
@@ -305,6 +321,77 @@ function PatternInsightsPage() {
     }
   }
 
+  const handleKeywordClick = async (keyword: string) => {
+    setSelectedKeyword(keyword)
+    setLoadingKeywordEntries(true)
+    setKeywordEntries([])
+    
+    try {
+      const response = await api.getEntriesByKeyword(keyword)
+      
+      if (response.success && response.data) {
+        // Handle nested response structure similar to getPatterns
+        const responseData = response.data.data || response.data
+        const entries = responseData.entries || []
+        
+        setKeywordEntries(entries)
+      } else {
+        toast({
+          title: 'Error loading entries',
+          description: `Failed to load entries for keyword "${keyword}"`,
+          variant: 'destructive'
+        })
+      }
+    } catch (error) {
+      console.error('Failed to load keyword entries:', error)
+      toast({
+        title: 'Error loading entries',
+        description: `Failed to load entries for keyword "${keyword}"`,
+        variant: 'destructive'
+      })
+    } finally {
+      setLoadingKeywordEntries(false)
+    }
+  }
+
+  const handlePatternEntriesClick = async (pattern: Pattern) => {
+    setSelectedPatternForEntries(pattern)
+    setLoadingPatternEntries(true)
+    setPatternEntries([])
+    
+    try {
+      const response = await api.getPatternEntries(pattern.id)
+      
+      if (response.success && response.data) {
+        // Handle nested response structure
+        const responseData = response.data.data || response.data
+        const entries = responseData.entries || []
+        
+        setPatternEntries(entries)
+      } else {
+        toast({
+          title: 'Error loading entries',
+          description: `Failed to load entries for pattern "${pattern.description}"`,
+          variant: 'destructive'
+        })
+      }
+    } catch (error) {
+      console.error('Failed to load pattern entries:', error)
+      toast({
+        title: 'Error loading entries',
+        description: `Failed to load entries for pattern "${pattern.description}"`,
+        variant: 'destructive'
+      })
+    } finally {
+      setLoadingPatternEntries(false)
+    }
+  }
+
+  const handleViewEntry = (entryId: number) => {
+    // Navigate to View Entries page with the specific entry selected
+    navigate('/entries', { state: { selectedEntryId: entryId } })
+  }
+
   if (loading) {
     return (
       <div className="h-screen flex flex-col p-4 md:p-6 overflow-hidden">
@@ -353,7 +440,7 @@ function PatternInsightsPage() {
                 ) : (
                   <>
                     <Sparkles className="mr-2 h-4 w-4" />
-                    Generate Insights
+                    Refresh Insights
                   </>
                 )}
               </span>
@@ -636,7 +723,7 @@ function PatternInsightsPage() {
                 ) : (
                   <>
                     <Sparkles className="mr-2 h-4 w-4" />
-                    Generate Insights
+                    Refresh Insights
                   </>
                 )}
               </span>
@@ -646,9 +733,15 @@ function PatternInsightsPage() {
 
         <Tabs defaultValue="wordcloud" className="flex-1 flex flex-col">
           <TabsList className="grid w-full max-w-md grid-cols-3 mb-4 bg-card/50 backdrop-blur-sm border border-border/50 flex-shrink-0">
-            <TabsTrigger value="wordcloud">Word Cloud</TabsTrigger>
-            <TabsTrigger value="patterns">All Patterns</TabsTrigger>
-            <TabsTrigger value="timeline">Timeline</TabsTrigger>
+            <TabsTrigger value="wordcloud" className="flex items-center gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
+              Word Cloud
+            </TabsTrigger>
+            <TabsTrigger value="patterns" className="flex items-center gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
+              All Patterns
+            </TabsTrigger>
+            <TabsTrigger value="timeline" className="flex items-center gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
+              Timeline
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="wordcloud" className="flex-1">
@@ -661,8 +754,7 @@ function PatternInsightsPage() {
             >
               <Card className="lg:col-span-3 bg-card/50 backdrop-blur-sm border-border/50 flex flex-col" style={{ minHeight: '600px' }}>
                 <CardHeader className="flex-shrink-0">
-                  <CardTitle className="text-white flex items-center gap-2">
-                    <Sparkles className="h-5 w-5" />
+                  <CardTitle className="text-white">
                     Your Journal Keywords
                   </CardTitle>
                   <CardDescription className="text-gray-400">
@@ -682,11 +774,11 @@ function PatternInsightsPage() {
                 </CardContent>
               </Card>
 
-              <Card className="bg-card/50 backdrop-blur-sm border-border/50 overflow-hidden max-h-96">
-                <CardHeader className="pb-3">
+              <Card className="bg-card/50 backdrop-blur-sm border-border/50 flex flex-col" style={{ minHeight: '600px' }}>
+                <CardHeader className="pb-3 flex-shrink-0">
                   <CardTitle className="text-white text-lg">Pattern Summary</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-4 flex-1 overflow-y-auto">
                   {Object.entries(patternsByType).map(([type, typePatterns]) => {
                     if (typePatterns.length === 0) return null
                     const Icon = getPatternIcon(type)
@@ -699,7 +791,7 @@ function PatternInsightsPage() {
                           <span className="text-sm font-medium text-white capitalize">
                             {type} Patterns
                           </span>
-                          <Badge variant="secondary" className="ml-auto px-2 py-1 text-xs font-semibold">
+                          <Badge className="bg-cyan-500/10 text-cyan-400 border-cyan-500/20 text-xs ml-auto px-2 py-1 font-semibold">
                             {typePatterns.length}
                           </Badge>
                         </div>
@@ -785,12 +877,19 @@ function PatternInsightsPage() {
                         </div>
                         <div className="mt-3 flex flex-wrap gap-1">
                           {pattern.keywords.slice(0, 3).map((keyword, idx) => (
-                            <Badge key={idx} className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-xs">
+                            <Badge 
+                              key={idx} 
+                              className="bg-cyan-500/10 text-cyan-400 border-cyan-500/20 text-xs cursor-pointer hover:bg-cyan-500/20 transition-colors"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleKeywordClick(keyword)
+                              }}
+                            >
                               {keyword}
                             </Badge>
                           ))}
                           {pattern.keywords.length > 3 && (
-                            <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-xs">
+                            <Badge className="bg-cyan-500/10 text-cyan-400 border-cyan-500/20 text-xs">
                               +{pattern.keywords.length - 3}
                             </Badge>
                           )}
@@ -804,59 +903,33 @@ function PatternInsightsPage() {
             
               {/* Pagination Controls */}
             {totalPages > 1 && (
-              <div className="flex items-center justify-between mt-4 pt-4 border-t border-border/50 flex-shrink-0">
-                <div className="text-sm text-muted-foreground">
-                  Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, filteredPatterns.length)} of {filteredPatterns.length} patterns
+              <div className="mt-4 flex items-center justify-between border-t border-border pt-4 flex-shrink-0">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => goToPage(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="flex items-center gap-2 bg-card border border-border text-yellow-400 hover:bg-card/80 hover:text-yellow-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </Button>
+                
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <span>Page {currentPage} of {totalPages}</span>
+                  <span className="text-xs">({filteredPatterns.length} total)</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => goToPage(currentPage - 1)}
-                    disabled={currentPage === 1}
-                    className="px-3"
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  
-                  {/* Page numbers */}
-                  <div className="flex items-center gap-1">
-                    {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-                      let pageNum;
-                      if (totalPages <= 5) {
-                        pageNum = i + 1;
-                      } else if (currentPage <= 3) {
-                        pageNum = i + 1;
-                      } else if (currentPage >= totalPages - 2) {
-                        pageNum = totalPages - 4 + i;
-                      } else {
-                        pageNum = currentPage - 2 + i;
-                      }
-                      
-                      return (
-                        <Button
-                          key={pageNum}
-                          variant={currentPage === pageNum ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => goToPage(pageNum)}
-                          className="w-8 h-8 p-0"
-                        >
-                          {pageNum}
-                        </Button>
-                      );
-                    })}
-                  </div>
-                  
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => goToPage(currentPage + 1)}
-                    disabled={currentPage === totalPages}
-                    className="px-3"
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
+                
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => goToPage(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="flex items-center gap-2 bg-card border border-border text-yellow-400 hover:bg-card/80 hover:text-yellow-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
               </div>
             )}
             </motion.div>
@@ -907,7 +980,14 @@ function PatternInsightsPage() {
                                 {pattern.keywords && pattern.keywords.length > 0 && (
                                   <div className="mt-2 flex flex-wrap gap-1">
                                     {pattern.keywords.slice(0, 3).map((keyword, idx) => (
-                                      <Badge key={idx} className="bg-cyan-500/10 text-cyan-400 border-cyan-500/20 text-xs">
+                                      <Badge 
+                                        key={idx} 
+                                        className="bg-cyan-500/10 text-cyan-400 border-cyan-500/20 text-xs cursor-pointer hover:bg-cyan-500/20 transition-colors"
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          handleKeywordClick(keyword)
+                                        }}
+                                      >
                                         {keyword}
                                       </Badge>
                                     ))}
@@ -930,31 +1010,33 @@ function PatternInsightsPage() {
               
               {/* Timeline Pagination */}
               {totalPages > 1 && (
-                <div className="border-t border-border/50 p-4 flex items-center justify-between bg-card/30 flex-shrink-0">
-                  <div className="text-sm text-muted-foreground">
-                    Page {currentPage} of {totalPages}
+                <div className="mt-4 flex items-center justify-between border-t border-border pt-4 flex-shrink-0">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => goToPage(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="flex items-center gap-2 bg-card border border-border text-yellow-400 hover:bg-card/80 hover:text-yellow-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Previous
+                  </Button>
+                  
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <span>Page {currentPage} of {totalPages}</span>
+                    <span className="text-xs">({filteredPatterns.length} total)</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => goToPage(currentPage - 1)}
-                      disabled={currentPage === 1}
-                      className="px-3"
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => goToPage(currentPage + 1)}
-                      disabled={currentPage === totalPages}
-                      className="px-3"
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </div>
+                  
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => goToPage(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="flex items-center gap-2 bg-card border border-border text-yellow-400 hover:bg-card/80 hover:text-yellow-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
                 </div>
               )}
             </motion.div>
@@ -999,8 +1081,10 @@ function PatternInsightsPage() {
                   variant="ghost"
                   size="sm"
                   onClick={() => setSelectedPattern(null)}
+                  className="h-8 w-8 p-0 text-blue-300 drop-shadow-[0_0_4px_rgba(147,197,253,0.6)] hover:bg-muted/50 hover:text-white hover:drop-shadow-[0_0_6px_rgba(255,255,255,0.6)]"
+                  title="Close"
                 >
-                  ×
+                  <X className="h-4 w-4" />
                 </Button>
               </div>
 
@@ -1031,7 +1115,11 @@ function PatternInsightsPage() {
                   <p className="text-sm text-gray-400 mb-2">Keywords</p>
                   <div className="flex flex-wrap gap-2">
                     {selectedPattern.keywords.map((keyword, idx) => (
-                      <Badge key={idx} variant="secondary">
+                      <Badge 
+                        key={idx} 
+                        className="bg-cyan-500/10 text-cyan-400 border-cyan-500/20 text-xs cursor-pointer hover:bg-cyan-500/20 transition-colors"
+                        onClick={() => handleKeywordClick(keyword)}
+                      >
                         {keyword}
                       </Badge>
                     ))}
@@ -1041,8 +1129,310 @@ function PatternInsightsPage() {
                 <div>
                   <p className="text-sm text-gray-400 mb-2">Related Entries</p>
                   <p className="text-white">
-                    This pattern appears in {selectedPattern.related_entries.length} journal entries
+                    This pattern appears in{' '}
+                    <button
+                      onClick={() => handlePatternEntriesClick(selectedPattern)}
+                      className="text-pink-400 hover:text-pink-300 underline cursor-pointer transition-colors font-medium"
+                    >
+                      {selectedPattern.related_entries.length} journal entries
+                    </button>
                   </p>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Keyword Entries Modal */}
+      <AnimatePresence>
+        {selectedKeyword && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md"
+            onClick={() => setSelectedKeyword(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              className="w-[95vw] h-[85vh] max-w-6xl bg-card border border-border rounded-lg shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="h-full flex flex-col">
+                {/* Modal Header */}
+                <div className="flex items-center justify-between p-6 border-b border-border">
+                  <div>
+                    <h2 className="text-xl font-bold text-white">
+                      Entries containing "{selectedKeyword}"
+                    </h2>
+                    <p className="text-muted-foreground flex items-center gap-2 mt-1">
+                      <Hash className="h-4 w-4" />
+                      {keywordEntries.length} entries found
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedKeyword(null)}
+                    className="h-8 w-8 p-0 text-blue-300 drop-shadow-[0_0_4px_rgba(147,197,253,0.6)] hover:bg-muted/50 hover:text-white hover:drop-shadow-[0_0_6px_rgba(255,255,255,0.6)]"
+                    title="Close"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                {/* Modal Content */}
+                <div className="flex-1 overflow-y-auto p-6">
+                  {loadingKeywordEntries ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                      <span className="ml-2 text-gray-400">Loading entries...</span>
+                    </div>
+                  ) : keywordEntries.length === 0 ? (
+                    <div className="text-center py-8">
+                      <FileText className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+                      <p className="text-white font-medium text-lg mb-2">No entries found</p>
+                      <p className="text-muted-foreground">
+                        No entries contain "{selectedKeyword}". This keyword might be generated from patterns or synonyms.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {keywordEntries.map((entry) => {
+                        const formatTimestamp = (timestamp: string) => {
+                          const date = new Date(timestamp)
+                          const now = new Date()
+                          const diffInDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24))
+                          
+                          const dayOfWeek = date.toLocaleDateString('en-US', { weekday: 'long' })
+                          const formattedDate = date.toLocaleDateString('en-US', { 
+                            month: 'short', 
+                            day: 'numeric',
+                            year: diffInDays > 365 ? 'numeric' : undefined
+                          })
+                          const time = date.toLocaleTimeString('en-US', { 
+                            hour: 'numeric', 
+                            minute: '2-digit',
+                            hour12: true 
+                          })
+                          
+                          return { dayOfWeek, formattedDate, time }
+                        }
+
+                        const { dayOfWeek, formattedDate, time } = formatTimestamp(entry.timestamp)
+                        
+                        return (
+                          <motion.div
+                            key={entry.id}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="space-y-2"
+                          >
+                            <Card className="cursor-default hover:bg-muted/30 transition-all duration-200">
+                              <CardHeader className="pb-3 pt-4 px-4">
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <CardTitle className="text-sm font-medium">
+                                      <span className="text-primary">{dayOfWeek}</span>
+                                      <span className="text-white">, </span>
+                                      <span className="text-muted-foreground">{formattedDate}</span>
+                                    </CardTitle>
+                                    <CardDescription className="flex items-center gap-2 mt-1 text-xs">
+                                      <Clock className="h-3 w-3" />
+                                      {time} • Entry #{entry.id}
+                                    </CardDescription>
+                                  </div>
+                                  <button
+                                    onClick={() => handleViewEntry(entry.id)}
+                                    className="relative overflow-hidden group px-3 py-1.5 rounded-md font-medium shadow hover:shadow-lg hover:scale-[1.02] transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 text-sm"
+                                  >
+                                    <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                                    <span className="relative z-10 flex items-center font-medium">
+                                      <ExternalLink className="h-3 w-3 mr-1" />
+                                      View
+                                    </span>
+                                  </button>
+                                </div>
+                              </CardHeader>
+                              <CardContent className="px-4 pb-4">
+                                <div className="text-white text-sm leading-relaxed whitespace-pre-wrap">
+                                  {entry.structured_summary || entry.enhanced_text || entry.raw_text}
+                                </div>
+                                <div className="mt-4 pt-3 border-t border-border">
+                                  <div className="flex items-center justify-between">
+                                    {entry.mood_tags && entry.mood_tags.length > 0 && (
+                                      <div className="flex flex-wrap gap-1">
+                                        {entry.mood_tags.map((tag: string, tagIdx: number) => (
+                                          <Badge key={tagIdx} className="bg-purple-500/10 text-purple-400 border-purple-500/20 text-xs">
+                                            {tag}
+                                          </Badge>
+                                        ))}
+                                      </div>
+                                    )}
+                                    <div className="text-xs text-muted-foreground ml-auto">
+                                      {entry.word_count} words
+                                    </div>
+                                  </div>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          </motion.div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Pattern Entries Modal */}
+      <AnimatePresence>
+        {selectedPatternForEntries && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md"
+            onClick={() => setSelectedPatternForEntries(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              className="w-[95vw] h-[85vh] max-w-6xl bg-card border border-border rounded-lg shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="h-full flex flex-col">
+                {/* Modal Header */}
+                <div className="flex items-center justify-between p-6 border-b border-border">
+                  <div>
+                    <h2 className="text-xl font-bold text-white">
+                      Entries for "{selectedPatternForEntries.description}"
+                    </h2>
+                    <p className="text-muted-foreground flex items-center gap-2 mt-1">
+                      <TrendingUp className="h-4 w-4" />
+                      {patternEntries.length} entries found • {selectedPatternForEntries.pattern_type} pattern
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedPatternForEntries(null)}
+                    className="h-8 w-8 p-0 text-blue-300 drop-shadow-[0_0_4px_rgba(147,197,253,0.6)] hover:bg-muted/50 hover:text-white hover:drop-shadow-[0_0_6px_rgba(255,255,255,0.6)]"
+                    title="Close"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                {/* Modal Content */}
+                <div className="flex-1 overflow-y-auto p-6">
+                  {loadingPatternEntries ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                      <span className="ml-2 text-gray-400">Loading entries...</span>
+                    </div>
+                  ) : patternEntries.length === 0 ? (
+                    <div className="text-center py-8">
+                      <FileText className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+                      <p className="text-white font-medium text-lg mb-2">No entries found</p>
+                      <p className="text-muted-foreground">
+                        No entries found for this pattern. The pattern data might be outdated.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {patternEntries.map((entry) => {
+                        const formatTimestamp = (timestamp: string) => {
+                          const date = new Date(timestamp)
+                          const now = new Date()
+                          const diffInDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24))
+                          
+                          const dayOfWeek = date.toLocaleDateString('en-US', { weekday: 'long' })
+                          const formattedDate = date.toLocaleDateString('en-US', { 
+                            month: 'short', 
+                            day: 'numeric',
+                            year: diffInDays > 365 ? 'numeric' : undefined
+                          })
+                          const time = date.toLocaleTimeString('en-US', { 
+                            hour: 'numeric', 
+                            minute: '2-digit',
+                            hour12: true 
+                          })
+                          
+                          return { dayOfWeek, formattedDate, time }
+                        }
+
+                        const { dayOfWeek, formattedDate, time } = formatTimestamp(entry.timestamp)
+                        
+                        return (
+                          <motion.div
+                            key={entry.id}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="space-y-2"
+                          >
+                            <Card className="cursor-default hover:bg-muted/30 transition-all duration-200">
+                              <CardHeader className="pb-3 pt-4 px-4">
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <CardTitle className="text-sm font-medium">
+                                      <span className="text-primary">{dayOfWeek}</span>
+                                      <span className="text-white">, </span>
+                                      <span className="text-muted-foreground">{formattedDate}</span>
+                                    </CardTitle>
+                                    <CardDescription className="flex items-center gap-2 mt-1 text-xs">
+                                      <Clock className="h-3 w-3" />
+                                      {time} • Entry #{entry.id}
+                                    </CardDescription>
+                                  </div>
+                                  <button
+                                    onClick={() => handleViewEntry(entry.id)}
+                                    className="relative overflow-hidden group px-3 py-1.5 rounded-md font-medium shadow hover:shadow-lg hover:scale-[1.02] transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 text-sm"
+                                  >
+                                    <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                                    <span className="relative z-10 flex items-center font-medium">
+                                      <ExternalLink className="h-3 w-3 mr-1" />
+                                      View
+                                    </span>
+                                  </button>
+                                </div>
+                              </CardHeader>
+                              <CardContent className="px-4 pb-4">
+                                <div className="text-white text-sm leading-relaxed whitespace-pre-wrap">
+                                  {entry.structured_summary || entry.enhanced_text || entry.raw_text}
+                                </div>
+                                <div className="mt-4 pt-3 border-t border-border">
+                                  <div className="flex items-center justify-between">
+                                    {entry.mood_tags && entry.mood_tags.length > 0 && (
+                                      <div className="flex flex-wrap gap-1">
+                                        {entry.mood_tags.map((tag: string, tagIdx: number) => (
+                                          <Badge key={tagIdx} className="bg-purple-500/10 text-purple-400 border-purple-500/20 text-xs">
+                                            {tag}
+                                          </Badge>
+                                        ))}
+                                      </div>
+                                    )}
+                                    <div className="text-xs text-muted-foreground ml-auto">
+                                      {entry.word_count} words
+                                    </div>
+                                  </div>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          </motion.div>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
             </motion.div>
