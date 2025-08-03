@@ -278,9 +278,10 @@ class ApiClient {
     })
   }
 
-  // Regenerate all embeddings with BGE improvements
+
+  // Regenerate all embeddings using raw text only
   async regenerateAllEmbeddings(): Promise<ApiResponse<any>> {
-    return this.request('/embeddings/regenerate-all', {
+    return this.request('/embeddings/regenerate-all-raw-text', {
       method: 'POST'
     })
   }

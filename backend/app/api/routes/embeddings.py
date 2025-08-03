@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 
 from app.api.schemas import SuccessResponse, ErrorResponse
 from app.services.embedding_service import get_embedding_service, EmbeddingService
+from app.services.hybrid_search import HybridSearchService
 from app.db.repositories.entry_repository import EntryRepository
 
 logger = logging.getLogger(__name__)
@@ -458,30 +459,60 @@ async def semantic_search(request: SemanticSearchRequest):
                 )
             )
         
-        # Perform similarity search
+        # Perform similarity search - get more candidates for hybrid reranking
         similar_indices = embedding_service.search_similar_embeddings(
             query_embedding=query_embedding,
             candidate_embeddings=candidate_embeddings,
-            top_k=request.limit,
+            top_k=min(request.limit * 2, 100),  # Get 2x candidates for reranking
             similarity_threshold=request.similarity_threshold
         )
         
-        # Format results
-        search_results = []
+        # Prepare results for hybrid reranking
+        initial_results = []
         for index, similarity in similar_indices:
             entry = entry_metadata[index]
-            
-            # Generate title and content preview
+            entry_dict = {
+                "id": entry.id,
+                "raw_text": entry.raw_text,
+                "enhanced_text": entry.enhanced_text,
+                "structured_summary": entry.structured_summary,
+                "mode": entry.mode,
+                "timestamp": entry.timestamp,
+                "mood_tags": entry.mood_tags,
+                "word_count": entry.word_count
+            }
+            initial_results.append((index, similarity, entry_dict))
+        
+        # Apply hybrid reranking with conservative boost values
+        reranked_results = HybridSearchService.rerank_search_results(
+            results=initial_results,
+            query=request.query,
+            text_field="raw_text",
+            exact_match_boost=0.2,  # Conservative 20% boost
+            partial_match_boost=0.1  # Conservative 10% boost
+        )
+        
+        # Format final results (take only requested limit)
+        search_results = []
+        for _, hybrid_score, entry_dict in reranked_results[:request.limit]:
+            # Get original entry object for title generation
+            entry = next(e for e in entry_metadata if e.id == entry_dict["id"])
             title = _generate_entry_title(entry)
-            content = _generate_entry_preview(entry)
+            
+            # Use hybrid search to extract context around matches
+            content = HybridSearchService.extract_search_context(
+                text=entry.raw_text or "",
+                query=request.query,
+                context_length=200
+            )
             
             search_results.append(EntrySearchResult(
-                entry_id=entry.id,
-                similarity=similarity,
+                entry_id=entry_dict["id"],
+                similarity=hybrid_score,  # Report hybrid score (capped at 1.0)
                 title=title,
                 content=content,
-                timestamp=entry.timestamp.isoformat(),
-                mode=entry.mode
+                timestamp=entry_dict["timestamp"].isoformat(),
+                mode=entry_dict["mode"]
             ))
         
         response_data = SemanticSearchResponse(
@@ -503,6 +534,8 @@ async def semantic_search(request: SemanticSearchRequest):
             status_code=500,
             detail=f"Failed to perform semantic search: {str(e)}"
         )
+
+
 
 
 @router.post("/similar-entries", response_model=SuccessResponse[SemanticSearchResponse])
@@ -939,88 +972,111 @@ async def regenerate_embeddings_sync():
 
 @router.post("/debug-search", response_model=SuccessResponse[dict])
 async def debug_semantic_search(request: dict):
-    """Debug semantic search to see what's happening"""
+    """Debug semantic search - EXACT copy of main semantic search logic"""
     try:
-        query = request.get("query", "hiking")
-        logger.info(f"DEBUG SEARCH for: '{query}'")
+        query = request.get("query", "")
+        if not query:
+            raise HTTPException(status_code=400, detail="Query is required")
         
-        # Get embedding service
+        logger.info(f"DEBUG SEARCH for: '{query}' (using main search logic)")
+        
         embedding_service = get_embedding_service()
         
-        # Generate query embedding with BGE formatting
-        logger.info("Generating query embedding with BGE formatting...")
+        # EXACT COPY of main semantic search - Generate embedding for the search query with BGE query formatting
         query_embedding = await embedding_service.generate_embedding(
             text=query,
             normalize=True,
-            is_query=True  # This should add BGE prefix
+            is_query=True  # Mark as query for BGE formatting
         )
-        logger.info(f"Query embedding generated: {len(query_embedding)}D")
         
-        # Get MORE entries with embeddings for testing
-        entries = await EntryRepository.get_entries_with_embeddings(limit=100)
-        logger.info(f"Found {len(entries)} entries with embeddings")
+        # EXACT COPY of main semantic search - Get all entries with embeddings
+        entries_with_embeddings = await EntryRepository.get_entries_with_embeddings(
+            limit=1000  # Get a large batch for comprehensive search
+        )
         
-        # Also get ALL entries to check if hiking entry exists at all
-        all_entries = await EntryRepository.get_all(limit=200)
-        logger.info(f"Found {len(all_entries)} total entries")
+        if not entries_with_embeddings:
+            return SuccessResponse(
+                success=True,
+                message="No entries with embeddings found",
+                data={
+                    "query": query,
+                    "results": [],
+                    "count": 0,
+                    "total_searchable_entries": 0
+                }
+            )
         
-        # Find hiking entries in all entries - check ALL text fields
-        hiking_entries = []
-        for entry in all_entries:
-            # Check all text fields, not just the "best" one
-            raw_has_hiking = entry.raw_text and "hiking" in entry.raw_text.lower()
-            enhanced_has_hiking = entry.enhanced_text and "hiking" in entry.enhanced_text.lower()
-            structured_has_hiking = entry.structured_summary and "hiking" in entry.structured_summary.lower()
-            
-            if raw_has_hiking or enhanced_has_hiking or structured_has_hiking:
-                text_used_for_embedding = _select_best_text_for_embedding(entry)
-                hiking_entries.append({
-                    "entry_id": entry.id,
-                    "raw_has_hiking": raw_has_hiking,
-                    "enhanced_has_hiking": enhanced_has_hiking,
-                    "structured_has_hiking": structured_has_hiking,
-                    "text_used_for_embedding": text_used_for_embedding[:200] if text_used_for_embedding else "No text",
-                    "raw_text": entry.raw_text[:100] if entry.raw_text else "None",
-                    "enhanced_text": entry.enhanced_text[:100] if entry.enhanced_text else "None",
-                    "structured_text": entry.structured_summary[:100] if entry.structured_summary else "None",
-                    "has_embeddings": entry.embeddings is not None and len(entry.embeddings) > 0 if entry.embeddings else False
-                })
+        # EXACT COPY of main semantic search - Extract embeddings and metadata
+        candidate_embeddings = []
+        entry_metadata = []
         
-        logger.info(f"Found {len(hiking_entries)} entries containing 'hiking'")
-        
-        debug_results = []
-        for entry in entries:
+        for entry in entries_with_embeddings:
             if entry.embeddings and len(entry.embeddings) > 0:
-                # Calculate similarity manually
-                similarity = EmbeddingService.cosine_similarity(
-                    query_embedding,
-                    entry.embeddings
-                )
-                
-                # Get the text that was used for embedding
-                text_used = _select_best_text_for_embedding(entry)
-                
-                debug_results.append({
-                    "entry_id": entry.id,
-                    "similarity": float(similarity),
-                    "text_preview": text_used[:100] if text_used else "No text",
-                    "has_hiking": "hiking" in text_used.lower() if text_used else False,
-                    "embedding_length": len(entry.embeddings)
-                })
+                candidate_embeddings.append(entry.embeddings)
+                entry_metadata.append(entry)
         
-        # Sort by similarity
-        debug_results.sort(key=lambda x: x["similarity"], reverse=True)
+        if not candidate_embeddings:
+            return SuccessResponse(
+                success=True,
+                message="No valid embeddings found",
+                data={
+                    "query": query,
+                    "results": [],
+                    "count": 0,
+                    "total_searchable_entries": 0
+                }
+            )
+        
+        # EXACT COPY of main semantic search - Perform similarity search with same threshold
+        similar_indices = embedding_service.search_similar_embeddings(
+            query_embedding=query_embedding,
+            candidate_embeddings=candidate_embeddings,
+            top_k=20,  # Same as main search
+            similarity_threshold=0.3  # Same as main search
+        )
+        
+        # EXACT COPY of main semantic search - Format results exactly the same way
+        search_results = []
+        for index, similarity in similar_indices:
+            entry = entry_metadata[index]
+            
+            # Generate title and content preview
+            title = _generate_entry_title(entry)
+            content = _generate_entry_preview(entry)
+            
+            # Add debug info
+            text_used_for_embedding = _select_best_text_for_embedding(entry)
+            contains_query = query.lower() in text_used_for_embedding.lower() if text_used_for_embedding else False
+            
+            search_results.append({
+                "entry_id": entry.id,
+                "similarity": similarity,
+                "title": title,
+                "content": content,
+                "timestamp": entry.timestamp.isoformat(),
+                "mode": entry.mode,
+                # Debug additions
+                "text_used_for_embedding": text_used_for_embedding[:200] if text_used_for_embedding else "No text",
+                "contains_query": contains_query,
+                "embedding_length": len(entry.embeddings)
+            })
         
         return SuccessResponse(
             success=True,
-            message=f"Debug search results for '{query}'",
+            message=f"Debug search results for '{query}' (main search logic)",
             data={
                 "query": query,
                 "query_embedding_dim": len(query_embedding),
-                "entries_checked": len(debug_results),
-                "total_entries": len(all_entries),
-                "hiking_entries_found": hiking_entries,
-                "results": debug_results[:10]  # Top 10
+                "total_searchable_entries": len(candidate_embeddings),
+                "entries_checked": len(candidate_embeddings),
+                "results": search_results,
+                "count": len(search_results),
+                # Debug summary
+                "perfect_matches": [r for r in search_results if r["contains_query"]],
+                "similarity_range": {
+                    "min": min([r["similarity"] for r in search_results]) if search_results else 0,
+                    "max": max([r["similarity"] for r in search_results]) if search_results else 0
+                }
             }
         )
         

@@ -83,7 +83,7 @@ function ViewEntriesPage() {
   const [searching, setSearching] = useState(false)
   const [semanticResults, setSemanticResults] = useState<Entry[]>([])
   const [isSemanticSearch, setIsSemanticSearch] = useState(false)
-  const [useSemanticSearch, setUseSemanticSearch] = useState(true)
+  // Removed: useSemanticSearch - now always uses hybrid search
   const [isRegenerating, setIsRegenerating] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
@@ -106,6 +106,7 @@ function ViewEntriesPage() {
   const [showBetweenEndCalendar, setShowBetweenEndCalendar] = useState(false)
   const [lastPeriodValue, setLastPeriodValue] = useState(1)
   const [lastPeriodUnit, setLastPeriodUnit] = useState<'days' | 'months'>('months')
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{ entryId: number; entryTitle: string } | null>(null)
 
   // Load entries on component mount and when page changes
   useEffect(() => {
@@ -122,16 +123,17 @@ function ViewEntriesPage() {
     }
   }, [searchQuery])
 
-  // Handle Enter key for search (semantic or normal)
+  // Handle Enter key for search
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault()
-      if (useSemanticSearch) {
-        performSemanticSearch(searchQuery)
-      } else {
-        performNormalSearch(searchQuery)
-      }
+      performSemanticSearch(searchQuery)
     }
+  }
+  
+  // Handle search button click
+  const handleSearchClick = () => {
+    performSemanticSearch(searchQuery)
   }
 
   // Test embedding similarity function
@@ -476,9 +478,9 @@ function ViewEntriesPage() {
       setSearching(true)
       console.log('🔍 Starting semantic search for:', query)
       
-      const response = await api.semanticSearch(query, 20, 0.3) // Higher threshold for better matches
+      const response = await api.semanticSearch(query, 20, 0.3)
       
-      console.log('📡 Semantic search response:', response)
+      console.log('📡 Search response:', response)
       
       if (response.success && response.data) {
         // Handle nested data structure from SuccessResponse
@@ -487,14 +489,14 @@ function ViewEntriesPage() {
         console.log('📊 Search results:', results)
         
         if (results.length === 0) {
-          console.log('⚠️ No semantic search results found')
+          console.log('⚠️ No search results found')
           setSemanticResults([])
           setIsSemanticSearch(true)
           setCurrentPage(1)
           return
         }
         
-        // Convert semantic search results to Entry objects
+        // Convert search results to Entry objects
         console.log('🔄 Fetching entry details for', results.length, 'results')
         
         const entryPromises = results.map(async (result: any) => {
@@ -511,18 +513,19 @@ function ViewEntriesPage() {
         })
         
         const entries = (await Promise.all(entryPromises)).filter(Boolean) as Entry[]
-        console.log('✅ Successfully fetched', entries.length, 'entries with similarities:', entries.map(e => (e as any).similarity))
+        console.log('✅ Successfully fetched', entries.length, 'entries')
+        console.log('🎯 Similarities:', entries.map(e => `${(e as any).similarity * 100}%`).join(', '))
         
         setSemanticResults(entries)
         setIsSemanticSearch(true)
         setCurrentPage(1) // Reset to first page for search results
       } else {
-        console.error('❌ Semantic search failed:', response.error || response.data)
+        console.error('❌ Search failed:', response.error || response.data)
         setSemanticResults([])
         setIsSemanticSearch(false)
       }
     } catch (error) {
-      console.error('💥 Semantic search error:', error)
+      console.error('💥 Search error:', error)
       setSemanticResults([])
       setIsSemanticSearch(false)
     } finally {
@@ -530,54 +533,71 @@ function ViewEntriesPage() {
     }
   }
 
-  const performNormalSearch = async (query: string) => {
-    if (!query.trim()) {
-      setIsSemanticSearch(false)
-      setSemanticResults([])
-      return
-    }
+
+  // Debug semantic search - shows detailed embedding information
+  const performDebugSearch = async (query: string) => {
+    if (!query.trim()) return
 
     try {
-      setSearching(true)
-      console.log('🔍 Starting normal text search for:', query)
+      console.log('🐛 DEBUG SEARCH for:', query)
       
-      // Use the existing text search API endpoint
-      const response = await api.request('/entries/search', {
-        method: 'POST',
-        body: JSON.stringify({
-          query: query,
-          limit: 50
-        })
-      })
-      
-      console.log('📡 Normal search response:', response)
+      const response = await api.debugSearch(query)
       
       if (response.success && response.data) {
-        const results = response.data || []
-        console.log('📊 Normal search results:', results)
+        const debugData = response.data.data || response.data
         
-        if (results.length === 0) {
-          console.log('⚠️ No normal search results found')
-          setSemanticResults([])
-          setIsSemanticSearch(true) // Use this flag to indicate search mode is active
-          setCurrentPage(1)
-          return
+        console.log('🔍 DEBUG SEARCH RESULTS:')
+        console.log('Query:', debugData.query)
+        console.log('Query embedding dimension:', debugData.query_embedding_dim)
+        console.log('Entries checked:', debugData.entries_checked)
+        console.log('Total entries in DB:', debugData.total_entries)
+        
+        if (debugData.hiking_entries_found && debugData.hiking_entries_found.length > 0) {
+          console.log(`\n📝 ENTRIES CONTAINING "${query}":`)
+          debugData.hiking_entries_found.forEach((entry: any, index: number) => {
+            console.log(`\n${index + 1}. Entry ID ${entry.entry_id}:`)
+            console.log('  - Raw text has query:', entry.raw_has_hiking)
+            console.log('  - Enhanced text has query:', entry.enhanced_has_hiking) 
+            console.log('  - Structured text has query:', entry.structured_has_hiking)
+            console.log('  - Has embeddings:', entry.has_embeddings)
+            console.log('  - Text used for embedding:', entry.text_used_for_embedding)
+            console.log('  - Raw preview:', entry.raw_text)
+          })
         }
         
-        setSemanticResults(results) // Reuse the same state for both search types
-        setIsSemanticSearch(true) // Indicate we're in search mode
-        setCurrentPage(1)
+        if (debugData.results && debugData.results.length > 0) {
+          console.log(`\n🔢 SIMILARITY RESULTS (Top ${debugData.results.length}):`)
+          debugData.results.forEach((result: any, index: number) => {
+            console.log(`${index + 1}. Entry ${result.entry_id}: ${(result.similarity * 100).toFixed(2)}% similarity`)
+            console.log(`   Text: "${result.text_preview}"`)
+            console.log(`   Contains query: ${result.has_hiking}`)
+            console.log(`   Embedding length: ${result.embedding_length}`)
+          })
+        }
+        
+        // Check for potential issues
+        const perfectMatches = debugData.results?.filter((r: any) => r.has_hiking) || []
+        const nonMatches = debugData.results?.filter((r: any) => !r.has_hiking) || []
+        
+        if (perfectMatches.length === 0) {
+          console.log('⚠️ WARNING: No results contain the search query text!')
+        }
+        
+        if (debugData.results?.some((r: any) => Math.abs(r.similarity - 0.5) < 0.01)) {
+          console.log('🚨 ALERT: Found results with ~50% similarity - this suggests BGE formatting mismatch!')
+        }
+        
+        console.log('\n📊 Summary:')
+        console.log(`- Entries with embeddings: ${debugData.entries_checked}`)
+        console.log(`- Entries containing "${query}": ${debugData.hiking_entries_found?.length || 0}`)
+        console.log(`- Perfect text matches in results: ${perfectMatches.length}`)
+        console.log(`- Non-matching results: ${nonMatches.length}`)
+        
       } else {
-        console.error('❌ Normal search failed:', response.error || response.data)
-        setSemanticResults([])
-        setIsSemanticSearch(false)
+        console.error('Debug search failed:', response.error)
       }
     } catch (error) {
-      console.error('💥 Normal search error:', error)
-      setSemanticResults([])
-      setIsSemanticSearch(false)
-    } finally {
-      setSearching(false)
+      console.error('Debug search error:', error)
     }
   }
 
@@ -592,6 +612,11 @@ function ViewEntriesPage() {
     setExpandedDropdowns(newExpanded)
   }
 
+  // Show delete confirmation
+  const showDeleteConfirmation = (entryId: number, entryTitle: string) => {
+    setDeleteConfirmation({ entryId, entryTitle })
+  }
+
   // Delete entry
   const deleteEntry = async (entryId: number) => {
     try {
@@ -604,6 +629,7 @@ function ViewEntriesPage() {
           setSelectedEntry(null)
         }
         setTotalEntries(prev => prev - 1)
+        setDeleteConfirmation(null) // Close confirmation popup
       } else {
         console.error('Failed to delete entry:', response.error)
       }
@@ -612,6 +638,11 @@ function ViewEntriesPage() {
     } finally {
       setDeleting(null)
     }
+  }
+
+  // Cancel delete
+  const cancelDelete = () => {
+    setDeleteConfirmation(null)
   }
 
   // Export entry
@@ -1182,53 +1213,37 @@ Word Count: ${entry.word_count}
             </div>
 
             <div className="flex items-center gap-3">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                {searching && (
-                  <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-primary animate-spin" />
-                )}
-                <input
-                  type="text"
-                  placeholder={useSemanticSearch ? "Semantic search..." : "Text search..."}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={handleSearchKeyDown}
-                  className="pl-10 pr-10 py-2 bg-background border border-border rounded-md text-white placeholder:text-muted-foreground focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all duration-200"
-                />
-              </div>
-              
-              {/* Search Mode Toggle */}
-              <div className="flex items-center gap-2 relative overflow-hidden group transition-all duration-200 bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 hover:text-primary px-3 py-2 rounded-md">
-                {/* Animated background for consistent styling */}
-                <motion.div
-                  layoutId="activeSearchModeBg"
-                  className="absolute inset-0 bg-primary/10"
-                  initial={false}
-                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                />
-                
-                <div className="relative flex items-center gap-2">
-                  <Label 
-                    htmlFor="search-mode"
-                    className="text-sm font-medium whitespace-nowrap cursor-pointer"
-                  >
-                    {useSemanticSearch ? 'Semantic' : 'Text'}
-                  </Label>
-                  <Switch
-                    id="search-mode"
-                    checked={useSemanticSearch}
-                    onCheckedChange={setUseSemanticSearch}
-                    className="data-[state=checked]:bg-primary"
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <input
+                    type="text"
+                    placeholder="Search your entries..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={handleSearchKeyDown}
+                    className="pl-10 pr-4 py-2 bg-background border border-border rounded-md text-white placeholder:text-muted-foreground focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all duration-200 w-80"
                   />
                 </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleSearchClick}
+                  disabled={searching || !searchQuery.trim()}
+                  className="flex items-center gap-2 relative overflow-hidden group transition-all duration-200 bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 hover:text-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <div className="relative flex items-center gap-2">
+                    {searching ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Search className="h-4 w-4" />
+                    )}
+                    Search
+                  </div>
+                </Button>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {isSemanticSearch && (
-                <Badge className={useSemanticSearch ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-blue-500/10 text-blue-400 border-blue-500/20"}>
-                  {useSemanticSearch ? 'Semantic Search' : 'Text Search'}
-                </Badge>
-              )}
               <Badge className="bg-primary/10 text-primary border-primary/20">
                 {searchQuery ? filteredEntries.length : totalEntries} entries
               </Badge>
@@ -1300,7 +1315,8 @@ Word Count: ${entry.word_count}
                                 size="sm"
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  deleteEntry(entry.id)
+                                  const { dayOfWeek, formattedDate } = formatTimestamp(entry.timestamp)
+                                  showDeleteConfirmation(entry.id, `${dayOfWeek}, ${formattedDate}`)
                                 }}
                                 disabled={deleting === entry.id}
                                 className="h-8 w-8 p-0 text-blue-300 drop-shadow-[0_0_4px_rgba(147,197,253,0.6)] hover:bg-red-500/20 hover:text-red-400 hover:drop-shadow-[0_0_6px_rgba(248,113,113,0.8)]"
@@ -1438,7 +1454,8 @@ Word Count: ${entry.word_count}
                                           size="sm"
                                           onClick={(e) => {
                                             e.stopPropagation()
-                                            deleteEntry(entry.id)
+                                            const { dayOfWeek, formattedDate } = formatTimestamp(entry.timestamp)
+                                            showDeleteConfirmation(entry.id, `${dayOfWeek}, ${formattedDate}`)
                                           }}
                                           disabled={deleting === entry.id}
                                           className="h-6 w-6 p-0 text-blue-300 drop-shadow-[0_0_4px_rgba(147,197,253,0.6)] hover:bg-red-500/20 hover:text-red-400 hover:drop-shadow-[0_0_6px_rgba(248,113,113,0.8)]"
@@ -1580,7 +1597,10 @@ Word Count: ${entry.word_count}
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => deleteEntry(selectedEntry.id)}
+                        onClick={() => {
+                          const { dayOfWeek, formattedDate } = formatTimestamp(selectedEntry.timestamp)
+                          showDeleteConfirmation(selectedEntry.id, `${dayOfWeek}, ${formattedDate}`)
+                        }}
                         disabled={deleting === selectedEntry.id}
                         className="h-8 w-8 p-0 text-blue-300 drop-shadow-[0_0_4px_rgba(147,197,253,0.6)] hover:bg-red-500/20 hover:text-red-400 hover:drop-shadow-[0_0_6px_rgba(248,113,113,0.8)]"
                         title="Delete entry"
@@ -1824,8 +1844,8 @@ Word Count: ${entry.word_count}
                         variant="outline"
                         size="sm"
                         onClick={() => {
-                          deleteEntry(selectedEntry.id)
-                          setExpandedView(false)
+                          const { dayOfWeek, formattedDate } = formatTimestamp(selectedEntry.timestamp)
+                          showDeleteConfirmation(selectedEntry.id, `${dayOfWeek}, ${formattedDate}`)
                         }}
                         disabled={deleting === selectedEntry.id}
                         className="flex items-center gap-2 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/50"
@@ -1845,6 +1865,65 @@ Word Count: ${entry.word_count}
                     </div>
                   </div>
                 </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Confirmation Modal */}
+      <AnimatePresence>
+        {deleteConfirmation && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md"
+            onClick={cancelDelete}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              className="w-full max-w-md bg-card border border-border rounded-lg shadow-2xl p-6"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="flex items-center justify-center w-12 h-12 bg-red-500/20 rounded-full">
+                  <Trash2 className="h-6 w-6 text-red-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Delete Entry</h3>
+                  <p className="text-sm text-muted-foreground">This action cannot be undone</p>
+                </div>
+              </div>
+              
+              <p className="text-white mb-6">
+                Are you sure you want to delete the entry from{' '}
+                <span className="font-medium text-primary">{deleteConfirmation.entryTitle}</span>?
+              </p>
+              
+              <div className="flex justify-end gap-3">
+                <Button
+                  variant="ghost"
+                  onClick={cancelDelete}
+                  className="text-white hover:bg-muted/50"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => deleteEntry(deleteConfirmation.entryId)}
+                  disabled={deleting === deleteConfirmation.entryId}
+                  className="bg-red-600 text-white hover:bg-red-700 border-red-600 hover:border-red-700"
+                >
+                  {deleting === deleteConfirmation.entryId ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  ) : (
+                    <Trash2 className="h-4 w-4 mr-2" />
+                  )}
+                  Delete Entry
+                </Button>
               </div>
             </motion.div>
           </motion.div>

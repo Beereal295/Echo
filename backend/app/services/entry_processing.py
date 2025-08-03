@@ -24,53 +24,21 @@ class EntryProcessingService:
     
     def __init__(self, ollama_service: OllamaService):
         self.ollama_service = ollama_service
-        self._enhanced_system_prompt = """You are a writing assistant that turns raw speech transcripts into clear, structured journal entries.
-Your job is to preserve the speaker's voice while improving readability and flow.
+        self._enhanced_system_prompt = """You are editing the following text. Make ONLY these improvements:
+1. Fix grammar and punctuation
+2. Improve sentence flow
+3. Remove filler words if present
 
-Guidelines:
+FORBIDDEN:
+- Adding new information
+- Creating fictional content  
+- Expanding on details not provided
+- Changing the meaning or tone
+- Adding introductory phrases like "Here's the enhanced version" or "Sure, here's..."
 
-Correct grammar, punctuation, and sentence structure.
-
-Remove filler words, false starts, and repetitions.
-
-Combine related ideas into coherent, well-structured paragraphs.
-
-Preserve the emotional tone and personal style of the speaker.
-
-Keep all names, personal details, and specific information intact.
-
-Use natural, conversational language (not overly formal).
-
-Maintain the original order and flow of events.
-
-Do not add new information or change meaning.
-
-Match the level of detail in the original.
-
-Always write in the first person.
-
-Do not add titles, headers, summaries, or any extra formatting—only return the journal-style paragraphs.
-
-Do not include any introductory text, closing remarks, or signatures in your response."""
+Return ONLY the improved text with no introduction, explanation, or commentary."""
         
-        self._structured_system_prompt = """You are a personal journal assistant that rewrites freeform diary entries into flat, structured bullet points in first person.
-Your task is to preserve every important detail while improving structure.
-
-Guidelines:
-Write only flat bullet points (•), no headers, summaries, or prose.
-Keep all key events, emotions, thoughts, people, and moments intact.
-Use first-person voice ("I", "my") and preserve the author's tone and wording.
-Do not interpret, rephrase creatively, or remove meaningful content.
-Expand or reorganize for clarity, but never shorten or skip details.
-Maintain chronological flow when it exists.
-Each bullet must be a standalone, meaningful statement.
-Do not add any text before or after the bullet list. Only return clean bullets.
-
-Example Output Format:
-• I had a long call with Sarah this morning and told her about the issues at work.
-• Felt frustrated that things are still unresolved with my manager.
-• I went for a short walk afterward to clear my head, which helped a bit.
-• I'm still unsure about what to do next, but talking to Sarah helped."""
+        self._structured_system_prompt = """Convert this text to bullet points while keeping all original information. Always use first-person voice (I, my, me) in the bullet points."""
 
     async def process_entry(
         self, 
@@ -157,7 +125,7 @@ Example Output Format:
         try:
             # Get preferences from database
             model = await PreferencesRepository.get_value('ollama_model', settings.OLLAMA_DEFAULT_MODEL)
-            temperature = await PreferencesRepository.get_value('ollama_temperature', 0.7)
+            temperature = await PreferencesRepository.get_value('ollama_temperature', 0.2)
             context_window = await PreferencesRepository.get_value('ollama_context_window', 4096)
             
             response = await self.ollama_service.generate(
@@ -177,7 +145,7 @@ Example Output Format:
         try:
             # Get preferences from database
             model = await PreferencesRepository.get_value('ollama_model', settings.OLLAMA_DEFAULT_MODEL)
-            temperature = await PreferencesRepository.get_value('ollama_temperature', 0.7)
+            temperature = await PreferencesRepository.get_value('ollama_temperature', 0.2)
             context_window = await PreferencesRepository.get_value('ollama_context_window', 4096)
             
             response = await self.ollama_service.generate(
