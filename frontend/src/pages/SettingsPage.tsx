@@ -10,9 +10,11 @@ import { Slider } from '@/components/ui/slider'
 import { useToast } from '@/components/ui/use-toast'
 import { api } from '@/lib/api'
 import { Keyboard, Globe, Mic, Settings2, Loader2, CheckCircle2, XCircle } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
 
 function SettingsPage() {
   const { toast } = useToast()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   
@@ -42,6 +44,9 @@ function SettingsPage() {
   const [autoSaveInterval, setAutoSaveInterval] = useState('30')
   const [theme, setTheme] = useState('system')
   const [patternThreshold, setPatternThreshold] = useState('30')
+
+  // Get current tab from URL or default to 'general'
+  const currentTab = searchParams.get('tab') || 'general'
 
   // Load preferences on mount
   useEffect(() => {
@@ -277,6 +282,10 @@ function SettingsPage() {
     document.addEventListener('keydown', handleKeyDown)
   }
 
+  const handleTabChange = (tabValue: string) => {
+    setSearchParams({ tab: tabValue })
+  }
+
   if (loading) {
     return (
       <div className="max-w-4xl mx-auto p-8">
@@ -298,7 +307,7 @@ function SettingsPage() {
           </p>
         </div>
 
-        <Tabs defaultValue="general" className="flex-1 flex flex-col overflow-hidden">
+        <Tabs value={currentTab} onValueChange={handleTabChange} className="flex-1 flex flex-col overflow-hidden">
           <TabsList className="grid w-full max-w-md grid-cols-4 mb-4 bg-card/50 backdrop-blur-sm border border-border/50 flex-shrink-0">
             <TabsTrigger value="general" className="flex items-center gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
               <Settings2 className="h-4 w-4" />

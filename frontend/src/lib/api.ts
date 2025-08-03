@@ -388,6 +388,25 @@ class ApiClient {
   }>> {
     return this.request(`/patterns/keyword/${encodeURIComponent(keyword)}`)
   }
+
+  // Mood analysis endpoints
+  async analyzeMood(text: string): Promise<ApiResponse<{
+    mood_tags: string[]
+  }>> {
+    return this.request('/entries/analyze-mood', {
+      method: 'POST',
+      body: JSON.stringify({ text })
+    })
+  }
+
+  async analyzeEntryMood(entryId: number): Promise<ApiResponse<{
+    entry_id: number
+    status: string
+  }>> {
+    return this.request(`/entries/${entryId}/analyze-mood`, {
+      method: 'POST'
+    })
+  }
 }
 
 // Export singleton instance

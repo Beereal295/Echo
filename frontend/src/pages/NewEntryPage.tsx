@@ -951,23 +951,29 @@ function NewEntryPage() {
         
         safeToast({
           title: "✓ Added to diary!",
-          description: (
-            <div className="space-y-1 mt-2">
-              <div className="flex items-center gap-2">
-                <CheckCircle className="h-3 w-3 text-green-500" />
-                <span className="text-sm">Entry saved to database</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Loader2 className="h-3 w-3 animate-spin text-blue-400" />
-                <span className="text-sm text-blue-400">Generating embeddings...</span>
-              </div>
-            </div>
-          ),
+          description: "Entry saved successfully. Generating embeddings...",
         })
         
         // Start polling for embedding completion
         if (createdEntry.id) {
           pollEmbeddingStatus(createdEntry.id)
+        }
+        
+        // Trigger mood analysis in background if enhanced text is available
+        if (createdEntry.id && createdEntries.enhanced?.enhanced_text) {
+          try {
+            await api.analyzeEntryMood(createdEntry.id)
+            // Show mood analysis toast
+            setTimeout(() => {
+              safeToast({
+                title: "✓ Moods added!",
+                description: "Emotional analysis completed for your entry",
+              })
+            }, 1500) // Show after 1.5 seconds to not conflict with main toast
+          } catch (error) {
+            console.error('Mood analysis failed:', error)
+            // Don't show error toast - mood analysis is supplementary
+          }
         }
         
         // Redirect to view entries page to see the saved entry

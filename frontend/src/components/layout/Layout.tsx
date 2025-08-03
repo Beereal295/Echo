@@ -34,7 +34,67 @@ function Layout({ children }: LayoutProps) {
     const saved = localStorage.getItem('sidebarCollapsed')
     return saved ? JSON.parse(saved) : false
   })
+  const [dailyStreak, setDailyStreak] = useState(0)
+  const [streakLoading, setStreakLoading] = useState(true)
   const location = useLocation()
+
+  // Calculate daily streak from entries
+  const calculateDailyStreak = async () => {
+    try {
+      setStreakLoading(true)
+      const response = await api.getEntries(1, 100) // Get recent entries to calculate streak
+      
+      if (response.success && response.data && response.data.entries) {
+        const entries = response.data.entries
+        
+        // Sort entries by date descending
+        const sortedEntries = entries.sort((a, b) => 
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        )
+        
+        let streak = 0
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        
+        // Check if there's an entry today
+        const todayEntry = sortedEntries.find(entry => {
+          const entryDate = new Date(entry.timestamp)
+          entryDate.setHours(0, 0, 0, 0)
+          return entryDate.getTime() === today.getTime()
+        })
+        
+        if (todayEntry) {
+          streak = 1
+          
+          // Count consecutive days going backwards
+          for (let i = 1; i < 365; i++) { // Max 365 day streak check
+            const checkDate = new Date(today)
+            checkDate.setDate(today.getDate() - i)
+            checkDate.setHours(0, 0, 0, 0)
+            
+            const dayEntry = sortedEntries.find(entry => {
+              const entryDate = new Date(entry.timestamp)
+              entryDate.setHours(0, 0, 0, 0)
+              return entryDate.getTime() === checkDate.getTime()
+            })
+            
+            if (dayEntry) {
+              streak++
+            } else {
+              break
+            }
+          }
+        }
+        
+        setDailyStreak(streak)
+      }
+    } catch (error) {
+      console.error('Failed to calculate daily streak:', error)
+      setDailyStreak(0)
+    } finally {
+      setStreakLoading(false)
+    }
+  }
 
   useEffect(() => {
     // Check if pattern threshold is met
@@ -49,18 +109,23 @@ function Layout({ children }: LayoutProps) {
       }
     }
     
-    // Initial check
+    // Initial checks
     checkPatternThreshold()
+    calculateDailyStreak()
     
     // Listen for settings updates
     const handleSettingsUpdate = () => {
       checkPatternThreshold()
+      calculateDailyStreak()
     }
     
     window.addEventListener('settingsUpdated', handleSettingsUpdate)
     
     // Check periodically to update when new entries are added
-    const interval = setInterval(checkPatternThreshold, 60000) // Check every minute
+    const interval = setInterval(() => {
+      checkPatternThreshold()
+      calculateDailyStreak()
+    }, 60000) // Check every minute
     
     return () => {
       clearInterval(interval)
@@ -316,12 +381,28 @@ function Layout({ children }: LayoutProps) {
               <TooltipTrigger asChild>
                 <div className="w-full flex justify-center">
                   <Badge className="bg-primary/10 text-primary border border-primary/20 font-medium hover:bg-primary/20 hover:text-primary transition-colors duration-300 group cursor-pointer">
-                    <Flame className="h-3 w-3 text-primary group-hover:text-primary transition-colors duration-300" />
+                    <motion.div
+                      animate={dailyStreak > 0 ? {
+                        scale: [1, 1.1, 1],
+                        rotate: [0, -2, 2, 0]
+                      } : {}}
+                      transition={{
+                        duration: 2,
+                        repeat: dailyStreak > 0 ? Infinity : 0,
+                        ease: "easeInOut"
+                      }}
+                    >
+                      <Flame className={`h-3 w-3 transition-all duration-300 ${
+                        dailyStreak > 0 
+                          ? 'text-orange-400 drop-shadow-sm filter brightness-125' 
+                          : 'text-gray-400'
+                      }`} />
+                    </motion.div>
                   </Badge>
                 </div>
               </TooltipTrigger>
               <TooltipContent side="right" sideOffset={20} className="z-[200]">
-                <p>Daily Streak: 0 days</p>
+                <p>Daily Streak: {streakLoading ? '...' : `${dailyStreak} ${dailyStreak === 1 ? 'day' : 'days'}`}</p>
               </TooltipContent>
             </Tooltip>
           ) : (
@@ -339,17 +420,34 @@ function Layout({ children }: LayoutProps) {
                 </motion.span>
               </AnimatePresence>
               <Badge className="bg-primary/10 text-primary border border-primary/20 font-medium hover:bg-primary/20 hover:text-primary transition-colors duration-300 group">
-                <Flame className="mr-1 h-3 w-3 text-primary group-hover:text-primary transition-colors duration-300" />
+                <motion.div
+                  animate={dailyStreak > 0 ? {
+                    scale: [1, 1.1, 1],
+                    rotate: [0, -2, 2, 0]
+                  } : {}}
+                  transition={{
+                    duration: 2,
+                    repeat: dailyStreak > 0 ? Infinity : 0,
+                    ease: "easeInOut"
+                  }}
+                  className="mr-1"
+                >
+                  <Flame className={`h-3 w-3 transition-all duration-300 ${
+                    dailyStreak > 0 
+                      ? 'text-orange-400 drop-shadow-sm filter brightness-125' 
+                      : 'text-gray-400'
+                  }`} />
+                </motion.div>
                 <AnimatePresence mode="wait">
                   <motion.span 
-                    key="streak-count"
+                    key={`streak-count-${dailyStreak}`}
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -10 }}
                     transition={{ duration: 0.2, ease: "easeOut" }}
                     className="whitespace-nowrap"
                   >
-                    0 days
+                    {streakLoading ? '...' : `${dailyStreak} ${dailyStreak === 1 ? 'day' : 'days'}`}
                   </motion.span>
                 </AnimatePresence>
               </Badge>

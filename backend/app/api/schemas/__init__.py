@@ -3,7 +3,9 @@ from .entry import (
     EntryUpdate,
     EntryResponse,
     EntryListResponse,
-    EntrySearchRequest
+    EntrySearchRequest,
+    MoodAnalysisRequest,
+    MoodAnalysisResponse
 )
 from .preferences import (
     PreferenceUpdate,
@@ -25,6 +27,8 @@ __all__ = [
     "EntryResponse",
     "EntryListResponse",
     "EntrySearchRequest",
+    "MoodAnalysisRequest",
+    "MoodAnalysisResponse",
     
     # Preference schemas
     "PreferenceUpdate",

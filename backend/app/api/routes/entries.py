@@ -9,6 +9,8 @@ from app.api.schemas import (
     EntryResponse,
     EntryListResponse,
     EntrySearchRequest,
+    MoodAnalysisRequest,
+    MoodAnalysisResponse,
     SuccessResponse,
     ErrorResponse
 )
@@ -19,6 +21,7 @@ from app.schemas.entry import ProcessingMode, EntryProcessRequest, EntryCreateAn
 from app.services.entry_processing import get_entry_processing_service
 from app.services.processing_queue import get_processing_queue
 from app.services.embedding_service import get_embedding_service
+from app.services.mood_analysis import get_mood_analysis_service
 
 logger = logging.getLogger(__name__)
 
@@ -522,3 +525,67 @@ async def get_entry_count():
         return {"total_entries": count}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get entry count: {str(e)}")
+
+
+@router.post("/analyze-mood", response_model=SuccessResponse[MoodAnalysisResponse])
+async def analyze_mood(request: MoodAnalysisRequest):
+    """Analyze the mood/emotions in journal text"""
+    try:
+        mood_service = await get_mood_analysis_service()
+        mood_tags = await mood_service.analyze_mood(request.text)
+        
+        return SuccessResponse(
+            message=f"Mood analysis complete, found {len(mood_tags)} moods",
+            data=MoodAnalysisResponse(mood_tags=mood_tags)
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to analyze mood: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to analyze mood: {str(e)}")
+
+
+@router.post("/{entry_id}/analyze-mood", response_model=SuccessResponse)
+async def analyze_entry_mood(entry_id: int, background_tasks: BackgroundTasks):
+    """Analyze mood for a specific entry and update the database"""
+    try:
+        # Get the entry
+        entry = await EntryRepository.get_by_id(entry_id)
+        if not entry:
+            raise HTTPException(status_code=404, detail="Entry not found")
+        
+        # Use enhanced text if available, otherwise fall back to raw text
+        text_to_analyze = entry.enhanced_text or entry.raw_text
+        if not text_to_analyze:
+            raise HTTPException(status_code=400, detail="Entry has no text to analyze")
+        
+        # Add mood analysis as background task
+        background_tasks.add_task(_analyze_and_update_entry_mood, entry_id, text_to_analyze)
+        
+        return SuccessResponse(
+            message="Mood analysis started for entry",
+            data={"entry_id": entry_id, "status": "processing"}
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to start mood analysis for entry {entry_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to start mood analysis: {str(e)}")
+
+
+async def _analyze_and_update_entry_mood(entry_id: int, text: str):
+    """Background task to analyze mood and update entry"""
+    try:
+        mood_service = await get_mood_analysis_service()
+        mood_tags = await mood_service.analyze_mood(text)
+        
+        if mood_tags:
+            # Update the entry with extracted moods
+            entry = await EntryRepository.get_by_id(entry_id)
+            if entry:
+                entry.mood_tags = mood_tags
+                await EntryRepository.update(entry)
+                logger.info(f"Updated entry {entry_id} with moods: {mood_tags}")
+        
+    except Exception as e:
+        logger.error(f"Failed to analyze and update mood for entry {entry_id}: {str(e)}")

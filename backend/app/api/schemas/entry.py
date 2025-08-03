@@ -90,3 +90,27 @@ class EntrySearchRequest(BaseModel):
                 "limit": 20
             }
         }
+
+
+class MoodAnalysisRequest(BaseModel):
+    """Schema for mood analysis request"""
+    text: str = Field(..., min_length=1, description="Text to analyze for mood")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "text": "I had a wonderful day today. Felt really happy and accomplished after finishing my project."
+            }
+        }
+
+
+class MoodAnalysisResponse(BaseModel):
+    """Schema for mood analysis response"""
+    mood_tags: List[str] = Field(..., description="Extracted mood tags")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "mood_tags": ["happy", "accomplished", "content"]
+            }
+        }
