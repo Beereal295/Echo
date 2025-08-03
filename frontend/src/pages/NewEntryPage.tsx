@@ -462,6 +462,47 @@ function NewEntryPage() {
     }
   }
 
+  const clearDraftsWithoutToast = async () => {
+    // Clear drafts from backend and localStorage without showing toast notifications
+    setAutoSaveCountdown(null)
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current)
+    }
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current)
+    }
+    
+    // Mark that drafts have been handled
+    setHasDraftLoaded(true)
+    
+    try {
+      // Try to clear from backend
+      try {
+        const response = await api.request('/drafts/latest')
+        if (response.success && response.data?.id) {
+          await api.request(`/drafts/${response.data.id}`, {
+            method: 'DELETE'
+          })
+          console.log('Cleared draft from backend successfully')
+        }
+      } catch (backendError) {
+        console.log('Backend draft clear not available')
+      }
+      
+      // Clear from localStorage
+      localStorage.removeItem('echo_draft_new_entry')
+      console.log('Cleared draft from localStorage')
+      
+      // Reset auto-save state
+      setLastAutoSave(null)
+      setIsAutoSaving(false)
+      
+    } catch (error) {
+      console.error('Failed to clear drafts:', error)
+      // Silently fail - don't disrupt user experience
+    }
+  }
+
   const performManualSave = async () => {
     if (!text.trim() || isManualSaving) return
     
@@ -949,6 +990,9 @@ function NewEntryPage() {
       if (response.success && response.data) {
         const createdEntry = response.data
         
+        // Clear drafts silently (without toast notification)
+        await clearDraftsWithoutToast()
+        
         safeToast({
           title: "✓ Added to diary!",
           description: "Entry saved successfully. Generating embeddings...",
@@ -979,7 +1023,7 @@ function NewEntryPage() {
         // Redirect to view entries page to see the saved entry
         setTimeout(() => {
           navigate('/entries')
-        }, 2000)
+        }, 1000)
         
       } else {
         throw new Error(response.error || 'Failed to save entry')
