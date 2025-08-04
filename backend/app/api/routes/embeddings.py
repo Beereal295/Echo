@@ -104,6 +104,8 @@ class SemanticSearchRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=1000, description="Text query to search for")
     limit: int = Field(10, ge=1, le=50, description="Maximum number of results to return")
     similarity_threshold: float = Field(0.3, ge=0.0, le=1.0, description="Minimum similarity threshold")
+    date_range: Optional[Dict[str, str]] = Field(None, description="Optional date filtering with 'start_date' and 'end_date' in ISO format")
+    mood_tags: Optional[List[str]] = Field(None, description="Optional mood tag filtering")
 
 
 class SimilarEntriesRequest(BaseModel):
@@ -129,6 +131,7 @@ class SemanticSearchResponse(BaseModel):
     results: List[EntrySearchResult] = Field(..., description="Search results")
     count: int = Field(..., description="Number of results returned")
     total_searchable_entries: int = Field(..., description="Total number of entries with embeddings")
+    filters_applied: Optional[Dict[str, Any]] = Field(None, description="Metadata about applied filters")
 
 
 @router.post("/generate", response_model=SuccessResponse[EmbeddingGenerateResponse])
@@ -421,10 +424,27 @@ async def semantic_search(request: SemanticSearchRequest):
             is_query=True  # Mark as query for BGE formatting
         )
         
-        # Get all entries with embeddings
+        # Extract date filtering parameters
+        start_date = None
+        end_date = None
+        if request.date_range:
+            start_date = request.date_range.get('start_date')
+            end_date = request.date_range.get('end_date')
+        
+        # Get all entries with embeddings (with optional filtering)
         entries_with_embeddings = await EntryRepository.get_entries_with_embeddings(
-            limit=1000  # Get a large batch for comprehensive search
+            limit=1000,  # Get a large batch for comprehensive search
+            start_date=start_date,
+            end_date=end_date,
+            mood_tags=request.mood_tags
         )
+        
+        # Prepare filter metadata
+        filters_applied = {
+            "date_range": request.date_range if request.date_range else None,
+            "mood_tags": request.mood_tags if request.mood_tags else None,
+            "has_filters": bool(request.date_range or request.mood_tags)
+        }
         
         if not entries_with_embeddings:
             return SuccessResponse(
@@ -434,7 +454,8 @@ async def semantic_search(request: SemanticSearchRequest):
                     query=request.query,
                     results=[],
                     count=0,
-                    total_searchable_entries=0
+                    total_searchable_entries=0,
+                    filters_applied=filters_applied
                 )
             )
         
@@ -455,7 +476,8 @@ async def semantic_search(request: SemanticSearchRequest):
                     query=request.query,
                     results=[],
                     count=0,
-                    total_searchable_entries=0
+                    total_searchable_entries=0,
+                    filters_applied=filters_applied
                 )
             )
         
@@ -519,7 +541,8 @@ async def semantic_search(request: SemanticSearchRequest):
             query=request.query,
             results=search_results,
             count=len(search_results),
-            total_searchable_entries=len(candidate_embeddings)
+            total_searchable_entries=len(candidate_embeddings),
+            filters_applied=filters_applied
         )
         
         return SuccessResponse(

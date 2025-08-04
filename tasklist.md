@@ -268,6 +268,10 @@ This document serves as the project management tool for Echo development. All ta
 **Testing Criteria:** Can ask questions via voice/text and receive contextual responses via voice/text
 **Status:** ⏳
 
+**IMPORTANT:** This task has a dedicated detailed implementation plan in `TALK_TO_YOUR_DIARY_TASKLIST.md`. 
+All implementation work for this feature must follow the dedicated tasklist with 24 major tasks and 120 sub-tasks.
+The dedicated tasklist provides comprehensive implementation details, technical specifications, and testing criteria.
+
 ---
 
 ## Phase 6: Milestone System & Polish

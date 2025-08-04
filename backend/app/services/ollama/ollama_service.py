@@ -357,6 +357,68 @@ class OllamaService:
         """Check if connected to Ollama"""
         return self._connected
     
+    async def generate_with_tools(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Generate text with function calling support.
+        
+        Args:
+            request: Ollama request with tools parameter
+            
+        Returns:
+            Ollama response with potential tool calls
+        """
+        await self.ensure_connected()
+        
+        try:
+            # Send request to Ollama with tools
+            response = await self._client.post(
+                "/api/generate",
+                json=request,
+                timeout=self.timeout
+            )
+            
+            if response.status_code == 404:
+                model = request.get("model", "unknown")
+                raise OllamaModelNotFoundError(f"Model '{model}' not found")
+            
+            response.raise_for_status()
+            
+            # Handle Ollama streaming response format (multiple JSON lines)
+            response_text = response.text
+            logger.info(f"Raw Ollama response: {response_text[:300]}...")
+            
+            # Ollama often returns multiple JSON objects separated by newlines
+            # We need the last complete JSON object
+            lines = response_text.strip().split('\n')
+            
+            # Try to parse from the last line backwards
+            for line in reversed(lines):
+                if line.strip():
+                    try:
+                        data = json.loads(line)
+                        logger.info(f"Parsed Ollama data: {data}")
+                        return data
+                    except json.JSONDecodeError:
+                        continue
+            
+            # If no valid JSON found, try parsing the entire response
+            try:
+                data = response.json()
+                return data
+            except json.JSONDecodeError:
+                logger.error(f"Failed to parse Ollama response: {response_text[:200]}...")
+                raise OllamaGenerationError("Invalid response format from Ollama")
+                
+        except httpx.TimeoutException:
+            raise OllamaTimeoutError(f"Generation timed out after {self.timeout}s")
+        except OllamaModelNotFoundError:
+            raise
+        except httpx.HTTPStatusError as e:
+            raise OllamaGenerationError(f"HTTP error {e.response.status_code}: {e.response.text}")
+        except Exception as e:
+            logger.error(f"Error generating with tools: {e}")
+            raise OllamaGenerationError(f"Generation failed: {str(e)}")
+
     async def test_connection(self) -> Dict[str, Any]:
         """Test connection and return status info"""
         try:

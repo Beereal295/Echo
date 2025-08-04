@@ -139,15 +139,44 @@ class EntryRepository:
         return [Entry.from_dict(row) for row in rows]
     
     @staticmethod
-    async def get_entries_with_embeddings(limit: int = 100, offset: int = 0) -> List[Entry]:
-        """Get entries that have embeddings for similarity search"""
-        rows = await db.fetch_all(
-            """SELECT * FROM entries 
-               WHERE embeddings IS NOT NULL AND embeddings != '[]' AND embeddings != ''
-               ORDER BY timestamp DESC
-               LIMIT ? OFFSET ?""",
-            (limit, offset)
-        )
+    async def get_entries_with_embeddings(
+        limit: int = 100, 
+        offset: int = 0,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        mood_tags: Optional[List[str]] = None
+    ) -> List[Entry]:
+        """Get entries that have embeddings for similarity search with optional filtering"""
+        # Base query
+        query = """SELECT * FROM entries 
+                   WHERE embeddings IS NOT NULL AND embeddings != '[]' AND embeddings != ''"""
+        params = []
+        
+        # Add date filtering if specified
+        if start_date:
+            query += " AND timestamp >= ?"
+            params.append(start_date)
+        
+        if end_date:
+            query += " AND timestamp <= ?"
+            params.append(end_date)
+        
+        # Add mood tag filtering if specified
+        if mood_tags:
+            # Use JSON_EXTRACT or LIKE for mood tag filtering (SQLite JSON support)
+            mood_conditions = []
+            for mood_tag in mood_tags:
+                mood_conditions.append("mood_tags LIKE ?")
+                params.append(f'%"{mood_tag}"%')
+            
+            if mood_conditions:
+                query += f" AND ({' OR '.join(mood_conditions)})"
+        
+        # Add ordering and pagination
+        query += " ORDER BY timestamp DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+        
+        rows = await db.fetch_all(query, tuple(params))
         return [Entry.from_dict(row) for row in rows]
     
     @staticmethod

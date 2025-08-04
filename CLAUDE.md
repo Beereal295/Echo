@@ -19,6 +19,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Development Workflow:**
 - Follow the task structure defined in `tasklist.md`
+- For Talk to Your Diary feature implementation, follow the dedicated `TALK_TO_YOUR_DIARY_TASKLIST.md`
 - Never run or test the main application during development
 - Focus purely on implementation according to documented specifications
 - All testing and validation is handled by project lead

@@ -7,14 +7,14 @@ interface WebSocketMessage {
   timestamp?: string
 }
 
-interface STTState {
+export interface STTState {
   state: string
   message?: string
   is_active?: boolean
   session_id?: string
 }
 
-interface TranscriptionResult {
+export interface TranscriptionResult {
   text: string
   language?: string
   confidence?: number
