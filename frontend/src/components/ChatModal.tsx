@@ -258,21 +258,51 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
     return true
   }
 
+  const stripTTSProblematicChars = (text: string): string => {
+    // Remove markdown emphasis (*, **)
+    let cleanText = text.replace(/\*+/g, '')
+    
+    // Remove emojis (common Unicode ranges)
+    cleanText = cleanText
+      // Emoticons (😀-😿)
+      .replace(/[\u{1F600}-\u{1F64F}]/gu, '')
+      // Symbols & pictographs (🌀-🗿)
+      .replace(/[\u{1F300}-\u{1F5FF}]/gu, '')
+      // Transport & map symbols (🚀-🛿)
+      .replace(/[\u{1F680}-\u{1F6FF}]/gu, '')
+      // Supplemental symbols (🤀-🧿)
+      .replace(/[\u{1F900}-\u{1F9FF}]/gu, '')
+      // Extended pictographs (🪀-🫿)
+      .replace(/[\u{1FA70}-\u{1FAFF}]/gu, '')
+      // Miscellaneous symbols (☀-⛿)
+      .replace(/[\u{2600}-\u{26FF}]/gu, '')
+      // Dingbats (✀-➿)
+      .replace(/[\u{2700}-\u{27BF}]/gu, '')
+    
+    // Clean up extra whitespace that might result from removals
+    cleanText = cleanText.replace(/\s+/g, ' ').trim()
+    
+    return cleanText
+  }
+
   const playAudioForMessage = async (text: string) => {
     if (!voiceEnabled || !ttsInitialized || audioPlaying) return
     
     try {
       setAudioPlaying(true)
       
+      // Apply second-level stripping: Remove TTS-problematic characters when voice is ON
+      const ttsText = stripTTSProblematicChars(text)
+      
       // Initialize AudioContext if needed
       if (!initializeAudioContext()) {
         // Fallback to HTML audio
-        await playAudioFallback(text)
+        await playAudioFallback(ttsText)
         return
       }
       
       // Synthesize speech (non-streaming for natural voice resonance)
-      const audioBlob = await api.synthesizeSpeech(text, false)
+      const audioBlob = await api.synthesizeSpeech(ttsText, false)
       const arrayBuffer = await audioBlob.arrayBuffer()
       
       // Decode audio data using AudioContext
@@ -295,13 +325,15 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
       
     } catch (error) {
       console.error('AudioContext playback failed, trying fallback:', error)
-      // Fallback to HTML audio
-      await playAudioFallback(text)
+      // Fallback to HTML audio (also strip problematic chars)
+      const ttsText = stripTTSProblematicChars(text)
+      await playAudioFallback(ttsText)
     }
   }
 
   const playAudioFallback = async (text: string) => {
     try {
+      // Note: text should already be cleaned by caller
       // Synthesize speech (non-streaming for natural voice resonance)
       const audioBlob = await api.synthesizeSpeech(text, false)
       const audioUrl = URL.createObjectURL(audioBlob)
