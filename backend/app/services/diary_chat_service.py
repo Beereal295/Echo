@@ -43,12 +43,21 @@ def strip_thinking_block(response_text: str) -> str:
     return response_text
 
 @tool
-async def search_diary_entries(query: str, limit: int = 10) -> Dict[str, Any]:
+async def search_diary_entries(query: str, limit: int = 20) -> Dict[str, Any]:
     """Search user's diary entries by content using semantic search.
+    
+    Use this tool when the user asks about:
+    - Specific topics: "hiking", "work", "friends", "family", "vacation"
+    - Emotions or feelings: "happy", "sad", "anxious", "excited"
+    - Activities: "meeting", "dinner", "exercise", "movie"
+    - People mentioned: "mom", "John", "boss", "girlfriend"
+    - Any content-based query without specific dates
+    
+    IMPORTANT: Use this tool for ALL non-date queries. Search broadly to find context.
     
     args:
         query: Text query to search for (1-1000 characters)
-        limit: Maximum number of results to return (1-20)
+        limit: Maximum number of results to return (100)
         
     Returns:
         Search results with entries and metadata
@@ -60,8 +69,8 @@ async def search_diary_entries(query: str, limit: int = 10) -> Dict[str, Any]:
         if not query or len(query.strip()) == 0:
             return {"success": False, "error": "Query cannot be empty"}
         
-        if limit < 1 or limit > 20:
-            limit = 10
+        if limit < 1 or limit > 100:
+            limit = 20
             
         query = query.strip()[:1000]  # Limit query length
         
