@@ -10,7 +10,10 @@ from app.api.routes import (
     ollama_router,
     drafts_router,
     embeddings_router,
-    patterns_router
+    patterns_router,
+    tts_router,
+    conversations_router,
+    diary_chat_router
 )
 from app.core.config import settings
 
@@ -28,3 +31,6 @@ api_router.include_router(ollama_router)
 api_router.include_router(drafts_router)
 api_router.include_router(embeddings_router)
 api_router.include_router(patterns_router)
+api_router.include_router(tts_router)
+api_router.include_router(conversations_router)
+api_router.include_router(diary_chat_router)

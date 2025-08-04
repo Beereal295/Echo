@@ -17,6 +17,24 @@ MIGRATIONS: List[Tuple[int, str, str, str]] = [
         """ALTER TABLE patterns ADD COLUMN keywords TEXT""",
         """ALTER TABLE patterns DROP COLUMN keywords"""
     ),
+    (
+        3,
+        "Add conversations table for Talk to Your Diary feature",
+        """CREATE TABLE IF NOT EXISTS conversations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp DATETIME NOT NULL,
+    duration INTEGER DEFAULT 0,
+    transcription TEXT NOT NULL,
+    conversation_type TEXT NOT NULL,
+    message_count INTEGER DEFAULT 0,
+    search_queries_used TEXT,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME
+);
+CREATE INDEX IF NOT EXISTS idx_conversations_timestamp ON conversations(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_conversations_type ON conversations(conversation_type);""",
+        """DROP TABLE IF EXISTS conversations;"""
+    ),
 ]
 
 
@@ -35,7 +53,10 @@ async def get_current_version(db) -> int:
 async def apply_migration(db, version: int, description: str, up_sql: str):
     """Apply a single migration"""
     if up_sql.strip() and not up_sql.strip().startswith("--"):
-        await db.execute(up_sql)
+        # Split multiple statements by semicolon and execute each one
+        statements = [stmt.strip() for stmt in up_sql.split(';') if stmt.strip()]
+        for statement in statements:
+            await db.execute(statement)
     
     await db.execute(
         "INSERT INTO schema_version (version, applied_at, description) VALUES (?, ?, ?)",

@@ -102,7 +102,12 @@ async def initialize_default_preferences():
     default_prefs = [
         ("hotkey", "F8", "string", "Global hotkey for voice recording"),
         ("ollama_port", "11434", "int", "Ollama server port"),
-        ("ollama_model", "llama2", "string", "Default Ollama model"),
+        ("ollama_model", "llama2", "string", "Journal Processing - Default Ollama model"),
+        ("ollama_temperature", "0.1", "float", "Journal Processing - Model temperature"),
+        ("ollama_context_window", "4096", "int", "Journal Processing - Context window size"),
+        ("talk_to_diary_model", "qwen3:8b", "string", "Talk to Your Diary - Ollama model"),
+        ("talk_to_diary_temperature", "0.2", "float", "Talk to Your Diary - Model temperature"),
+        ("talk_to_diary_context_window", "8192", "int", "Talk to Your Diary - Context window size"),
         ("whisper_model", "base", "string", "Whisper model size"),
         ("pattern_unlock_shown", "false", "bool", "Whether pattern unlock celebration was shown"),
         ("coffee_popup_shown", "false", "bool", "Whether coffee popup was shown"),

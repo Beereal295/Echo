@@ -8,6 +8,9 @@ from .ollama import router as ollama_router
 from .drafts import router as drafts_router
 from .embeddings import router as embeddings_router
 from .patterns import router as patterns_router
+from .tts import router as tts_router
+from .conversations import router as conversations_router
+from .diary_chat import router as diary_chat_router
 
 __all__ = [
     "entries_router",
@@ -19,5 +22,8 @@ __all__ = [
     "ollama_router",
     "drafts_router",
     "embeddings_router",
-    "patterns_router"
+    "patterns_router",
+    "tts_router",
+    "conversations_router",
+    "diary_chat_router"
 ]

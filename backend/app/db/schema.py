@@ -53,6 +53,21 @@ CREATE TABLE IF NOT EXISTS drafts (
 )
 """
 
+# Conversations table for Talk to Your Diary feature
+CONVERSATIONS_TABLE = """
+CREATE TABLE IF NOT EXISTS conversations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp DATETIME NOT NULL,
+    duration INTEGER DEFAULT 0,  -- in seconds
+    transcription TEXT NOT NULL,
+    conversation_type TEXT NOT NULL,  -- 'call' or 'chat'
+    message_count INTEGER DEFAULT 0,
+    search_queries_used TEXT,  -- JSON array
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME
+)
+"""
+
 # Schema version table for migrations
 SCHEMA_VERSION_TABLE = """
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -70,7 +85,9 @@ INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_patterns_type ON patterns(pattern_type)",
     "CREATE INDEX IF NOT EXISTS idx_patterns_confidence ON patterns(confidence DESC)",
     "CREATE INDEX IF NOT EXISTS idx_preferences_key ON preferences(key)",
-    "CREATE INDEX IF NOT EXISTS idx_drafts_updated ON drafts(updated_at DESC)"
+    "CREATE INDEX IF NOT EXISTS idx_drafts_updated ON drafts(updated_at DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_conversations_timestamp ON conversations(timestamp DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_conversations_type ON conversations(conversation_type)"
 ]
 
 # All tables in order of creation
@@ -79,5 +96,6 @@ ALL_TABLES = [
     ENTRIES_TABLE,
     PATTERNS_TABLE,
     PREFERENCES_TABLE,
-    DRAFTS_TABLE
+    DRAFTS_TABLE,
+    CONVERSATIONS_TABLE
 ]

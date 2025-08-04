@@ -254,10 +254,15 @@ class ApiClient {
     return this.request<PreferencesListResponse>('/preferences/')
   }
 
-  async updatePreference(key: string, value: any): Promise<ApiResponse<any>> {
-    return this.request('/preferences/', {
-      method: 'POST',
-      body: JSON.stringify({ key, value })
+  async updatePreference(key: string, value: any, valueType: string = 'string', description?: string): Promise<ApiResponse<any>> {
+    return this.request(`/preferences/${key}`, {
+      method: 'PUT',
+      body: JSON.stringify({ 
+        key, 
+        value, 
+        value_type: valueType, 
+        description 
+      })
     })
   }
 
@@ -406,6 +411,150 @@ class ApiClient {
     return this.request(`/entries/${entryId}/analyze-mood`, {
       method: 'POST'
     })
+  }
+
+  // Talk to Your Diary API endpoints
+  async getDiaryGreeting(): Promise<ApiResponse<string>> {
+    return this.request('/diary/greeting')
+  }
+
+  async getDiarySearchFeedback(): Promise<ApiResponse<string>> {
+    return this.request('/diary/search-feedback')
+  }
+
+  async sendDiaryChatMessage(message: string, conversationHistory?: Array<{ role: string; content: string }>, conversationId?: number): Promise<ApiResponse<{
+    response: string
+    tool_calls_made: Array<{ tool: string; arguments: any; result: any }>
+    search_queries_used: string[]
+    search_feedback?: string
+    conversation_id?: number
+  }>> {
+    return this.request('/diary/chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        message,
+        conversation_history: conversationHistory,
+        conversation_id: conversationId
+      })
+    })
+  }
+
+  // Conversation management endpoints
+  async createConversation(data: {
+    transcription: string
+    conversation_type: string
+    duration: number
+    message_count: number
+    search_queries_used: string[]
+  }): Promise<ApiResponse<any>> {
+    return this.request('/conversations', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    })
+  }
+
+  async getConversations(): Promise<ApiResponse<{
+    conversations: Array<{
+      id: number
+      timestamp: string
+      duration: number
+      transcription: string
+      conversation_type: string
+      message_count: number
+      search_queries_used: string[]
+      created_at: string
+      updated_at?: string
+    }>
+    total: number
+  }>> {
+    return this.request('/conversations')
+  }
+
+  async deleteConversation(id: number): Promise<ApiResponse<any>> {
+    return this.request(`/conversations/${id}`, {
+      method: 'DELETE'
+    })
+  }
+
+  async getConversationStats(): Promise<ApiResponse<{
+    total_conversations: number
+    total_duration_seconds: number
+    average_duration_seconds: number
+    average_message_count: number
+    conversations_by_type: Record<string, number>
+    most_searched_topics: Array<{ query: string; count: number }>
+    conversations_over_time: Array<{ date: string; count: number }>
+    last_conversation_date?: string
+  }>> {
+    return this.request('/conversations/stats')
+  }
+
+  // TTS endpoints
+  async synthesizeSpeech(text: string, voice: string = 'en_sky', stream: boolean = true): Promise<Blob> {
+    // Try streaming first, fallback to non-streaming if it fails
+    for (const useStream of [stream, false]) {
+      try {
+        const response = await fetch(`${this.baseUrl}/tts/synthesize`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ text, voice, stream: useStream })
+        })
+
+        if (!response.ok) {
+          throw new Error(`TTS synthesis failed: ${response.statusText}`)
+        }
+
+        // For streaming responses, collect all chunks
+        if (useStream && response.body) {
+          const reader = response.body.getReader()
+          const chunks: Uint8Array[] = []
+          
+          try {
+            let done = false
+            let totalBytes = 0
+            
+            while (!done) {
+              const result = await reader.read()
+              done = result.done
+              
+              if (result.value) {
+                chunks.push(result.value)
+                totalBytes += result.value.length
+              }
+            }
+            
+            // Ensure we got some data
+            if (totalBytes === 0) {
+              throw new Error('No audio data received from stream')
+            }
+            
+            // Combine all chunks into a single blob
+            return new Blob(chunks, { type: 'audio/wav' })
+          } finally {
+            reader.releaseLock()
+          }
+        } else {
+          // For non-streaming responses
+          return response.blob()
+        }
+      } catch (error) {
+        // If streaming failed and we haven't tried non-streaming yet, continue to fallback
+        if (useStream && stream) {
+          console.warn('Streaming TTS failed, falling back to non-streaming:', error)
+          continue
+        }
+        // If non-streaming also failed or we weren't trying streaming, throw the error
+        throw error
+      }
+    }
+    
+    throw new Error('All TTS synthesis methods failed')
+  }
+
+  async getTTSVoices(): Promise<ApiResponse<{ voices: string[] }>> {
+    return this.request('/tts/voices')
   }
 }
 

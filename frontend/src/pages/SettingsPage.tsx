@@ -26,11 +26,18 @@ function SettingsPage() {
   const [ollamaHost, setOllamaHost] = useState('localhost')
   const [ollamaPort, setOllamaPort] = useState('11434')
   const [ollamaModels, setOllamaModels] = useState<string[]>([])
-  const [selectedModel, setSelectedModel] = useState('mistral:instruct')
   const [ollamaConnected, setOllamaConnected] = useState<boolean | null>(null)
   const [testingOllama, setTestingOllama] = useState(false)
-  const [ollamaTemperature, setOllamaTemperature] = useState('0.7')
-  const [ollamaContextWindow, setOllamaContextWindow] = useState('4096')
+  
+  // Journal Processing settings
+  const [journalModel, setJournalModel] = useState('mistral:instruct')
+  const [journalTemperature, setJournalTemperature] = useState('0.1')
+  const [journalContextWindow, setJournalContextWindow] = useState('4096')
+  
+  // Talk to Your Diary settings
+  const [diaryModel, setDiaryModel] = useState('qwen3:8b')
+  const [diaryTemperature, setDiaryTemperature] = useState('0.2')
+  const [diaryContextWindow, setDiaryContextWindow] = useState('8192')
   
   // TTS settings
   const [ttsEngine, setTtsEngine] = useState('kokoro')
@@ -73,13 +80,22 @@ function SettingsPage() {
               setOllamaPort(String(pref.typed_value || '11434'))
               break
             case 'ollama_model':
-              setSelectedModel(pref.typed_value || 'mistral:instruct')
+              setJournalModel(pref.typed_value || 'mistral:instruct')
               break
             case 'ollama_temperature':
-              setOllamaTemperature(String(pref.typed_value || '0.7'))
+              setJournalTemperature(String(pref.typed_value || '0.1'))
               break
             case 'ollama_context_window':
-              setOllamaContextWindow(String(pref.typed_value || '4096'))
+              setJournalContextWindow(String(pref.typed_value || '4096'))
+              break
+            case 'talk_to_diary_model':
+              setDiaryModel(pref.typed_value || 'qwen3:8b')
+              break
+            case 'talk_to_diary_temperature':
+              setDiaryTemperature(String(pref.typed_value || '0.2'))
+              break
+            case 'talk_to_diary_context_window':
+              setDiaryContextWindow(String(pref.typed_value || '8192'))
               break
             case 'tts_engine':
               setTtsEngine(pref.typed_value || 'kokoro')
@@ -179,13 +195,22 @@ function SettingsPage() {
     await savePreferences(preferences)
   }
 
-  const handleSaveOllama = async () => {
+  const handleSaveJournal = async () => {
     const preferences = [
       { key: 'ollama_host', value: ollamaHost, value_type: 'string' },
       { key: 'ollama_port', value: parseInt(ollamaPort), value_type: 'int' },
-      { key: 'ollama_model', value: selectedModel, value_type: 'string' },
-      { key: 'ollama_temperature', value: parseFloat(ollamaTemperature), value_type: 'float' },
-      { key: 'ollama_context_window', value: parseInt(ollamaContextWindow), value_type: 'int' }
+      { key: 'ollama_model', value: journalModel, value_type: 'string' },
+      { key: 'ollama_temperature', value: parseFloat(journalTemperature), value_type: 'float' },
+      { key: 'ollama_context_window', value: parseInt(journalContextWindow), value_type: 'int' }
+    ]
+    await savePreferences(preferences)
+  }
+
+  const handleSaveDiary = async () => {
+    const preferences = [
+      { key: 'talk_to_diary_model', value: diaryModel, value_type: 'string' },
+      { key: 'talk_to_diary_temperature', value: parseFloat(diaryTemperature), value_type: 'float' },
+      { key: 'talk_to_diary_context_window', value: parseInt(diaryContextWindow), value_type: 'int' }
     ]
     await savePreferences(preferences)
   }
@@ -308,7 +333,7 @@ function SettingsPage() {
         </div>
 
         <Tabs value={currentTab} onValueChange={handleTabChange} className="flex-1 flex flex-col overflow-hidden">
-          <TabsList className="grid w-full max-w-md grid-cols-4 mb-4 bg-card/50 backdrop-blur-sm border border-border/50 flex-shrink-0">
+          <TabsList className="grid w-full max-w-2xl grid-cols-5 mb-4 bg-card/50 backdrop-blur-sm border border-border/50 flex-shrink-0">
             <TabsTrigger value="general" className="flex items-center gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
               <Settings2 className="h-4 w-4" />
               <span className="hidden sm:inline">General</span>
@@ -317,9 +342,13 @@ function SettingsPage() {
               <Keyboard className="h-4 w-4" />
               <span className="hidden sm:inline">Hotkey</span>
             </TabsTrigger>
-            <TabsTrigger value="ollama" className="flex items-center gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
+            <TabsTrigger value="journal" className="flex items-center gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
               <Globe className="h-4 w-4" />
-              <span className="hidden sm:inline">Ollama</span>
+              <span className="hidden sm:inline">Journal</span>
+            </TabsTrigger>
+            <TabsTrigger value="diary" className="flex items-center gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
+              <Globe className="h-4 w-4" />
+              <span className="hidden sm:inline">Diary</span>
             </TabsTrigger>
             <TabsTrigger value="tts" className="flex items-center gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
               <Mic className="h-4 w-4" />
@@ -523,7 +552,7 @@ function SettingsPage() {
             </motion.div>
           </TabsContent>
 
-          <TabsContent value="ollama" className="flex-1 overflow-hidden">
+          <TabsContent value="journal" className="flex-1 overflow-hidden">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -532,13 +561,13 @@ function SettingsPage() {
               <Card className="bg-card/50 backdrop-blur-sm border-border/50 h-full flex flex-col overflow-hidden">
               <CardHeader className="pb-2 flex-shrink-0">
                 <div className="flex items-center gap-2">
-                  <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center flex-shrink-0">
+                  <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center flex-shrink-0">
                     <Globe className="h-4 w-4 text-white" />
                   </div>
                   <div className="min-w-0">
-                    <CardTitle className="text-lg text-white">Ollama Configuration</CardTitle>
+                    <CardTitle className="text-lg text-white">Journal Processing</CardTitle>
                     <CardDescription className="text-gray-400 text-sm">
-                      Configure connection to your local Ollama instance
+                      Configure AI model for journal entry processing (3 modes)
                     </CardDescription>
                   </div>
                 </div>
@@ -613,10 +642,10 @@ function SettingsPage() {
                   <div className="bg-muted/10 rounded-lg p-3 border border-border/50">
                     <h3 className="text-white font-medium mb-2 text-sm">Model Configuration</h3>
                     
-                    {/* Default Model */}
+                    {/* Journal Model */}
                     <div className="space-y-1 mb-3">
-                      <Label htmlFor="ollama-model" className="text-white font-medium text-sm">Default Model</Label>
-                      <Select value={selectedModel} onValueChange={setSelectedModel}>
+                      <Label htmlFor="journal-model" className="text-white font-medium text-sm">Journal Processing Model</Label>
+                      <Select value={journalModel} onValueChange={setJournalModel}>
                         <SelectTrigger className="bg-background/50 border-border text-white hover:bg-muted/50 h-9">
                           <SelectValue placeholder="Select a model" />
                         </SelectTrigger>
@@ -629,26 +658,26 @@ function SettingsPage() {
                         </SelectContent>
                       </Select>
                       <p className="text-sm text-gray-400">
-                        Model used for processing journal entries
+                        Model for raw → enhanced → structured processing (fast, reliable models recommended)
                       </p>
                     </div>
 
                     {/* Model Parameters */}
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1">
-                        <Label htmlFor="ollama-temperature" className="text-white font-medium text-sm">Temperature</Label>
+                        <Label htmlFor="journal-temperature" className="text-white font-medium text-sm">Temperature</Label>
                         <div className="flex items-center gap-2">
                           <Slider
-                            id="ollama-temperature"
+                            id="journal-temperature"
                             min={0}
                             max={1}
                             step={0.1}
-                            value={[parseFloat(ollamaTemperature)]}
-                            onValueChange={(value) => setOllamaTemperature(value[0].toString())}
+                            value={[parseFloat(journalTemperature)]}
+                            onValueChange={(value) => setJournalTemperature(value[0].toString())}
                             className="flex-1 [&>*:first-child]:bg-muted/30 [&>*:first-child]:border-border/50"
                           />
                           <span className="w-10 text-sm text-white font-mono bg-background/50 px-1.5 py-0.5 rounded">
-                            {ollamaTemperature}
+                            {journalTemperature}
                           </span>
                         </div>
                         <p className="text-sm text-gray-400">
@@ -657,8 +686,123 @@ function SettingsPage() {
                       </div>
                       
                       <div className="space-y-1">
-                        <Label htmlFor="ollama-context" className="text-white font-medium text-sm">Context Window</Label>
-                        <Select value={ollamaContextWindow} onValueChange={setOllamaContextWindow}>
+                        <Label htmlFor="journal-context" className="text-white font-medium text-sm">Context Window</Label>
+                        <Select value={journalContextWindow} onValueChange={setJournalContextWindow}>
+                          <SelectTrigger className="bg-background/50 border-border text-white hover:bg-muted/50 h-9">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="bg-background border-border">
+                            <SelectItem value="2048" className="text-white hover:bg-muted/50 focus:bg-muted/50">2048 tokens</SelectItem>
+                            <SelectItem value="4096" className="text-white hover:bg-muted/50 focus:bg-muted/50">4096 tokens</SelectItem>
+                            <SelectItem value="8192" className="text-white hover:bg-muted/50 focus:bg-muted/50">8192 tokens</SelectItem>
+                            <SelectItem value="16384" className="text-white hover:bg-muted/50 focus:bg-muted/50">16384 tokens</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-sm text-gray-400">
+                          Max entry length
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Save Button */}
+                <div className="flex justify-end pt-2">
+                  <button 
+                    onClick={handleSaveJournal} 
+                    disabled={saving}
+                    className="relative overflow-hidden group px-5 py-2 rounded-lg font-medium shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                    <span className="relative z-10 flex items-center font-medium">
+                      {saving ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        'Save Settings'
+                      )}
+                    </span>
+                  </button>
+                </div>
+              </CardContent>
+            </Card>
+            </motion.div>
+          </TabsContent>
+
+          <TabsContent value="diary" className="flex-1 overflow-hidden">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <Card className="bg-card/50 backdrop-blur-sm border-border/50 h-full flex flex-col overflow-hidden">
+              <CardHeader className="pb-2 flex-shrink-0">
+                <div className="flex items-center gap-2">
+                  <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center flex-shrink-0">
+                    <Globe className="h-4 w-4 text-white" />
+                  </div>
+                  <div className="min-w-0">
+                    <CardTitle className="text-lg text-white">Talk to Your Diary</CardTitle>
+                    <CardDescription className="text-gray-400 text-sm">
+                      Configure AI model for conversational diary interaction
+                    </CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="flex-1 overflow-y-auto space-y-4 p-4">
+                {/* Model Configuration */}
+                {ollamaConnected && ollamaModels.length > 0 && (
+                  <div className="bg-muted/10 rounded-lg p-3 border border-border/50">
+                    <h3 className="text-white font-medium mb-2 text-sm">Model Configuration</h3>
+                    
+                    {/* Diary Chat Model */}
+                    <div className="space-y-1 mb-3">
+                      <Label htmlFor="diary-model" className="text-white font-medium text-sm">Conversation Model</Label>
+                      <Select value={diaryModel} onValueChange={setDiaryModel}>
+                        <SelectTrigger className="bg-background/50 border-border text-white hover:bg-muted/50 h-9">
+                          <SelectValue placeholder="Select a model" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-background border-border">
+                          {ollamaModels.map((model) => (
+                            <SelectItem key={model} value={model} className="text-white hover:bg-muted/50 focus:bg-muted/50">
+                              {model}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-sm text-gray-400">
+                        Model for diary conversations (thinking models like Qwen recommended)
+                      </p>
+                    </div>
+
+                    {/* Model Parameters */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label htmlFor="diary-temperature" className="text-white font-medium text-sm">Temperature</Label>
+                        <div className="flex items-center gap-2">
+                          <Slider
+                            id="diary-temperature"
+                            min={0}
+                            max={1}
+                            step={0.1}
+                            value={[parseFloat(diaryTemperature)]}
+                            onValueChange={(value) => setDiaryTemperature(value[0].toString())}
+                            className="flex-1 [&>*:first-child]:bg-muted/30 [&>*:first-child]:border-border/50"
+                          />
+                          <span className="w-10 text-sm text-white font-mono bg-background/50 px-1.5 py-0.5 rounded">
+                            {diaryTemperature}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-400">
+                          0 = focused, 1 = creative
+                        </p>
+                      </div>
+                      
+                      <div className="space-y-1">
+                        <Label htmlFor="diary-context" className="text-white font-medium text-sm">Context Window</Label>
+                        <Select value={diaryContextWindow} onValueChange={setDiaryContextWindow}>
                           <SelectTrigger className="bg-background/50 border-border text-white hover:bg-muted/50 h-9">
                             <SelectValue />
                           </SelectTrigger>
@@ -677,10 +821,18 @@ function SettingsPage() {
                   </div>
                 )}
 
+                {/* Info Notice */}
+                <div className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 rounded-lg p-4 border border-purple-500/20">
+                  <h3 className="text-white font-medium mb-2">About Talk to Your Diary</h3>
+                  <p className="text-sm text-gray-400">
+                    This model handles conversational interactions with your diary entries. Thinking models (like Qwen) provide better reasoning but internal thinking blocks are automatically stripped for clean responses.
+                  </p>
+                </div>
+
                 {/* Save Button */}
                 <div className="flex justify-end pt-2">
                   <button 
-                    onClick={handleSaveOllama} 
+                    onClick={handleSaveDiary} 
                     disabled={saving}
                     className="relative overflow-hidden group px-5 py-2 rounded-lg font-medium shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
