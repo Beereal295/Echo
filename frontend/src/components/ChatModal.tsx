@@ -33,6 +33,10 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
   const [isToolCall, setIsToolCall] = useState(false)
   const [searchQueries, setSearchQueries] = useState<string[]>([])
   const [startTime, setStartTime] = useState<Date | null>(null)
+  const [audioPlaying, setAudioPlaying] = useState(false)
+  const [ttsInitialized, setTtsInitialized] = useState(false)
+  const audioContextRef = useRef<AudioContext | null>(null)
+  const currentAudioSourceRef = useRef<AudioBufferSourceNode | null>(null)
   const { toast } = useToast()
 
   // Helper function to ensure toast content is valid (same as NewEntryPage)
@@ -120,14 +124,49 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
   useEffect(() => {
     if (isOpen) {
       initializeChat()
+      if (voiceEnabled) {
+        initializeTTS()
+      }
     } else {
       // Reset state when modal closes
       setMessages([])
       setInputText('')
       setSearchQueries([])
       setStartTime(null)
+      setTtsInitialized(false)
+      // Stop any playing audio
+      if (currentAudioSourceRef.current) {
+        try {
+          currentAudioSourceRef.current.stop()
+        } catch (e) {
+          // Audio might already be stopped
+        }
+        currentAudioSourceRef.current = null
+      }
+      // Close AudioContext
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        audioContextRef.current.close()
+        audioContextRef.current = null
+      }
     }
   }, [isOpen])
+
+  // Initialize TTS when voice is enabled
+  useEffect(() => {
+    if (isOpen && voiceEnabled && !ttsInitialized) {
+      initializeTTS()
+    }
+    // Stop audio if voice is disabled
+    if (!voiceEnabled && currentAudioSourceRef.current) {
+      try {
+        currentAudioSourceRef.current.stop()
+      } catch (e) {
+        // Audio might already be stopped
+      }
+      currentAudioSourceRef.current = null
+      setAudioPlaying(false)
+    }
+  }, [voiceEnabled, isOpen, ttsInitialized])
 
   // Update input when STT transcription changes - accumulate text with space continuation
   useEffect(() => {
@@ -166,6 +205,10 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
         }
         setMessages([greetingMessage])
         
+        // Play greeting if voice is enabled
+        if (voiceEnabled && ttsInitialized) {
+          playAudioForMessage(greetingText)
+        }
       }
     } catch (error) {
       console.error('Failed to get greeting:', error)
@@ -177,8 +220,111 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
         timestamp: new Date()
       }
       setMessages([fallbackGreeting])
+      
+      // Play fallback greeting if voice is enabled
+      if (voiceEnabled && ttsInitialized) {
+        playAudioForMessage(fallbackGreeting.content)
+      }
     }
   }
+
+  const initializeTTS = async () => {
+    try {
+      const response = await api.initializeTTS()
+      if (response.success) {
+        setTtsInitialized(true)
+        console.log('TTS initialized successfully')
+      }
+    } catch (error) {
+      console.error('Failed to initialize TTS:', error)
+      // Don't show error to user, just disable TTS silently
+    }
+  }
+
+  const initializeAudioContext = () => {
+    if (!audioContextRef.current) {
+      try {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
+        
+        // Resume AudioContext if it's suspended (required by some browsers)
+        if (audioContextRef.current.state === 'suspended') {
+          audioContextRef.current.resume()
+        }
+      } catch (error) {
+        console.error('Failed to create AudioContext:', error)
+        return false
+      }
+    }
+    return true
+  }
+
+  const playAudioForMessage = async (text: string) => {
+    if (!voiceEnabled || !ttsInitialized || audioPlaying) return
+    
+    try {
+      setAudioPlaying(true)
+      
+      // Initialize AudioContext if needed
+      if (!initializeAudioContext()) {
+        // Fallback to HTML audio
+        await playAudioFallback(text)
+        return
+      }
+      
+      // Synthesize speech (non-streaming for natural voice resonance)
+      const audioBlob = await api.synthesizeSpeech(text, false)
+      const arrayBuffer = await audioBlob.arrayBuffer()
+      
+      // Decode audio data using AudioContext
+      const audioBuffer = await audioContextRef.current!.decodeAudioData(arrayBuffer)
+      
+      // Create and configure audio source
+      const source = audioContextRef.current!.createBufferSource()
+      source.buffer = audioBuffer
+      source.connect(audioContextRef.current!.destination)
+      
+      // Handle playback end
+      source.onended = () => {
+        setAudioPlaying(false)
+        currentAudioSourceRef.current = null
+      }
+      
+      // Store reference and start playback
+      currentAudioSourceRef.current = source
+      source.start(0)
+      
+    } catch (error) {
+      console.error('AudioContext playback failed, trying fallback:', error)
+      // Fallback to HTML audio
+      await playAudioFallback(text)
+    }
+  }
+
+  const playAudioFallback = async (text: string) => {
+    try {
+      // Synthesize speech (non-streaming for natural voice resonance)
+      const audioBlob = await api.synthesizeSpeech(text, false)
+      const audioUrl = URL.createObjectURL(audioBlob)
+      
+      // Create and play audio using HTML Audio
+      const audio = new Audio(audioUrl)
+      audio.onended = () => {
+        setAudioPlaying(false)
+        URL.revokeObjectURL(audioUrl)
+      }
+      audio.onerror = () => {
+        setAudioPlaying(false)
+        URL.revokeObjectURL(audioUrl)
+        console.error('HTML Audio playback failed')
+      }
+      
+      await audio.play()
+    } catch (error) {
+      console.error('All audio playback methods failed:', error)
+      setAudioPlaying(false)
+    }
+  }
+
 
 
   const handleStartRecording = () => {
@@ -287,6 +433,11 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
                 ? { ...msg, isStreaming: false }
                 : msg
             ))
+            
+            // Play audio after streaming is complete if voice is enabled
+            if (voiceEnabled && ttsInitialized) {
+              playAudioForMessage(responseText)
+            }
           }
         }, 50) // Adjust speed as needed
 
@@ -437,6 +588,16 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
                 <Loader2 className="h-3 w-3 animate-spin" />
                 <span>{typeof processingMessage === 'string' ? processingMessage : 'Processing...'}</span>
                 <span className="animate-pulse">...</span>
+              </div>
+            </div>
+          )}
+
+          {/* Audio Playing Indicator */}
+          {audioPlaying && voiceEnabled && (
+            <div className="px-6 py-2 border-t">
+              <div className="flex items-center gap-2 text-sm text-primary">
+                <Volume2 className="h-3 w-3 animate-pulse" />
+                <span>Speaking...</span>
               </div>
             </div>
           )}

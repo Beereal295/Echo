@@ -490,7 +490,7 @@ class ApiClient {
   }
 
   // TTS endpoints
-  async synthesizeSpeech(text: string, voice: string = 'en_sky', stream: boolean = true): Promise<Blob> {
+  async synthesizeSpeech(text: string, stream: boolean = true): Promise<Blob> {
     // Try streaming first, fallback to non-streaming if it fails
     for (const useStream of [stream, false]) {
       try {
@@ -499,7 +499,7 @@ class ApiClient {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ text, voice, stream: useStream })
+          body: JSON.stringify({ text, stream: useStream })
         })
 
         if (!response.ok) {
@@ -553,8 +553,14 @@ class ApiClient {
     throw new Error('All TTS synthesis methods failed')
   }
 
-  async getTTSVoices(): Promise<ApiResponse<{ voices: string[] }>> {
-    return this.request('/tts/voices')
+  async getTTSStatus(): Promise<ApiResponse<any>> {
+    return this.request('/tts/status')
+  }
+
+  async initializeTTS(): Promise<ApiResponse<any>> {
+    return this.request('/tts/initialize', {
+      method: 'POST'
+    })
   }
 }
 

@@ -3,7 +3,6 @@ TTS API endpoints for text-to-speech synthesis.
 
 This module provides endpoints for:
 - Text-to-speech synthesis with piper-tts
-- Voice pack management and selection
 - Streaming audio generation for conversational use
 """
 
@@ -25,30 +24,17 @@ router = APIRouter(prefix="/tts", tags=["tts"])
 class TTSSynthesizeRequest(BaseModel):
     """Request model for TTS synthesis."""
     text: str = Field(..., min_length=1, max_length=5000, description="Text to convert to speech")
-    voice: str = Field("hfc_female", description="Voice pack to use for synthesis")
-    speed: float = Field(1.0, ge=0.5, le=2.0, description="Speech speed multiplier")
     stream: bool = Field(True, description="Whether to stream audio for faster response")
-
-
-class TTSVoiceRequest(BaseModel):
-    """Request model for setting voice pack."""
-    voice_pack: str = Field(..., description="Name of the voice pack to use")
 
 
 # Response Models
 class TTSModelInfoResponse(BaseModel):
     """Response model for TTS model information."""
     model_name: str = Field(..., description="Name of the TTS model")
-    device: str = Field(..., description="Device the model is running on")
-    voice_pack: str = Field(..., description="Currently selected voice pack")
     is_initialized: bool = Field(..., description="Whether the model is initialized")
-    available_voices: list[str] = Field(..., description="List of available voice packs")
-
-
-class TTSVoicesResponse(BaseModel):
-    """Response model for available voices."""
-    voices: list[str] = Field(..., description="List of available voice packs")
-    current_voice: str = Field(..., description="Currently selected voice pack")
+    sample_rate: int = Field(..., description="Audio sample rate")
+    channels: int = Field(..., description="Number of audio channels")
+    model_path: str = Field(..., description="Path to the model file")
 
 
 @router.post("/synthesize")
@@ -66,24 +52,19 @@ async def synthesize_speech(request: TTSSynthesizeRequest):
         HTTPException: If synthesis fails
     """
     try:
-        logger.error("=== TTS ENDPOINT CALLED ===")
-        logger.error(f"TTS request - text: '{request.text[:50]}...', voice: {request.voice}, stream: {request.stream}")
+        logger.info(f"TTS request - text: '{request.text[:50]}...', stream: {request.stream}")
         
         tts_service = get_tts_service()
-        logger.error("Got TTS service")
         
         # Generate speech audio
-        logger.error("About to synthesize speech")
         audio_result = await tts_service.synthesize_speech(
             text=request.text,
-            voice=request.voice,
-            speed=request.speed,
             stream=request.stream
         )
-        logger.error(f"Generated audio result type: {type(audio_result)}, size: {len(audio_result) if isinstance(audio_result, bytes) else 'N/A'}")
         
-        if request.stream:
-            # Return streaming response for faster conversational experience
+        # Check if result is streaming (async generator) or complete (bytes)
+        if hasattr(audio_result, '__aiter__'):
+            # Streaming response
             async def audio_generator():
                 async for chunk in audio_result:
                     yield chunk
@@ -97,7 +78,7 @@ async def synthesize_speech(request: TTSSynthesizeRequest):
                 }
             )
         else:
-            # Return complete audio file
+            # Complete audio file (bytes)
             return Response(
                 content=audio_result,
                 media_type="audio/wav",
@@ -118,87 +99,6 @@ async def synthesize_speech(request: TTSSynthesizeRequest):
         raise HTTPException(
             status_code=500,
             detail=f"Speech synthesis failed: {str(e)}"
-        )
-
-
-@router.get("/voices", response_model=SuccessResponse[TTSVoicesResponse])
-async def get_available_voices():
-    """
-    Get list of available voice packs.
-    
-    Returns:
-        List of available voices and current selection
-        
-    Raises:
-        HTTPException: If voice retrieval fails
-    """
-    try:
-        tts_service = get_tts_service()
-        
-        available_voices = await tts_service.get_available_voices()
-        current_voice = tts_service.voice_pack
-        
-        response_data = TTSVoicesResponse(
-            voices=available_voices,
-            current_voice=current_voice
-        )
-        
-        return SuccessResponse(
-            success=True,
-            message=f"Retrieved {len(available_voices)} available voices",
-            data=response_data
-        )
-        
-    except Exception as e:
-        logger.error(f"Failed to get available voices: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to retrieve voices: {str(e)}"
-        )
-
-
-@router.post("/voice", response_model=SuccessResponse[dict])
-async def set_voice_pack(request: TTSVoiceRequest):
-    """
-    Set the default voice pack for TTS.
-    
-    Args:
-        request: Voice pack selection
-        
-    Returns:
-        Success response with voice pack status
-        
-    Raises:
-        HTTPException: If voice pack setting fails
-    """
-    try:
-        tts_service = get_tts_service()
-        
-        success = await tts_service.set_voice_pack(request.voice_pack)
-        
-        if not success:
-            available_voices = await tts_service.get_available_voices()
-            raise HTTPException(
-                status_code=400,
-                detail=f"Voice pack '{request.voice_pack}' not available. Available voices: {available_voices}"
-            )
-        
-        return SuccessResponse(
-            success=True,
-            message=f"Voice pack set to '{request.voice_pack}'",
-            data={
-                "voice_pack": request.voice_pack,
-                "status": "active"
-            }
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to set voice pack: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to set voice pack: {str(e)}"
         )
 
 
@@ -257,8 +157,7 @@ async def initialize_tts_model():
             message="TTS model initialized successfully",
             data={
                 "status": "initialized",
-                "voice_pack": tts_service.voice_pack,
-                "device": tts_service.device
+                "model_name": "en_US-hfc_female-medium"
             }
         )
         
@@ -289,8 +188,7 @@ async def get_tts_status():
             data={
                 "is_ready": is_ready,
                 "is_initialized": tts_service._is_initialized,
-                "voice_pack": tts_service.voice_pack,
-                "device": tts_service.device
+                "model_name": "en_US-hfc_female-medium"
             }
         )
         
