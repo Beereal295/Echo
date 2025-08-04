@@ -271,6 +271,15 @@ class ApiClient {
     return this.request('/entries/stats/count')
   }
 
+  async getDailyStreak(): Promise<ApiResponse<{ 
+    streak: number
+    last_entry_date: string | null
+    total_entries: number
+    unique_days: number
+  }>> {
+    return this.request('/entries/stats/daily-streak')
+  }
+
   // Semantic search
   async semanticSearch(query: string, limit: number = 10, similarityThreshold: number = 0.3): Promise<ApiResponse<any>> {
     return this.request('/embeddings/semantic-search', {

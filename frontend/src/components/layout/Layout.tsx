@@ -42,51 +42,15 @@ function Layout({ children }: LayoutProps) {
   const calculateDailyStreak = async () => {
     try {
       setStreakLoading(true)
-      const response = await api.getEntries(1, 100) // Get recent entries to calculate streak
+      // Use the dedicated streak endpoint that has no pagination limits
+      const response = await api.getDailyStreak()
       
-      if (response.success && response.data && response.data.entries) {
-        const entries = response.data.entries
-        
-        // Sort entries by date descending
-        const sortedEntries = entries.sort((a, b) => 
-          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-        )
-        
-        let streak = 0
-        const today = new Date()
-        today.setHours(0, 0, 0, 0)
-        
-        // Check if there's an entry today
-        const todayEntry = sortedEntries.find(entry => {
-          const entryDate = new Date(entry.timestamp)
-          entryDate.setHours(0, 0, 0, 0)
-          return entryDate.getTime() === today.getTime()
-        })
-        
-        if (todayEntry) {
-          streak = 1
-          
-          // Count consecutive days going backwards
-          for (let i = 1; i < 365; i++) { // Max 365 day streak check
-            const checkDate = new Date(today)
-            checkDate.setDate(today.getDate() - i)
-            checkDate.setHours(0, 0, 0, 0)
-            
-            const dayEntry = sortedEntries.find(entry => {
-              const entryDate = new Date(entry.timestamp)
-              entryDate.setHours(0, 0, 0, 0)
-              return entryDate.getTime() === checkDate.getTime()
-            })
-            
-            if (dayEntry) {
-              streak++
-            } else {
-              break
-            }
-          }
-        }
-        
-        setDailyStreak(streak)
+      if (response.success && response.data) {
+        console.log('Streak data from server:', response.data)
+        setDailyStreak(response.data.streak)
+      } else {
+        console.error('Failed to get streak data:', response.error)
+        setDailyStreak(0)
       }
     } catch (error) {
       console.error('Failed to calculate daily streak:', error)

@@ -527,6 +527,74 @@ async def get_entry_count():
         raise HTTPException(status_code=500, detail=f"Failed to get entry count: {str(e)}")
 
 
+@router.get("/stats/daily-streak", response_model=dict)
+async def get_daily_streak():
+    """Calculate the current daily streak of consecutive days with entries"""
+    try:
+        from datetime import datetime, timedelta
+        
+        # Get all entries ordered by date descending (no pagination limit)
+        all_entries = await EntryRepository.get_all_for_streak()
+        
+        if not all_entries:
+            return {"streak": 0, "last_entry_date": None}
+        
+        # Sort entries by date descending
+        sorted_entries = sorted(all_entries, key=lambda e: e.timestamp, reverse=True)
+        
+        # Get unique dates with entries
+        entry_dates = set()
+        for entry in sorted_entries:
+            entry_date = entry.timestamp.date()
+            entry_dates.add(entry_date)
+        
+        # Calculate streak
+        streak = 0
+        today = datetime.now().date()
+        
+        # Check if there's an entry today
+        if today in entry_dates:
+            streak = 1
+            current_date = today
+            
+            # Count consecutive days going backwards
+            for i in range(1, 365):  # Max 365 day streak
+                check_date = current_date - timedelta(days=1)
+                if check_date in entry_dates:
+                    streak += 1
+                    current_date = check_date
+                else:
+                    break
+        else:
+            # Check if there's an entry yesterday (streak continues from yesterday)
+            yesterday = today - timedelta(days=1)
+            if yesterday in entry_dates:
+                streak = 1
+                current_date = yesterday
+                
+                # Count consecutive days going backwards from yesterday
+                for i in range(1, 365):
+                    check_date = current_date - timedelta(days=1)
+                    if check_date in entry_dates:
+                        streak += 1
+                        current_date = check_date
+                    else:
+                        break
+        
+        last_entry_date = sorted_entries[0].timestamp.isoformat() if sorted_entries else None
+        
+        return {
+            "streak": streak,
+            "last_entry_date": last_entry_date,
+            "total_entries": len(all_entries),
+            "unique_days": len(entry_dates)
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to calculate daily streak: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to calculate daily streak: {str(e)}")
+
+
 @router.post("/analyze-mood", response_model=SuccessResponse[MoodAnalysisResponse])
 async def analyze_mood(request: MoodAnalysisRequest):
     """Analyze the mood/emotions in journal text"""

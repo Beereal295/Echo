@@ -87,6 +87,14 @@ class EntryRepository:
         return result["count"] if result else 0
     
     @staticmethod
+    async def get_all_for_streak() -> List[Entry]:
+        """Get all entries for streak calculation (no pagination limit)"""
+        rows = await db.fetch_all(
+            "SELECT * FROM entries ORDER BY timestamp DESC"
+        )
+        return [Entry.from_dict(row) for row in rows]
+    
+    @staticmethod
     async def search(
         query: str,
         limit: int = 50
