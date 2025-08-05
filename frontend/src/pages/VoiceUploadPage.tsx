@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -24,7 +25,8 @@ import {
   Eye,
   Sparkles,
   Lightbulb,
-  Plus
+  Plus,
+  Mic
 } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -95,6 +97,7 @@ interface CreatedEntries {
 }
 
 function VoiceUploadPage() {
+  const navigate = useNavigate()
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [transcriptionResult, setTranscriptionResult] = useState<TranscriptionResult | null>(null)
   const [editedTranscription, setEditedTranscription] = useState('')
@@ -513,11 +516,6 @@ function VoiceUploadPage() {
         // Show results immediately (like NewEntryPage)
         setShowResults(true)
         setShowUploadCard(false)
-        
-        safeToast({
-          title: "✓ Entries processed!",
-          description: "Review your entries and click 'Add to Diary' to save them.",
-        })
       } else {
         throw new Error(response.error || 'Failed to process entry')
       }
@@ -553,6 +551,11 @@ function VoiceUploadPage() {
           title: "✨ Entry saved to diary!",
           description: "Your voice note has been added to your journal.",
         })
+        
+        // Redirect to view entries page to see the saved entry
+        setTimeout(() => {
+          navigate('/entries')
+        }, 1000)
         
         // Trigger mood analysis in background if enhanced text is available
         if (createdEntry.id && createdEntries.enhanced?.enhanced_text) {
@@ -711,7 +714,7 @@ function VoiceUploadPage() {
               />
               
               {selectedFile ? (
-                <div className="space-y-3">
+                <div className="space-y-6">
                   <div className="flex items-center justify-center">
                     <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center">
                       <FileAudio2 className="h-6 w-6 text-white" />
@@ -724,68 +727,75 @@ function VoiceUploadPage() {
                     </p>
                   </div>
                   
-                  {/* Audio Preview */}
-                  {audioUrl && (
-                    <div className="flex items-center justify-center gap-3">
-                      <button
-                        onClick={togglePlayback}
-                        className="relative overflow-hidden group px-4 py-2 rounded-md font-medium shadow-md hover:shadow-lg hover:scale-[1.02] transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20"
-                      >
-                        <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                        <span className="relative z-10 text-primary font-medium group-hover:text-primary transition-colors duration-300 flex items-center gap-2">
-                        {isPlaying ? (
-                          <>
-                            <Pause className="h-4 w-4" />
-                            Pause
-                          </>
-                        ) : (
-                          <>
-                            <Play className="h-4 w-4" />
-                            Preview
-                          </>
-                        )}
-                        </span>
-                      </button>
-                      <audio
-                        ref={audioRef}
-                        src={audioUrl}
-                        onEnded={handleAudioEnded}
-                        className="hidden"
-                      />
-                    </div>
-                  )}
-                  
-                  <div className="flex gap-3 justify-center">
+                  {/* Action Buttons - All in one line */}
+                  <div className="flex items-center justify-between gap-2">
+                    {/* Choose File - Left */}
                     <button
                       onClick={() => fileInputRef.current?.click()}
-                      className="relative overflow-hidden group px-8 py-3 rounded-md font-medium shadow-md hover:shadow-lg hover:scale-[1.02] transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 min-w-[140px]"
+                      className="relative overflow-hidden group px-3 py-2 rounded-md font-medium shadow-md hover:shadow-lg hover:scale-[1.02] transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 w-[120px]"
                     >
                       <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                      <span className="relative z-10 text-primary font-medium group-hover:text-primary transition-colors duration-300">
-                        Choose Different File
+                      <span className="relative z-10 text-primary font-medium group-hover:text-primary transition-colors duration-300 flex items-center whitespace-nowrap text-sm">
+                        <Upload className="mr-2 h-3 w-3" />
+                        Choose File
                       </span>
                     </button>
+                    
+                    {/* Audio Preview - Center */}
+                    {audioUrl && (
+                      <button
+                        onClick={togglePlayback}
+                        className="relative overflow-hidden group px-3 py-2 rounded-md font-medium shadow-md hover:shadow-lg hover:scale-[1.02] transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 w-[100px]"
+                      >
+                        <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                        <span className="relative z-10 text-primary font-medium group-hover:text-primary transition-colors duration-300 flex items-center text-sm">
+                          {isPlaying ? (
+                            <>
+                              <Pause className="mr-2 h-3 w-3" />
+                              Pause
+                            </>
+                          ) : (
+                            <>
+                              <Play className="mr-2 h-3 w-3" />
+                              Preview
+                            </>
+                          )}
+                        </span>
+                      </button>
+                    )}
+                    
+                    {/* Transcribe - Right */}
                     <button
                       onClick={handleTranscribe}
                       disabled={isTranscribing}
-                      className="relative overflow-hidden group px-8 py-3 rounded-md font-medium shadow-md hover:shadow-lg hover:scale-[1.02] transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 min-w-[140px] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                      className="relative overflow-hidden group px-3 py-2 rounded-md font-medium shadow-md hover:shadow-lg hover:scale-[1.02] transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 w-[120px] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                     >
                       <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                      <span className="relative z-10 text-primary font-medium group-hover:text-primary transition-colors duration-300 flex items-center">
+                      <span className="relative z-10 text-primary font-medium group-hover:text-primary transition-colors duration-300 flex items-center text-sm">
                         {isTranscribing ? (
                           <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            <Loader2 className="mr-2 h-3 w-3 animate-spin" />
                             Transcribing...
                           </>
                         ) : (
                           <>
-                            <Upload className="mr-2 h-4 w-4" />
+                            <Mic className="mr-2 h-3 w-3" />
                             Transcribe
                           </>
                         )}
                       </span>
                     </button>
                   </div>
+                  
+                  {/* Hidden Audio Element */}
+                  {audioUrl && (
+                    <audio
+                      ref={audioRef}
+                      src={audioUrl}
+                      onEnded={handleAudioEnded}
+                      className="hidden"
+                    />
+                  )}
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -913,7 +923,7 @@ function VoiceUploadPage() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.3 }}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-6"
               onClick={() => setShowModal(false)}
             >
               <motion.div
@@ -921,7 +931,7 @@ function VoiceUploadPage() {
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
                 transition={{ duration: 0.3 }}
-                className="bg-card/90 backdrop-blur-xl border border-border/50 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[80vh] flex flex-col overflow-hidden"
+                className="bg-card/90 backdrop-blur-xl border border-border/50 rounded-2xl shadow-2xl max-w-6xl w-full max-h-[92vh] min-h-[600px] flex flex-col overflow-hidden mx-auto"
                 onClick={(e) => e.stopPropagation()}
               >
                 {/* Modal Header */}
@@ -947,7 +957,8 @@ function VoiceUploadPage() {
                         setShowUploadCard(true)
                         setShowTranscriptionCard(false)
                       }}
-                      className="text-gray-400 hover:text-white"
+                      className="h-8 w-8 p-0 text-blue-300 drop-shadow-[0_0_4px_rgba(147,197,253,0.6)] hover:bg-muted/50 hover:text-white hover:drop-shadow-[0_0_6px_rgba(255,255,255,0.6)]"
+                      title="Close modal"
                     >
                       <X className="h-4 w-4" />
                     </Button>
@@ -959,14 +970,11 @@ function VoiceUploadPage() {
                   <div className="space-y-6">
                     {/* Transcription Text Area */}
                     <div>
-                      <label className="block text-sm font-medium text-white mb-2">
-                        Transcribed Text (Editable)
-                      </label>
                       <Textarea
                         value={editedTranscription}
                         onChange={(e) => setEditedTranscription(e.target.value)}
                         placeholder="Your transcribed text will appear here..."
-                        className="min-h-[200px] bg-background/50 border-border text-white placeholder:text-gray-400 resize-none"
+                        className="min-h-[400px] bg-background/50 border-border text-white placeholder:text-gray-400 resize-none"
                       />
                     </div>
 
@@ -1062,10 +1070,11 @@ function VoiceUploadPage() {
           )}
         </AnimatePresence>
 
-        {/* Loading State - Show during processing (same as NewEntryPage) */}
-        <AnimatePresence>
-          {isProcessing && !showResults && (
+        {/* Loading State and Results - Wrapped in single AnimatePresence with wait mode */}
+        <AnimatePresence mode="wait">
+          {isProcessing && !showResults ? (
             <motion.div
+              key="loading"
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
@@ -1098,25 +1107,25 @@ function VoiceUploadPage() {
                 </motion.p>
               </div>
             </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Results Cards - Show after completion (same as NewEntryPage) */}
-        <AnimatePresence>
-          {showResults && createdEntries && (
+          ) : showResults && createdEntries && 
+           createdEntries.raw?.raw_text && 
+           createdEntries.enhanced?.enhanced_text && 
+           createdEntries.structured?.structured_summary ? (
             <motion.div
+              key="results"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, ease: "easeOut" }}
               className="flex-1 flex flex-col overflow-visible"
             >
               {/* AI Processing Tip */}
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.2 }}
-                className="mb-6 p-4 bg-yellow-400/5 border border-yellow-400/30 rounded-lg"
-              >
+              <div className="mb-6 relative overflow-hidden rounded-lg">
+                <motion.div
+                  initial={{ x: "-100%" }}
+                  animate={{ x: 0 }}
+                  transition={{ duration: 0.5, ease: "easeOut" }}
+                  className="p-4 bg-yellow-400/5 border border-yellow-400/30 rounded-lg"
+                >
                 <div className="flex items-start gap-3">
                   <Lightbulb className="h-5 w-5 text-yellow-400 flex-shrink-0 mt-0.5 drop-shadow-[0_0_8px_rgba(250,204,21,0.6)] animate-pulse" />
                   <div>
@@ -1128,7 +1137,8 @@ function VoiceUploadPage() {
                     </p>
                   </div>
                 </div>
-              </motion.div>
+                </motion.div>
+              </div>
               
               <div className="grid md:grid-cols-3 gap-6 flex-1 mb-6">
                 {viewModes.map((mode, index) => {
@@ -1327,7 +1337,7 @@ function VoiceUploadPage() {
                 </motion.button>
               </div>
             </motion.div>
-          )}
+          ) : null}
         </AnimatePresence>
         </div>
       </div>
@@ -1372,12 +1382,15 @@ function VoiceUploadPage() {
                   <p className="text-sm text-gray-400">Make changes to your content below</p>
                 </div>
               </div>
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => setShowOverlay(false)}
-                className="text-gray-400 hover:text-white transition-colors p-2 rounded-lg hover:bg-muted/50"
+                className="h-8 w-8 p-0 text-blue-300 drop-shadow-[0_0_4px_rgba(147,197,253,0.6)] hover:bg-muted/50 hover:text-white hover:drop-shadow-[0_0_6px_rgba(255,255,255,0.6)]"
+                title="Close modal"
               >
-                <X className="h-5 w-5" />
-              </button>
+                <X className="h-4 w-4" />
+              </Button>
             </div>
 
             {/* Content */}
@@ -1455,15 +1468,20 @@ function VoiceUploadPage() {
                     </p>
                   </div>
                 </div>
-                <button
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => {
                     setShowBackfillModal(false)
                     setShowBackfillCalendar(false)
+                    setShowHourDropdown(false)
+                    setShowMinuteDropdown(false)
                   }}
-                  className="p-2 rounded-full hover:bg-muted/50 transition-colors"
+                  className="h-8 w-8 p-0 text-blue-300 drop-shadow-[0_0_4px_rgba(147,197,253,0.6)] hover:bg-muted/50 hover:text-white hover:drop-shadow-[0_0_6px_rgba(255,255,255,0.6)]"
+                  title="Close modal"
                 >
-                  <X className="h-5 w-5 text-gray-400" />
-                </button>
+                  <X className="h-4 w-4" />
+                </Button>
               </div>
               
               {/* Content */}

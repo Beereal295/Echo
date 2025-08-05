@@ -41,6 +41,7 @@ interface Entry {
   timestamp: string
   word_count: number
   processing_metadata?: any
+  mood_tags?: string[]
 }
 
 // View modes for entry display
@@ -78,6 +79,32 @@ function ViewEntriesPage() {
   const location = useLocation()
   const [entries, setEntries] = useState<Entry[]>([])
   const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null)
+
+  // Get mood color based on sentiment (from Pattern Insights)
+  const getMoodColor = (mood: string) => {
+    const positiveModds = ['happy', 'excited', 'grateful', 'content', 'peaceful', 'confident', 'proud', 'hopeful', 'inspired', 'loved', 'optimistic']
+    const negativeModds = ['sad', 'angry', 'frustrated', 'anxious', 'stressed', 'worried', 'disappointed', 'lonely', 'scared', 'overwhelmed']
+    const neutralModds = ['tired', 'calm', 'surprised', 'confused', 'bored', 'curious', 'focused']
+    
+    if (positiveModds.includes(mood.toLowerCase())) {
+      return 'from-green-400 to-emerald-500'
+    } else if (negativeModds.includes(mood.toLowerCase())) {
+      return 'from-red-400 to-pink-500'
+    } else {
+      return 'from-blue-400 to-purple-500'
+    }
+  }
+
+  const getMoodEmoji = (mood: string) => {
+    const emojiMap: { [key: string]: string } = {
+      happy: '😊', sad: '😢', excited: '🤩', anxious: '😰', stressed: '😣',
+      calm: '😌', angry: '😠', grateful: '🙏', tired: '😴', content: '😌',
+      frustrated: '😤', peaceful: '🧘', overwhelmed: '😵', confident: '😎',
+      worried: '😟', hopeful: '🌟', lonely: '😔', proud: '💪', scared: '😨',
+      surprised: '😲', bored: '😑', confused: '🤔', inspired: '✨'
+    }
+    return emojiMap[mood.toLowerCase()] || '💭'
+  }
   
   const [expandedDropdowns, setExpandedDropdowns] = useState<Set<number>>(new Set())
   const [selectedVersion, setSelectedVersion] = useState<'raw' | 'enhanced' | 'structured'>('enhanced')
@@ -1737,10 +1764,49 @@ Word Count: ${entry.word_count}
                       </p>
                     )}
                   </div>
+                  
+                  {/* Mood Tags Section */}
+                  {selectedEntry.mood_tags && selectedEntry.mood_tags.length > 0 && (
+                    <motion.div 
+                      className="mt-4 pt-4 border-t border-border"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3, delay: 0.1 }}
+                    >
+                      <div className="flex flex-wrap gap-1">
+                        {selectedEntry.mood_tags.map((tag, index) => (
+                          <motion.div
+                            key={`${selectedEntry.id}-${tag}-${index}`}
+                            initial={{ opacity: 0, scale: 0.7, y: 5 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            transition={{ 
+                              duration: 0.3, 
+                              delay: 0.2 + (index * 0.08),
+                              type: "spring",
+                              stiffness: 300,
+                              damping: 20
+                            }}
+                            whileHover={{ 
+                              scale: 1.1,
+                              y: -2,
+                              transition: { duration: 0.2 }
+                            }}
+                            whileTap={{ scale: 0.95 }}
+                          >
+                            <Badge 
+                              className={`bg-gradient-to-r ${getMoodColor(tag)} text-white text-xs cursor-pointer shadow-sm hover:shadow-md transition-shadow duration-200`}
+                            >
+                              {getMoodEmoji(tag)} {tag}
+                            </Badge>
+                          </motion.div>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                  
                   <div className="mt-6 pt-4 border-t border-border">
-                    <div className="flex items-center justify-between text-sm text-muted-foreground">
+                    <div className="flex items-center text-sm text-muted-foreground">
                       <span>{selectedEntry.word_count} words</span>
-                      <span>Created {formatTimestamp(selectedEntry.timestamp).formattedDate}</span>
                     </div>
                   </div>
                 </CardContent>

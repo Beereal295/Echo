@@ -847,12 +847,6 @@ function NewEntryPage() {
         setShowResults(true)
         setTimeout(() => setRecordingState(RecordingState.IDLE), 2000)
         
-        // Show success toast
-        safeToast({
-          title: "✓ Entries processed!",
-          description: "Review your entries and click 'Add to Diary' to save them.",
-        })
-        
         // Clear processing state
         setText('')
         setIsProcessing(false)
@@ -1385,10 +1379,11 @@ function NewEntryPage() {
         )}
       </AnimatePresence>
 
-      {/* Loading State - Show during processing */}
-      <AnimatePresence>
-        {isProcessing && !showResults && (
+      {/* Loading State and Results - Wrapped in single AnimatePresence with wait mode */}
+      <AnimatePresence mode="wait">
+        {isProcessing && !showResults ? (
           <motion.div
+            key="loading"
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
@@ -1421,25 +1416,25 @@ function NewEntryPage() {
               </motion.p>
             </div>
           </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Results Cards - Show after completion */}
-      <AnimatePresence>
-        {showResults && createdEntries && (
+        ) : showResults && createdEntries && 
+         createdEntries.raw?.raw_text && 
+         createdEntries.enhanced?.enhanced_text && 
+         createdEntries.structured?.structured_summary ? (
           <motion.div
+            key="results"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, ease: "easeOut" }}
             className="flex-1 flex flex-col overflow-visible"
           >
             {/* AI Processing Tip */}
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-              className="mb-6 p-4 bg-yellow-400/5 border border-yellow-400/30 rounded-lg"
-            >
+            <div className="mb-6 relative overflow-hidden rounded-lg">
+              <motion.div
+                initial={{ x: "-100%" }}
+                animate={{ x: 0 }}
+                transition={{ duration: 0.5, ease: "easeOut" }}
+                className="p-4 bg-yellow-400/5 border border-yellow-400/30 rounded-lg"
+              >
               <div className="flex items-start gap-3">
                 <Lightbulb className="h-5 w-5 text-yellow-400 flex-shrink-0 mt-0.5 drop-shadow-[0_0_8px_rgba(250,204,21,0.6)] animate-pulse" />
                 <div>
@@ -1451,7 +1446,8 @@ function NewEntryPage() {
                   </p>
                 </div>
               </div>
-            </motion.div>
+              </motion.div>
+            </div>
             
             <div className="grid md:grid-cols-3 gap-6 flex-1 mb-6">
               {viewModes.map((mode, index) => {
@@ -1626,7 +1622,7 @@ function NewEntryPage() {
               </motion.button>
             </div>
           </motion.div>
-        )}
+        ) : null}
       </AnimatePresence>
 
       {/* Overlay Edit Modal */}
@@ -1748,15 +1744,18 @@ function NewEntryPage() {
                     </p>
                   </div>
                 </div>
-                <button
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => {
                     setShowBackfillModal(false)
                     setShowBackfillCalendar(false)
                   }}
-                  className="p-2 rounded-full hover:bg-muted/50 transition-colors"
+                  className="h-8 w-8 p-0 text-blue-300 drop-shadow-[0_0_4px_rgba(147,197,253,0.6)] hover:bg-muted/50 hover:text-white hover:drop-shadow-[0_0_6px_rgba(255,255,255,0.6)]"
+                  title="Close modal"
                 >
-                  <X className="h-5 w-5 text-gray-400" />
-                </button>
+                  <X className="h-4 w-4" />
+                </Button>
               </div>
               
               {/* Content */}
