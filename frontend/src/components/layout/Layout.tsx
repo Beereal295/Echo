@@ -28,7 +28,6 @@ interface LayoutProps {
 }
 
 function Layout({ children }: LayoutProps) {
-  const [showPatterns, setShowPatterns] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     // Load collapsed state from localStorage
     const saved = localStorage.getItem('sidebarCollapsed')
@@ -61,25 +60,11 @@ function Layout({ children }: LayoutProps) {
   }
 
   useEffect(() => {
-    // Check if pattern threshold is met
-    const checkPatternThreshold = async () => {
-      try {
-        const response = await api.checkPatternThreshold()
-        if (response.success && response.data && response.data.data) {
-          setShowPatterns(response.data.data.threshold_met)
-        }
-      } catch (error) {
-        console.error('Failed to check pattern threshold:', error)
-      }
-    }
-    
     // Initial checks
-    checkPatternThreshold()
     calculateDailyStreak()
     
     // Listen for settings updates
     const handleSettingsUpdate = () => {
-      checkPatternThreshold()
       calculateDailyStreak()
     }
     
@@ -87,7 +72,6 @@ function Layout({ children }: LayoutProps) {
     
     // Check periodically to update when new entries are added
     const interval = setInterval(() => {
-      checkPatternThreshold()
       calculateDailyStreak()
     }, 60000) // Check every minute
     
@@ -130,14 +114,8 @@ function Layout({ children }: LayoutProps) {
       path: '/patterns',
       icon: Diamond,
       label: 'Pattern Insights',
-      alwaysShow: showPatterns,
+      alwaysShow: true,
       special: true
-    },
-    {
-      path: '/memories',
-      icon: Calendar,
-      label: 'Memories',
-      alwaysShow: true
     },
     {
       path: '/settings',

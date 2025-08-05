@@ -922,6 +922,14 @@ Word Count: ${entry.word_count}
     }
   }, [notification])
 
+  // Exit edit mode when switching between versions
+  useEffect(() => {
+    if (editing) {
+      setEditing(false)
+      setEditedContent('')
+    }
+  }, [selectedVersion])
+
   // Close date filter popup when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -1297,7 +1305,7 @@ Word Count: ${entry.word_count}
         <div className={`flex-1 flex gap-6 overflow-hidden ${showDateFilter ? 'blur-sm pointer-events-none' : ''} transition-all duration-200`}>
           {/* Entry List - Left Side */}
           <div className="w-96 flex flex-col overflow-hidden">
-            <div className="flex-1 overflow-y-auto space-y-3 pr-2 pt-1">
+            <div className="flex-1 overflow-y-auto space-y-3 pr-2 pl-1 pt-1">
               {loading ? (
                 <div className="flex items-center justify-center h-64">
                   <div className="text-center space-y-4">
@@ -1328,11 +1336,14 @@ Word Count: ${entry.word_count}
                       className="space-y-2"
                     >
                       {/* Entry Header - Always visible */}
-                      <Card className={`cursor-pointer transition-all duration-200 hover:shadow-md ${
+                      <Card className={`cursor-pointer transition-all duration-200 hover:shadow-lg relative overflow-hidden group ${
                         isSelected ? 'ring-2 ring-primary/50 bg-primary/5' : 'hover:bg-muted/30'
                       }`}>
+                        {/* Shimmer effect */}
+                        <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/10 to-transparent group-hover:translate-x-full transition-transform duration-700" />
+                        
                         <CardHeader 
-                          className="pb-3 pt-4 px-4"
+                          className="pb-2 pt-3 px-3 relative"
                           onClick={() => {
                             setSelectedEntry(entry)
                             setSelectedVersion('enhanced')
@@ -1351,37 +1362,40 @@ Word Count: ${entry.word_count}
                               </div>
                             </div>
                             <div className="flex items-center gap-1">
-                              {/* Delete button */}
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  const { dayOfWeek, formattedDate } = formatTimestamp(entry.timestamp)
-                                  showDeleteConfirmation(entry.id, `${dayOfWeek}, ${formattedDate}`)
-                                }}
-                                disabled={deleting === entry.id}
-                                className="h-8 w-8 p-0 text-blue-300 drop-shadow-[0_0_4px_rgba(147,197,253,0.6)] hover:bg-red-500/20 hover:text-red-400 hover:drop-shadow-[0_0_6px_rgba(248,113,113,0.8)]"
-                              >
-                                {deleting === entry.id ? (
-                                  <Loader2 className="h-3 w-3 animate-spin" />
-                                ) : (
-                                  <Trash2 className="h-3 w-3" />
-                                )}
-                              </Button>
-                              {/* Export button */}
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  exportAllVersions(entry)
-                                }}
-                                className="h-8 w-8 p-0 text-blue-300 drop-shadow-[0_0_4px_rgba(147,197,253,0.6)] hover:bg-blue-500/20 hover:text-blue-400 hover:drop-shadow-[0_0_6px_rgba(96,165,250,0.8)]"
-                              >
-                                <Download className="h-3 w-3" />
-                              </Button>
-                              {/* Dropdown toggle */}
+                              {/* Delete and Export buttons - only visible on hover */}
+                              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                {/* Delete button */}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    const { dayOfWeek, formattedDate } = formatTimestamp(entry.timestamp)
+                                    showDeleteConfirmation(entry.id, `${dayOfWeek}, ${formattedDate}`)
+                                  }}
+                                  disabled={deleting === entry.id}
+                                  className="h-8 w-8 p-0 text-blue-300 drop-shadow-[0_0_4px_rgba(147,197,253,0.6)] hover:bg-red-500/20 hover:text-red-400 hover:drop-shadow-[0_0_6px_rgba(248,113,113,0.8)]"
+                                >
+                                  {deleting === entry.id ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="h-3 w-3" />
+                                  )}
+                                </Button>
+                                {/* Export button */}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    exportAllVersions(entry)
+                                  }}
+                                  className="h-8 w-8 p-0 text-blue-300 drop-shadow-[0_0_4px_rgba(147,197,253,0.6)] hover:bg-blue-500/20 hover:text-blue-400 hover:drop-shadow-[0_0_6px_rgba(96,165,250,0.8)]"
+                                >
+                                  <Download className="h-3 w-3" />
+                                </Button>
+                              </div>
+                              {/* Dropdown toggle - always visible */}
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -1449,15 +1463,27 @@ Word Count: ${entry.word_count}
                               if (!content) return null
                               
                               return (
-                                <Card
+                                <motion.div
                                   key={mode.key}
-                                  className={`cursor-pointer transition-all duration-200 hover:shadow-md ${mode.bgColor} ${mode.borderColor} border relative group`}
-                                  onClick={() => {
-                                    setSelectedEntry(entry)
-                                    setSelectedVersion(mode.key as any)
+                                  whileHover={{
+                                    y: -8,
+                                    scale: 1.02,
+                                    transition: {
+                                      type: "spring",
+                                      stiffness: 400,
+                                      damping: 10
+                                    }
                                   }}
                                 >
-                                  <CardContent className="p-3">
+                                  <Card
+                                    className={`cursor-pointer transition-all duration-200 hover:shadow-lg ${mode.bgColor} ${mode.borderColor} border relative group overflow-hidden`}
+                                    onClick={() => {
+                                      setSelectedEntry(entry)
+                                      setSelectedVersion(mode.key as any)
+                                    }}
+                                  >
+                                  
+                                  <CardContent className="p-3 relative">
                                     <div className="flex items-center justify-between mb-2">
                                       <div className="flex items-center gap-2">
                                         <mode.icon className="h-4 w-4 text-white" />
@@ -1515,7 +1541,8 @@ Word Count: ${entry.word_count}
                                       {truncateText(content, 100)}
                                     </p>
                                   </CardContent>
-                                </Card>
+                                  </Card>
+                                </motion.div>
                               )
                             })}
                           </motion.div>

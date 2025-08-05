@@ -4,13 +4,68 @@ import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Mic, MessageSquare, Trash2, Volume2 } from 'lucide-react'
+import { Mic, MessageSquare, Trash2, Volume2, Download, ChevronLeft, ChevronRight, Clock, Loader2 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { format } from 'date-fns'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useToast } from '@/components/ui/use-toast'
+
+// Typewriter Text Component
+interface TypewriterTextProps {
+  text: string
+  delay?: number
+  className?: string
+}
+
+function TypewriterText({ text, delay = 0, className = '' }: TypewriterTextProps) {
+  const [displayedText, setDisplayedText] = useState('')
+  const [currentIndex, setCurrentIndex] = useState(0)
+  const [startTyping, setStartTyping] = useState(false)
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setStartTyping(true)
+    }, delay * 1000)
+
+    return () => clearTimeout(timer)
+  }, [delay])
+
+  useEffect(() => {
+    if (!startTyping) return
+
+    if (currentIndex < text.length) {
+      const timer = setTimeout(() => {
+        setDisplayedText(text.slice(0, currentIndex + 1))
+        setCurrentIndex(currentIndex + 1)
+      }, 80) // 80ms per character
+
+      return () => clearTimeout(timer)
+    }
+  }, [currentIndex, text, startTyping])
+
+  return (
+    <motion.p 
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: startTyping ? 1 : 0, y: 0 }}
+      transition={{ duration: 0.3 }}
+      className={className}
+    >
+      {displayedText}
+      {currentIndex < text.length && (
+        <motion.span
+          animate={{ opacity: [1, 0] }}
+          transition={{ duration: 0.8, repeat: Infinity }}
+          className="text-primary"
+        >
+          |
+        </motion.span>
+      )}
+    </motion.p>
+  )
+}
 import ChatModal from '@/components/ChatModal'
 import SaveDiscardModal from '@/components/SaveDiscardModal'
+import ConversationDetailModal from '@/components/ConversationDetailModal'
 
 // Types
 interface Conversation {
@@ -25,14 +80,9 @@ interface Conversation {
   updated_at?: string
 }
 
-interface ConversationPreview {
-  conversation: Conversation
-  isExpanded: boolean
-}
-
 function TalkToYourDiaryPage() {
   const [voiceEnabled, setVoiceEnabled] = useState(true)
-  const [conversations, setConversations] = useState<ConversationPreview[]>([])
+  const [conversations, setConversations] = useState<Conversation[]>([])
   const [isChatModalOpen, setIsChatModalOpen] = useState(false)
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false)
   const [currentTranscription, setCurrentTranscription] = useState('')
@@ -43,6 +93,17 @@ function TalkToYourDiaryPage() {
     searchQueries: string[]
   } | null>(null)
   const [loading, setLoading] = useState(false)
+  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [conversationToDelete, setConversationToDelete] = useState<Conversation | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const pageSize = 6 // Show 6 conversations per page
+  
   const { toast } = useToast()
 
   // Helper function to ensure toast content is valid (same as NewEntryPage)
@@ -95,15 +156,30 @@ function TalkToYourDiaryPage() {
     setLoading(true)
     try {
       const response = await api.getConversations()
-      if (response.success && response.data && response.data.conversations) {
-        const conversationPreviews = response.data.conversations.map(conv => ({
-          conversation: conv,
-          isExpanded: false
-        }))
-        setConversations(conversationPreviews)
+      console.log('API Response:', response) // Debug log
+      
+      if (response.success && response.data) {
+        console.log('Response data:', response.data) // Debug log
+        
+        // Handle nested response structure from SuccessResponse
+        const conversationsData = response.data.data || response.data
+        
+        if (conversationsData && conversationsData.conversations) {
+          console.log('Conversations found:', conversationsData.conversations.length) // Debug log
+          setConversations(conversationsData.conversations)
+          // Calculate total pages
+          const total = conversationsData.total || conversationsData.conversations.length
+          setTotalPages(Math.ceil(total / pageSize))
+        } else {
+          console.log('No conversations field in response, conversationsData:', conversationsData) // Debug log
+          setConversations([])
+          setTotalPages(1)
+        }
       } else {
+        console.log('Response not successful or no data') // Debug log
         // No conversations yet or empty response
         setConversations([])
+        setTotalPages(1)
       }
     } catch (error) {
       console.error('Failed to load conversations:', error)
@@ -192,6 +268,7 @@ function TalkToYourDiaryPage() {
   }
 
   const handleDeleteConversation = async (id: number) => {
+    setDeleting(true)
     try {
       await api.deleteConversation(id)
       safeToast({
@@ -205,13 +282,22 @@ function TalkToYourDiaryPage() {
         title: 'Failed to delete conversation',
         description: 'Please try again'
       })
+    } finally {
+      setDeleting(false)
+      setShowDeleteDialog(false)
+      setConversationToDelete(null)
     }
   }
 
-  const toggleConversationExpand = (index: number) => {
-    setConversations(prev => prev.map((conv, i) => 
-      i === index ? { ...conv, isExpanded: !conv.isExpanded } : conv
-    ))
+  const confirmDelete = (conversation: Conversation, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setConversationToDelete(conversation)
+    setShowDeleteDialog(true)
+  }
+
+  const openConversationDetail = (conversation: Conversation) => {
+    setSelectedConversation(conversation)
+    setIsDetailModalOpen(true)
   }
 
   const formatDuration = (seconds: number) => {
@@ -221,15 +307,47 @@ function TalkToYourDiaryPage() {
   }
 
   const getConversationPreview = (transcription: string) => {
+    // Extract first few messages for preview
     const lines = transcription.split('\n')
-    const preview = lines.slice(0, 3).join('\n')
-    return preview.length > 150 ? preview.substring(0, 150) + '...' : preview
+    const messages = lines.filter(line => line.match(/^\[.*\]\s(You|Echo):/))
+    const preview = messages.slice(0, 2).map(msg => {
+      const match = msg.match(/^\[.*\]\s(You|Echo):\s(.*)$/)
+      if (match) {
+        const [, speaker, content] = match
+        return `${speaker}: ${content}`
+      }
+      return msg
+    }).join(' → ')
+    
+    return preview.length > 120 ? preview.substring(0, 120) + '...' : preview
+  }
+
+  const exportConversation = (conversation: Conversation, e: React.MouseEvent) => {
+    e.stopPropagation()
+    const date = new Date(conversation.timestamp)
+    const dateStr = format(date, 'yyyy-MM-dd')
+    const filename = `conversation-${dateStr}.txt`
+    
+    const blob = new Blob([conversation.transcription], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  // Get paginated conversations
+  const getPaginatedConversations = () => {
+    const startIndex = (currentPage - 1) * pageSize
+    const endIndex = startIndex + pageSize
+    return conversations.slice(startIndex, endIndex)
   }
 
   return (
     <div className="max-w-7xl mx-auto p-8">
-      <h2 className="text-2xl font-bold mb-6">Talk to Your Diary</h2>
-      
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left Card - Talk to Echo */}
         <motion.div
@@ -237,88 +355,27 @@ function TalkToYourDiaryPage() {
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.3 }}
         >
-          <Card className="bg-card/50 backdrop-blur-sm border-border/50 h-[600px] flex flex-col">
+          <Card className="bg-card/50 backdrop-blur-sm border-border/50 h-[700px] flex flex-col">
             <CardHeader className="pb-2">
-              <div className="flex items-center gap-2">
-                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
-                  <MessageSquare className="h-4 w-4 text-white" />
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+                    <MessageSquare className="h-4 w-4 text-white" />
+                  </div>
+                  <div className="min-w-0">
+                    <CardTitle className="text-lg text-white">Talk to Echo</CardTitle>
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <CardTitle className="text-lg text-white">Talk to Echo</CardTitle>
-                  <p className="text-gray-400 text-sm">
-                    Your AI diary companion
-                  </p>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="flex-1 flex flex-col items-center justify-center gap-6">
-              {/* Animated Echo Icon */}
-              <motion.div
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ duration: 0.5, delay: 0.2 }}
-                className="relative"
-              >
-                <motion.div
-                  animate={{ 
-                    scale: [1, 1.05, 1]
-                  }}
-                  transition={{ 
-                    duration: 3, 
-                    repeat: Infinity, 
-                    ease: "easeInOut" 
-                  }}
-                  className="w-20 h-20 rounded-full bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center border border-primary/30"
-                >
-                  <Mic className="h-8 w-8 text-primary" />
-                </motion.div>
-                {/* Breathing glow effect */}
-                <motion.div
-                  animate={{ 
-                    opacity: [0.2, 0.8, 0.2],
-                    scale: [1, 1.2, 1]
-                  }}
-                  transition={{ 
-                    duration: 4, 
-                    repeat: Infinity,
-                    ease: "easeInOut"
-                  }}
-                  className="absolute inset-0 rounded-full bg-primary/20 blur-xl"
-                />
-                {/* Secondary outer glow */}
-                <motion.div
-                  animate={{ 
-                    opacity: [0.1, 0.4, 0.1],
-                    scale: [1.2, 1.5, 1.2]
-                  }}
-                  transition={{ 
-                    duration: 5, 
-                    repeat: Infinity,
-                    ease: "easeInOut",
-                    delay: 1
-                  }}
-                  className="absolute inset-0 rounded-full bg-primary/10 blur-2xl"
-                />
-              </motion.div>
-              
-              <div className="text-center space-y-4">
-                <motion.p 
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.4 }}
-                  className="text-gray-400 max-w-sm"
-                >
-                  Share your thoughts, explore memories, and reflect with your personal AI companion.
-                </motion.p>
                 
+                {/* Voice Toggle in Header */}
                 <motion.div 
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.6 }}
-                  className="flex items-center justify-center gap-3"
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.3 }}
+                  className="flex items-center gap-3 mt-1"
                 >
                   <Label htmlFor="voice-toggle" className="text-sm font-medium text-gray-300">
-                    Voice responses
+                    Voice
                   </Label>
                   <Switch
                     id="voice-toggle"
@@ -327,6 +384,93 @@ function TalkToYourDiaryPage() {
                   />
                   <Volume2 className={`h-4 w-4 ${voiceEnabled ? 'text-primary' : 'text-muted-foreground'}`} />
                 </motion.div>
+              </div>
+            </CardHeader>
+            <CardContent className="flex-1 flex flex-col items-center justify-center relative overflow-hidden">
+              {/* Background decorative elements */}
+              <div className="absolute inset-4 opacity-20">
+                <motion.div
+                  animate={{ 
+                    x: [0, 60, 0],
+                    y: [0, -30, 0]
+                  }}
+                  transition={{ 
+                    duration: 20, 
+                    repeat: Infinity, 
+                    ease: "linear" 
+                  }}
+                  className="absolute top-10 left-10 w-4 h-4 bg-primary/30 rounded-full blur-sm"
+                />
+                <motion.div
+                  animate={{ 
+                    x: [0, -40, 0],
+                    y: [0, 30, 0]
+                  }}
+                  transition={{ 
+                    duration: 15, 
+                    repeat: Infinity, 
+                    ease: "linear" 
+                  }}
+                  className="absolute top-32 right-16 w-2 h-2 bg-secondary/40 rounded-full blur-sm"
+                />
+                <motion.div
+                  animate={{ 
+                    x: [0, 30, 0],
+                    y: [0, -20, 0]
+                  }}
+                  transition={{ 
+                    duration: 25, 
+                    repeat: Infinity, 
+                    ease: "linear" 
+                  }}
+                  className="absolute bottom-20 left-20 w-3 h-3 bg-primary/20 rounded-full blur-sm"
+                />
+              </div>
+
+              <div className="flex flex-col items-center gap-6 -translate-y-8">
+                {/* Animated Echo Icon */}
+                <motion.div
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ duration: 0.5, delay: 0.2 }}
+                  className="relative cursor-pointer"
+                  onClick={handleStartChat}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <motion.div
+                    animate={{ 
+                      scale: [1, 1.05, 1]
+                    }}
+                    transition={{ 
+                      duration: 3, 
+                      repeat: Infinity, 
+                      ease: "easeInOut" 
+                    }}
+                    className="w-20 h-20 rounded-full bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center border border-primary/30"
+                  >
+                    <Mic className="h-8 w-8 text-primary" />
+                  </motion.div>
+                  {/* Subtle breathing glow effect */}
+                  <motion.div
+                    animate={{ 
+                      opacity: [0.1, 0.3, 0.1],
+                      scale: [1, 1.1, 1]
+                    }}
+                    transition={{ 
+                      duration: 4, 
+                      repeat: Infinity,
+                      ease: "easeInOut"
+                    }}
+                    className="absolute inset-0 rounded-full bg-primary/20 blur-lg"
+                  />
+                </motion.div>
+                
+                <TypewriterText 
+                  text="A quiet space... for your loud thoughts"
+                  delay={0.4}
+                  className="text-gray-400 text-center max-w-sm"
+                />
               </div>
 
               <motion.div
@@ -342,7 +486,6 @@ function TalkToYourDiaryPage() {
                 >
                   <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                   <span className="relative z-10 flex items-center font-medium">
-                    <Mic className="h-5 w-5 mr-2" />
                     Start Conversation
                   </span>
                 </button>
@@ -357,7 +500,7 @@ function TalkToYourDiaryPage() {
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.3, delay: 0.1 }}
         >
-          <Card className="bg-card/50 backdrop-blur-sm border-border/50 h-[600px] flex flex-col">
+          <Card className="bg-card/50 backdrop-blur-sm border-border/50 h-[700px] flex flex-col">
             <CardHeader className="pb-2">
               <div className="flex items-center gap-2">
                 <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-green-500 to-teal-600 flex items-center justify-center flex-shrink-0">
@@ -371,7 +514,7 @@ function TalkToYourDiaryPage() {
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="flex-1 overflow-hidden p-4">
+            <CardContent className="flex-1 overflow-hidden p-4 flex flex-col">
               {loading ? (
                 <div className="flex items-center justify-center h-full">
                   <motion.div
@@ -398,72 +541,123 @@ function TalkToYourDiaryPage() {
                   </div>
                 </div>
               ) : (
-                <div className="h-full overflow-y-auto pr-2 space-y-2">
-                  <AnimatePresence>
-                    {conversations.map((conv, index) => (
-                      <motion.div
-                        key={conv.conversation.id}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        transition={{ delay: index * 0.05 }}
-                        whileHover={{ y: -2 }}
-                      >
-                        <Card 
-                          className={`cursor-pointer transition-all duration-200 hover:shadow-md ${
-                            conv.isExpanded ? 'ring-2 ring-primary/50 bg-primary/5' : 'hover:bg-muted/30'
-                          }`}
-                          onClick={() => toggleConversationExpand(index)}
+                <>
+                  <div className="flex-1 overflow-y-auto pr-2 space-y-3 pl-1 pt-1">
+                    <AnimatePresence mode="wait">
+                      {getPaginatedConversations().map((conv, index) => (
+                        <motion.div
+                          key={conv.id}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -10 }}
+                          transition={{ delay: index * 0.05 }}
                         >
-                          <CardContent className="p-3">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-2">
-                                <Badge variant="secondary" className="text-xs px-2 py-0.5">
-                                  Chat
-                                </Badge>
-                                <span className="text-xs text-gray-400">
-                                  {format(new Date(conv.conversation.timestamp), 'MMM d, h:mm a')}
+                          <Card 
+                            className="cursor-pointer transition-all duration-200 hover:shadow-lg hover:bg-muted/30 group relative overflow-hidden"
+                            onClick={() => {
+                              openConversationDetail(conv)
+                            }}
+                          >
+                            {/* Shimmer effect */}
+                            <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/10 to-transparent group-hover:translate-x-full transition-transform duration-700" />
+                            
+                            <CardContent className="p-3 relative">
+                              <div className="flex items-start justify-between mb-2">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-sm font-semibold text-white">
+                                      <span className="text-primary">{format(new Date(conv.timestamp), 'EEEE')}</span>
+                                      <span className="text-white">, </span>
+                                      <span className="text-muted-foreground">{format(new Date(conv.timestamp), 'MMMM d, yyyy')}</span>
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2 mb-1 text-muted-foreground">
+                                    <Clock className="h-3 w-3" />
+                                    <span className="text-xs">{format(new Date(conv.timestamp), 'h:mm a')}</span>
+                                  </div>
+                                  <p className="text-sm text-white leading-relaxed line-clamp-2">
+                                    {getConversationPreview(conv.transcription)}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-1 ml-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={(e) => exportConversation(conv, e)}
+                                    className="h-8 w-8 p-0 text-blue-300 drop-shadow-[0_0_4px_rgba(147,197,253,0.6)] hover:bg-blue-500/20 hover:text-blue-400 hover:drop-shadow-[0_0_6px_rgba(96,165,250,0.8)]"
+                                    title="Export conversation"
+                                  >
+                                    <Download className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={(e) => confirmDelete(conv, e)}
+                                    className="h-8 w-8 p-0 text-blue-300 drop-shadow-[0_0_4px_rgba(147,197,253,0.6)] hover:bg-red-500/20 hover:text-red-400 hover:drop-shadow-[0_0_6px_rgba(248,113,113,0.8)]"
+                                    title="Delete conversation"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-center justify-between mt-2">
+                                <div className="flex items-center gap-2">
+                                  <Badge className="bg-green-500/10 text-green-400 border-green-500/20 text-xs">
+                                    {formatDuration(conv.duration)}
+                                  </Badge>
+                                  <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20 text-xs">
+                                    {conv.message_count} messages
+                                  </Badge>
+                                  {conv.search_queries_used.length > 0 && (
+                                    <Badge className="bg-purple-500/10 text-purple-400 border-purple-500/20 text-xs">
+                                      {conv.search_queries_used.length} searches
+                                    </Badge>
+                                  )}
+                                </div>
+                                <span className="text-muted-foreground text-xs">
+                                  {Math.round(conv.transcription.length / 5)} words
                                 </span>
                               </div>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6 hover:bg-destructive/20 hover:text-destructive"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  handleDeleteConversation(conv.conversation.id)
-                                }}
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            </div>
-                            
-                            <p className="text-sm text-gray-300 mb-2 line-clamp-2">
-                              {conv.isExpanded 
-                                ? conv.conversation.transcription
-                                : getConversationPreview(conv.conversation.transcription)
-                              }
-                            </p>
-                            
-                            <div className="flex items-center gap-3 text-xs text-gray-500">
-                              <span className="flex items-center gap-1">
-                                ⏱️ {formatDuration(conv.conversation.duration)}
-                              </span>
-                              <span className="flex items-center gap-1">
-                                💬 {conv.conversation.message_count}
-                              </span>
-                              {conv.conversation.search_queries_used.length > 0 && (
-                                <span className="flex items-center gap-1">
-                                  🔍 {conv.conversation.search_queries_used.length}
-                                </span>
-                              )}
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </motion.div>
-                    ))}
-                  </AnimatePresence>
-                </div>
+                            </CardContent>
+                          </Card>
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
+                  </div>
+
+                  {/* Pagination */}
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-between pt-4 border-t border-border flex-shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                        disabled={currentPage === 1}
+                        className="flex items-center gap-2 bg-card border border-border text-yellow-400 hover:bg-card/80 hover:text-yellow-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                        Previous
+                      </Button>
+                      
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <span>Page {currentPage} of {totalPages}</span>
+                        <span className="text-xs">({conversations.length} total)</span>
+                      </div>
+                      
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                        disabled={currentPage === totalPages}
+                        className="flex items-center gap-2 bg-card border border-border text-yellow-400 hover:bg-card/80 hover:text-yellow-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Next
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>
@@ -489,6 +683,87 @@ function TalkToYourDiaryPage() {
         duration={conversationToSave?.duration || 0}
         messageCount={conversationToSave?.messageCount || 0}
       />
+
+      {/* Conversation Detail Modal */}
+      <ConversationDetailModal
+        isOpen={isDetailModalOpen}
+        onClose={() => {
+          setIsDetailModalOpen(false)
+          setSelectedConversation(null)
+        }}
+        conversation={selectedConversation}
+        onDelete={async (id) => {
+          await handleDeleteConversation(id)
+          setIsDetailModalOpen(false)
+          setSelectedConversation(null)
+        }}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <AnimatePresence>
+        {showDeleteDialog && conversationToDelete && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+            onClick={() => setShowDeleteDialog(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              className="w-full max-w-md bg-card border border-border rounded-lg shadow-2xl p-6"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="flex items-center justify-center w-12 h-12 bg-red-500/20 rounded-full">
+                  <Trash2 className="h-6 w-6 text-red-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Delete Conversation</h3>
+                  <p className="text-sm text-muted-foreground">This action cannot be undone</p>
+                </div>
+              </div>
+              
+              <p className="text-white mb-6">
+                Are you sure you want to delete this conversation from{' '}
+                <span className="font-medium text-primary">
+                  {format(new Date(conversationToDelete.timestamp), 'EEEE, MMMM d, yyyy')}
+                </span>?
+              </p>
+              
+              <div className="flex justify-end gap-3">
+                <Button
+                  variant="ghost"
+                  onClick={() => setShowDeleteDialog(false)}
+                  className="text-white hover:bg-muted/50"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => handleDeleteConversation(conversationToDelete.id)}
+                  disabled={deleting}
+                  className="bg-red-600 text-white hover:bg-red-700 border-red-600 hover:border-red-700"
+                >
+                  {deleting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete Conversation
+                    </>
+                  )}
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

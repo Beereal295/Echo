@@ -53,7 +53,14 @@ class ConversationRepository:
         params.extend([limit, offset])
         
         rows = await db.fetch_all(query, tuple(params))
-        return [Conversation.from_dict(row) for row in rows]
+        conversations = []
+        for row in rows:
+            # Handle None values in search_queries_used
+            row_dict = dict(row)
+            if row_dict.get('search_queries_used') is None:
+                row_dict['search_queries_used'] = '[]'
+            conversations.append(Conversation.from_dict(row_dict))
+        return conversations
     
     @staticmethod
     async def update(

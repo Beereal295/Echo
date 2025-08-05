@@ -59,16 +59,42 @@ class Conversation:
     @classmethod
     def from_dict(cls, data: dict):
         """Create Conversation from database row"""
-        # Parse JSON fields
-        if data.get("search_queries_used"):
-            data["search_queries_used"] = json.loads(data["search_queries_used"])
-        
-        # Parse datetime fields
-        if data.get("timestamp"):
-            data["timestamp"] = datetime.fromisoformat(data["timestamp"])
-        if data.get("created_at"):
-            data["created_at"] = datetime.fromisoformat(data["created_at"])
-        if data.get("updated_at"):
-            data["updated_at"] = datetime.fromisoformat(data["updated_at"])
-        
-        return cls(**data)
+        try:
+            # Parse JSON fields
+            if data.get("search_queries_used"):
+                try:
+                    data["search_queries_used"] = json.loads(data["search_queries_used"])
+                except (json.JSONDecodeError, TypeError):
+                    data["search_queries_used"] = []
+            else:
+                data["search_queries_used"] = []
+            
+            # Parse datetime fields
+            if data.get("timestamp"):
+                try:
+                    data["timestamp"] = datetime.fromisoformat(data["timestamp"])
+                except (ValueError, TypeError):
+                    data["timestamp"] = datetime.now()
+            
+            if data.get("created_at"):
+                try:
+                    data["created_at"] = datetime.fromisoformat(data["created_at"])
+                except (ValueError, TypeError):
+                    data["created_at"] = datetime.now()
+            
+            if data.get("updated_at"):
+                try:
+                    data["updated_at"] = datetime.fromisoformat(data["updated_at"])
+                except (ValueError, TypeError):
+                    data["updated_at"] = None
+            
+            return cls(**data)
+        except Exception:
+            # Return a default conversation if parsing fails
+            return cls(
+                id=data.get("id"),
+                transcription=data.get("transcription", ""),
+                conversation_type=data.get("conversation_type", "chat"),
+                duration=data.get("duration", 0),
+                message_count=data.get("message_count", 0)
+            )

@@ -54,6 +54,12 @@ class ConversationResponse(BaseModel):
     updated_at: Optional[str] = Field(None, description="Last update timestamp")
 
 
+class ConversationListResponse(BaseModel):
+    """Response model for conversation list."""
+    conversations: List[ConversationResponse] = Field(..., description="List of conversations")
+    total: int = Field(..., description="Total number of conversations")
+
+
 class ConversationStatsResponse(BaseModel):
     """Response model for conversation statistics."""
     total_conversations: int = Field(..., description="Total number of conversations")
@@ -128,7 +134,7 @@ async def create_conversation(request: ConversationCreateRequest):
         )
 
 
-@router.get("", response_model=SuccessResponse[List[ConversationResponse]])
+@router.get("", response_model=SuccessResponse[ConversationListResponse])
 async def get_conversations(
     limit: int = Query(50, ge=1, le=200, description="Maximum number of conversations to return"),
     offset: int = Query(0, ge=0, description="Number of conversations to skip"),
@@ -159,22 +165,29 @@ async def get_conversations(
         # Convert to response format
         response_data = []
         for conv in conversations:
-            response_data.append(ConversationResponse(
-                id=conv.id,
-                timestamp=conv.timestamp.isoformat(),
-                duration=conv.duration,
-                transcription=conv.transcription,
-                conversation_type=conv.conversation_type,
-                message_count=conv.message_count,
-                search_queries_used=conv.search_queries_used,
-                created_at=conv.created_at.isoformat(),
-                updated_at=conv.updated_at.isoformat() if conv.updated_at else None
-            ))
+            try:
+                response_data.append(ConversationResponse(
+                    id=conv.id,
+                    timestamp=conv.timestamp.isoformat() if conv.timestamp else datetime.now().isoformat(),
+                    duration=conv.duration or 0,
+                    transcription=conv.transcription or "",
+                    conversation_type=conv.conversation_type or "chat",
+                    message_count=conv.message_count or 0,
+                    search_queries_used=conv.search_queries_used or [],
+                    created_at=conv.created_at.isoformat() if conv.created_at else datetime.now().isoformat(),
+                    updated_at=conv.updated_at.isoformat() if conv.updated_at else None
+                ))
+            except Exception:
+                # Skip problematic conversations silently
+                continue
         
         return SuccessResponse(
             success=True,
             message=f"Retrieved {len(response_data)} conversations",
-            data=response_data
+            data=ConversationListResponse(
+                conversations=response_data,
+                total=len(response_data)
+            )
         )
         
     except Exception as e:

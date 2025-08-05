@@ -9,6 +9,64 @@ import { useSTT } from '@/hooks/useSTT'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useToast } from '@/components/ui/use-toast'
 
+// Typewriter Text Component for chat messages
+interface TypewriterTextProps {
+  text: string
+  isActive: boolean
+  className?: string
+  onComplete?: () => void
+}
+
+function TypewriterText({ text, isActive, className = '', onComplete }: TypewriterTextProps) {
+  const [displayedText, setDisplayedText] = useState('')
+  const [currentIndex, setCurrentIndex] = useState(0)
+
+  useEffect(() => {
+    if (!isActive) {
+      setDisplayedText(text)
+      setCurrentIndex(text.length)
+      return
+    }
+
+    if (currentIndex < text.length) {
+      const timer = setTimeout(() => {
+        setDisplayedText(text.slice(0, currentIndex + 1))
+        setCurrentIndex(currentIndex + 1)
+      }, 25) // Faster than the main card (25ms vs 80ms)
+
+      return () => clearTimeout(timer)
+    } else if (onComplete && currentIndex === text.length) {
+      onComplete()
+    }
+  }, [currentIndex, text, isActive, onComplete])
+
+  // Reset when text changes
+  useEffect(() => {
+    if (isActive) {
+      setDisplayedText('')
+      setCurrentIndex(0)
+    } else {
+      setDisplayedText(text)
+      setCurrentIndex(text.length)
+    }
+  }, [text, isActive])
+
+  return (
+    <span className={className}>
+      {displayedText}
+      {isActive && currentIndex < text.length && (
+        <motion.span
+          animate={{ opacity: [1, 0] }}
+          transition={{ duration: 0.8, repeat: Infinity }}
+          className="text-primary"
+        >
+          |
+        </motion.span>
+      )}
+    </span>
+  )
+}
+
 interface ChatMessage {
   id: number
   role: 'user' | 'assistant'
@@ -444,34 +502,14 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
 
         setMessages(prev => [...prev, aiMessage])
         
-        // Simulate streaming text effect
-        let currentText = ''
-        const words = responseText.split(' ')
-        let wordIndex = 0
-
-        const streamInterval = setInterval(() => {
-          if (wordIndex < words.length) {
-            currentText += (wordIndex > 0 ? ' ' : '') + words[wordIndex]
-            setMessages(prev => prev.map(msg => 
-              msg.id === aiMessage.id 
-                ? { ...msg, content: currentText }
-                : msg
-            ))
-            wordIndex++
-          } else {
-            clearInterval(streamInterval)
-            setMessages(prev => prev.map(msg => 
-              msg.id === aiMessage.id 
-                ? { ...msg, isStreaming: false }
-                : msg
-            ))
-            
-            // Play audio after streaming is complete if voice is enabled
-            if (voiceEnabled && ttsInitialized) {
-              playAudioForMessage(responseText)
-            }
-          }
-        }, 50) // Adjust speed as needed
+        // Play audio after message is added if voice is enabled
+        // We'll let the typewriter animation handle the display
+        if (voiceEnabled && ttsInitialized) {
+          // Delay audio to let typewriter finish
+          setTimeout(() => {
+            playAudioForMessage(responseText)
+          }, responseText.length * 25) // Match typewriter speed
+        }
 
       } else {
         console.error('Response not successful or missing data:', response)
@@ -558,8 +596,8 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
                 <Send className="h-4 w-4 text-white" />
               </div>
               <div>
-                <h2 className="text-xl font-semibold text-white">Chat with Echo</h2>
-                <p className="text-sm text-gray-400">Your AI diary companion</p>
+                <h2 className="text-xl font-semibold text-white">Talk to Echo</h2>
+                <p className="text-sm text-gray-400">Your AI journal companion</p>
               </div>
             </div>
             <div className="flex items-center gap-4">
@@ -577,11 +615,11 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={handleClose}
-                className="h-8 w-8 p-0 text-blue-300 drop-shadow-[0_0_4px_rgba(147,197,253,0.6)] hover:bg-muted/50 hover:text-white hover:drop-shadow-[0_0_6px_rgba(255,255,255,0.6)]"
+                onClick={handleEndChat}
+                className="h-10 w-10 p-0 text-blue-300 drop-shadow-[0_0_4px_rgba(147,197,253,0.6)] hover:bg-muted/50 hover:text-white hover:drop-shadow-[0_0_6px_rgba(255,255,255,0.6)]"
                 title="Close"
               >
-                <X className="h-4 w-4" />
+                <X className="h-5 w-5" />
               </Button>
             </div>
           </div>
@@ -599,13 +637,26 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
                   <div
                     className={`max-w-[70%] px-4 py-2 rounded-lg ${
                       message.role === 'user'
-                        ? 'bg-secondary/20 border border-secondary/30 text-secondary-foreground'
+                        ? 'bg-gradient-to-br from-blue-500/20 to-cyan-500/20 border border-blue-500/30 text-white'
                         : 'bg-gradient-to-br from-purple-500/20 to-pink-500/20 border border-purple-500/30 text-white'
                     }`}
                   >
                     <p className="text-sm whitespace-pre-wrap">
-                      {message.content}
-                      {message.isStreaming && <span className="animate-pulse">▊</span>}
+                      {message.role === 'assistant' && message.isStreaming ? (
+                        <TypewriterText 
+                          text={message.content} 
+                          isActive={true}
+                          onComplete={() => {
+                            setMessages(prev => prev.map(msg => 
+                              msg.id === message.id 
+                                ? { ...msg, isStreaming: false }
+                                : msg
+                            ))
+                          }}
+                        />
+                      ) : (
+                        message.content
+                      )}
                     </p>
                   </div>
                 </div>
@@ -644,7 +695,7 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
                 onKeyPress={handleKeyPress}
                 placeholder="Type your message or use the mic..."
                 disabled={isProcessing || isRecording || isTranscribing}
-                className="flex-1"
+                className="flex-1 h-12 px-4"
               />
               <button
                 onClick={isRecording ? handleStopRecording : handleStartRecording}
@@ -689,18 +740,6 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
             )}
           </div>
 
-          {/* End Chat Button */}
-          <div className="border-t border-border/50 px-6 py-4">
-            <button
-              onClick={handleEndChat}
-              className="relative overflow-hidden group px-8 py-3 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 w-full"
-            >
-              <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-              <span className="relative z-10 flex items-center font-medium">
-                End Chat
-              </span>
-            </button>
-          </div>
         </div>
       </motion.div>
     </motion.div>
