@@ -341,6 +341,15 @@ class HotkeyService:
             'stt_service_available': self.stt_service is not None
         }
     
+    def reset_recording_state(self):
+        """Reset the recording state without stopping the service"""
+        try:
+            with self.recording_lock:
+                self.is_recording = False
+                logger.info("Hotkey service recording state reset to idle")
+        except Exception as e:
+            logger.error(f"Error resetting hotkey recording state: {e}")
+    
     def cleanup(self):
         """Clean up the hotkey service"""
         try:

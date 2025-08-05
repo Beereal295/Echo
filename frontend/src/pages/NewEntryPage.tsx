@@ -334,18 +334,70 @@ function NewEntryPage() {
                              !error.trim()
       
       if (!shouldSkipError) {
-        // Remove focus from any active element to prevent focus ring on toast
-        if (document.activeElement && document.activeElement !== document.body) {
-          (document.activeElement as HTMLElement).blur()
-        }
-        setTimeout(() => {
+        // Attempt automatic pipeline recovery
+        console.log('Attempting automatic recording pipeline recovery...')
+        
+        // Reset recording state and clear any stuck states
+        setRecordingState(RecordingState.IDLE)
+        setRecordingSource(null)
+        isStartingRef.current = false
+        
+        // Try to reinitialize the WebSocket connection and reset server-side recording
+        setTimeout(async () => {
+          try {
+            if (!wsClient.isConnected()) {
+              console.log('Reconnecting WebSocket for pipeline recovery...')
+              await wsClient.connect()
+              if (wsClient.isConnected()) {
+                wsClient.subscribeToChannels(['stt', 'recording', 'transcription'])
+                // Reset server-side recording session
+                wsClient.resetRecording()
+                console.log('Pipeline recovery successful - WebSocket reconnected and server reset')
+                
+                // Show recovery success message instead of error
+                setTimeout(() => {
+                  if (document.activeElement && document.activeElement !== document.body) {
+                    (document.activeElement as HTMLElement).blur()
+                  }
+                  safeToast({
+                    title: "🔄 Recording recovered",
+                    description: "Pipeline automatically restored. You can record again.",
+                  })
+                }, 10)
+                return
+              }
+            } else {
+              // WebSocket is connected, reset server-side recording and channels
+              wsClient.resetRecording()
+              wsClient.subscribeToChannels(['stt', 'recording', 'transcription'])
+              
+              setTimeout(() => {
+                if (document.activeElement && document.activeElement !== document.body) {
+                  (document.activeElement as HTMLElement).blur()
+                }
+                safeToast({
+                  title: "🔄 Recording recovered",
+                  description: "Pipeline automatically restored. You can record again.",
+                })
+              }, 10)
+              return
+            }
+          } catch (recoveryError) {
+            console.error('Pipeline recovery failed:', recoveryError)
+          }
+          
+          // If recovery failed, show the original error
+          if (document.activeElement && document.activeElement !== document.body) {
+            (document.activeElement as HTMLElement).blur()
+          }
           safeToast({
             title: "❌ Recording failed",
             description: error.trim() || "An unknown error occurred",
           })
-        }, 10) // Small delay to ensure blur takes effect
+        }, 100)
+      } else {
+        setRecordingState(RecordingState.IDLE)
       }
-      setRecordingState(RecordingState.IDLE)
     })
 
     // Load current preferences (hotkey and auto-save)
@@ -765,22 +817,57 @@ function NewEntryPage() {
   const startRecording = async () => {
     // Only proceed if we're truly idle and not already starting
     if (isStartingRef.current || recordingState !== RecordingState.IDLE) {
+      console.log('Start recording blocked - already in progress or not idle:', { 
+        isStarting: isStartingRef.current, 
+        currentState: recordingState 
+      })
       return
     }
     
     // Check actual WebSocket connection state
     if (!wsClient.isConnected()) {
-      safeToast({
-        title: "Connection Error",
-        description: "Please ensure connection is established",
-        variant: "destructive"
-      })
-      return
+      console.log('WebSocket not connected, attempting recovery...')
+      try {
+        await wsClient.connect()
+        if (wsClient.isConnected()) {
+          wsClient.subscribeToChannels(['stt', 'recording', 'transcription'])
+          console.log('WebSocket reconnected successfully')
+        } else {
+          throw new Error('Failed to reconnect')
+        }
+      } catch (error) {
+        safeToast({
+          title: "Connection Error",
+          description: "Please ensure connection is established",
+          variant: "destructive"
+        })
+        return
+      }
     }
     
     isStartingRef.current = true
-    // Don't reset the flag immediately - let the state change handler reset it
+    console.log('Starting recording...')
+    
+    // Add timeout to prevent stuck states
+    const startTimeout = setTimeout(() => {
+      if (isStartingRef.current && recordingState === RecordingState.IDLE) {
+        console.log('Recording start timeout - resetting state')
+        isStartingRef.current = false
+        setRecordingState(RecordingState.IDLE)
+      }
+    }, 5000) // 5 second timeout
+    
+    // Clear timeout when state changes (handled in state change handler)
+    const originalRef = isStartingRef.current
+    
     wsClient.startRecording()
+    
+    // Auto-clear timeout if state changes quickly
+    setTimeout(() => {
+      if (originalRef === isStartingRef.current && recordingState !== RecordingState.IDLE) {
+        clearTimeout(startTimeout)
+      }
+    }, 1000)
   }
 
   const stopRecording = () => {

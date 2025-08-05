@@ -168,6 +168,50 @@ class AudioCapture:
             logger.error(f"Failed to convert audio to numpy: {e}")
             return None
     
+    def force_reset(self):
+        """Force reset audio system - use when stuck"""
+        try:
+            logger.info("Force resetting audio system...")
+            
+            # Force stop recording
+            self.is_recording = False
+            
+            # Close stream if exists
+            if self.stream:
+                try:
+                    if not self.stream.is_stopped():
+                        self.stream.stop_stream()
+                    self.stream.close()
+                except Exception as e:
+                    logger.warning(f"Error closing stream during reset: {e}")
+                finally:
+                    self.stream = None
+            
+            # Wait for recording thread to finish
+            if self.recording_thread and self.recording_thread.is_alive():
+                self.recording_thread.join(timeout=1.0)
+            
+            # Clear data
+            self.audio_data = []
+            
+            # Recreate PyAudio instance
+            if self.audio:
+                try:
+                    self.audio.terminate()
+                except Exception as e:
+                    logger.warning(f"Error terminating PyAudio during reset: {e}")
+            
+            # Reinitialize
+            self.audio = pyaudio.PyAudio()
+            self._detect_native_sample_rate()
+            
+            logger.info(f"Audio system force reset complete - Native rate: {self.native_sample_rate}Hz")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Force reset failed: {e}")
+            return False
+
     def cleanup(self):
         """Clean up audio resources"""
         if self.is_recording:

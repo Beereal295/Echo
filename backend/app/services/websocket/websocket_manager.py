@@ -201,6 +201,51 @@ class WebSocketManager:
                         )
                     )
         
+        elif command == "reset_recording":
+            # Reset recording pipeline - force reset to idle state
+            logger.info("Received reset_recording command - performing pipeline reset")
+            if self.stt_service:
+                try:
+                    # Force reset the entire audio system - this should fix stuck audio streams
+                    if hasattr(self.stt_service, 'force_reset_audio'):
+                        self.stt_service.force_reset_audio()
+                        logger.info("STT audio system force reset completed")
+                    else:
+                        # Fallback to regular cancel
+                        self.stt_service.cancel_recording()
+                        logger.info("STT recording cancelled and state reset to idle")
+                    
+                    # Also reset hotkey service state
+                    if self.hotkey_service and hasattr(self.hotkey_service, 'reset_recording_state'):
+                        self.hotkey_service.reset_recording_state()
+                        logger.info("Hotkey service recording state also reset")
+                    
+                    # Clear session tracking
+                    self.current_recording_session = None
+                    self.recording_start_time = None
+                    
+                    # Send confirmation back to client
+                    success_message = create_state_message(
+                        state="idle",
+                        session_id=connection.session_id,
+                        additional_data={
+                            "message": "Recording pipeline reset successfully",
+                            "reset_completed": True
+                        }
+                    )
+                    await connection.send_message(success_message)
+                    logger.info("Reset recording command completed successfully")
+                    
+                except Exception as e:
+                    logger.error(f"Failed to reset recording pipeline: {e}")
+                    await connection.send_message(
+                        create_error_message(
+                            error=f"Failed to reset recording pipeline: {str(e)}",
+                            error_type="reset_error",
+                            session_id=connection.session_id
+                        )
+                    )
+        
         elif command == "subscribe":
             # Subscribe to additional channels
             channels = parameters.get("channels", [])

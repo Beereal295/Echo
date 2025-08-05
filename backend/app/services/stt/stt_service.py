@@ -257,6 +257,28 @@ class STTService:
             logger.error(f"Failed to cancel recording: {e}")
             return False
     
+    def force_reset_audio(self) -> bool:
+        """Force reset the entire audio system - use when stuck"""
+        try:
+            logger.info("STT Service: Force resetting audio system...")
+            
+            # Cancel any recording first
+            self.cancel_recording()
+            
+            # Force reset audio capture system
+            success = self.audio_capture.force_reset()
+            
+            if success:
+                logger.info("STT Service: Audio system force reset successful")
+            else:
+                logger.error("STT Service: Audio system force reset failed")
+            
+            return success
+            
+        except Exception as e:
+            logger.error(f"STT Service: Force reset failed: {e}")
+            return False
+    
     def save_last_recording(self, filepath: str) -> bool:
         """Save last recorded audio to file"""
         if not self.current_session or not self.current_session.get("audio_data"):

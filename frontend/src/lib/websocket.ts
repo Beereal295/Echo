@@ -189,6 +189,10 @@ class WebSocketClient {
     this.sendCommand('stop_recording')
   }
 
+  resetRecording(): void {
+    this.sendCommand('reset_recording')
+  }
+
   subscribeToChannels(channels: string[]): void {
     this.sendCommand('subscribe', { channels })
   }
