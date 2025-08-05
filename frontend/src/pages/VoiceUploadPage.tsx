@@ -103,6 +103,7 @@ function VoiceUploadPage() {
   const [transcriptionProgress, setTranscriptionProgress] = useState(0)
   const [currentLoadingMessage, setCurrentLoadingMessage] = useState('')
   const [createdEntries, setCreatedEntries] = useState<CreatedEntries | null>(null)
+  const [processingMetadata, setProcessingMetadata] = useState<any>(null)
   const [showModal, setShowModal] = useState(false)
   const [showResults, setShowResults] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -321,6 +322,7 @@ function VoiceUploadPage() {
     setTranscriptionResult(null)
     setEditedTranscription('')
     setCreatedEntries(null)
+    setProcessingMetadata(null)
     
     // Create audio URL for preview
     if (audioUrl) {
@@ -356,6 +358,7 @@ function VoiceUploadPage() {
     setTranscriptionResult(null)
     setEditedTranscription('')
     setCreatedEntries(null)
+    setProcessingMetadata(null)
     
     // Create audio URL for preview
     if (audioUrl) {
@@ -463,6 +466,7 @@ function VoiceUploadPage() {
     
     // Clear current results and hide existing cards
     setCreatedEntries(null)
+    setProcessingMetadata(null)
     setShowResults(false)
     
     // Small delay to ensure UI updates before showing loading
@@ -479,6 +483,17 @@ function VoiceUploadPage() {
       if (response.success && response.data) {
         const { results, raw_text } = response.data
         
+        // Extract processing metadata with priority: structured > enhanced > raw
+        let metadata = null
+        if (results.structured?.processing_metadata) {
+          metadata = results.structured.processing_metadata
+        } else if (results.enhanced?.processing_metadata) {
+          metadata = results.enhanced.processing_metadata
+        } else if (results.raw?.processing_metadata) {
+          metadata = results.raw.processing_metadata
+        }
+        
+        setProcessingMetadata(metadata)
         setCreatedEntries({
           raw: {
             id: 0,
@@ -523,12 +538,13 @@ function VoiceUploadPage() {
     if (!createdEntries) return
 
     try {
-      // Save entry to database with all three texts (same logic as NewEntryPage)
+      // Save entry to database with all three texts and processing metadata
       const response = await api.createEntryWithAllTexts(
         createdEntries.raw.raw_text,
         createdEntries.enhanced?.enhanced_text,
         createdEntries.structured?.structured_summary,
-        'raw'
+        'raw',
+        processingMetadata
       )
 
       if (response.success && response.data) {
@@ -560,6 +576,7 @@ function VoiceUploadPage() {
         setTranscriptionResult(null)
         setEditedTranscription('')
         setCreatedEntries(null)
+    setProcessingMetadata(null)
         setShowModal(false)
         setShowResults(false)
         setShowTranscriptionCard(false)
@@ -1218,6 +1235,7 @@ function VoiceUploadPage() {
                   onClick={() => {
                     // Clear processed results and go back to raw transcription state
                     setCreatedEntries(null)
+    setProcessingMetadata(null)
                     setShowResults(false)
                     setShowModal(true)
                   }}
@@ -1259,6 +1277,7 @@ function VoiceUploadPage() {
                     setTranscriptionResult(null)
                     setEditedTranscription('')
                     setCreatedEntries(null)
+    setProcessingMetadata(null)
                     setShowModal(false)
                     setShowResults(false)
                     setShowTranscriptionCard(false)

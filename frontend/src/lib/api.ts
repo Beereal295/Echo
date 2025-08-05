@@ -111,7 +111,8 @@ class ApiClient {
     rawText: string,
     enhancedText?: string,
     structuredSummary?: string,
-    mode: string = 'raw'
+    mode: string = 'raw',
+    processingMetadata?: any
   ): Promise<ApiResponse<Entry>> {
     return this.request<Entry>('/entries/', {
       method: 'POST',
@@ -119,7 +120,8 @@ class ApiClient {
         raw_text: rawText,
         enhanced_text: enhancedText,
         structured_summary: structuredSummary,
-        mode
+        mode,
+        processing_metadata: processingMetadata
       })
     })
   }

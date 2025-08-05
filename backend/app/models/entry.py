@@ -23,8 +23,7 @@ class Entry:
             self.timestamp = datetime.now()
         if self.mood_tags is None:
             self.mood_tags = []
-        if self.processing_metadata is None:
-            self.processing_metadata = {}
+        # Don't automatically set processing_metadata to {} - keep it as None if not provided
         if self.word_count == 0 and self.raw_text:
             self.word_count = len(self.raw_text.split())
     
@@ -46,8 +45,9 @@ class Entry:
     def update_processing_metadata(self, new_metadata: dict):
         """Update processing metadata while preserving existing data"""
         if self.processing_metadata is None:
-            self.processing_metadata = {}
-        self.processing_metadata.update(new_metadata)
+            self.processing_metadata = new_metadata.copy()
+        else:
+            self.processing_metadata.update(new_metadata)
     
     @classmethod
     def from_dict(cls, data: dict):

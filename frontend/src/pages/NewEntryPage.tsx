@@ -84,6 +84,7 @@ function NewEntryPage() {
   const [recordingState, setRecordingState] = useState(RecordingState.IDLE)
   const [isProcessing, setIsProcessing] = useState(false)
   const [createdEntries, setCreatedEntries] = useState<CreatedEntries | null>(null)
+  const [processingMetadata, setProcessingMetadata] = useState<any>(null)
   const [currentHotkey, setCurrentHotkey] = useState('F8')
   const [isConnected, setIsConnected] = useState(false)
   const [processingJobId, setProcessingJobId] = useState<string | null>(null)
@@ -799,6 +800,7 @@ function NewEntryPage() {
     setIsProcessing(true)
     setRecordingState(RecordingState.ENHANCING)
     setCreatedEntries(null)
+    setProcessingMetadata(null)
     
     try {
       // Process text only (no database operations)
@@ -809,6 +811,18 @@ function NewEntryPage() {
       
       if (response.success && response.data) {
         const { results, raw_text } = response.data
+        
+        // Extract processing metadata with priority: structured > enhanced > raw
+        let metadata = null
+        if (results.structured?.processing_metadata) {
+          metadata = results.structured.processing_metadata
+        } else if (results.enhanced?.processing_metadata) {
+          metadata = results.enhanced.processing_metadata
+        } else if (results.raw?.processing_metadata) {
+          metadata = results.raw.processing_metadata
+        }
+        
+        setProcessingMetadata(metadata)
         
         // Store processed results in state for display
         console.log('Processing results:', results)  // Debug log
@@ -1011,6 +1025,7 @@ function NewEntryPage() {
     // Reset all state
     setText('')
     setCreatedEntries(null)
+    setProcessingMetadata(null)
     setIsProcessing(false)
     setProcessingJobId(null)
     setRecordingState(RecordingState.IDLE)
@@ -1038,6 +1053,7 @@ function NewEntryPage() {
     const originalText = createdEntries?.raw?.raw_text || ''
     setText(originalText)
     setCreatedEntries(null)
+    setProcessingMetadata(null)
     setIsProcessing(false)
     setProcessingJobId(null)
     setRecordingState(RecordingState.IDLE)
@@ -1086,12 +1102,13 @@ function NewEntryPage() {
     if (!createdEntries) return
     
     try {
-      // Save entry to database with all three texts (same logic as before)
+      // Save entry to database with all three texts and processing metadata
       const response = await api.createEntryWithAllTexts(
         createdEntries.raw.raw_text,
         createdEntries.enhanced?.enhanced_text,
         createdEntries.structured?.structured_summary,
-        'raw'
+        'raw',
+        processingMetadata
       )
       
       if (response.success && response.data) {
