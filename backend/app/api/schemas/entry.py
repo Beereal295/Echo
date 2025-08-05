@@ -9,6 +9,8 @@ class EntryCreate(BaseModel):
     enhanced_text: Optional[str] = Field(None, description="Enhanced version of the text")
     structured_summary: Optional[str] = Field(None, description="Structured summary of the text")
     mode: str = Field(default="raw", description="Processing mode")
+    custom_timestamp: Optional[datetime] = Field(None, description="Custom timestamp for the entry (for backfilling)")
+    processing_metadata: Optional[dict] = Field(None, description="Processing metadata from AI processing")
     
     class Config:
         json_schema_extra = {

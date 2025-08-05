@@ -104,7 +104,7 @@ class WhisperService:
             logger.error(f"Transcription failed: {e}")
             return None
     
-    def transcribe_file(self, file_path: str) -> Optional[Dict[str, Any]]:
+    async def transcribe_file(self, file_path: str) -> Optional[Dict[str, Any]]:
         """Transcribe audio file using Whisper"""
         if not self._load_model():
             logger.error("Whisper model not available")

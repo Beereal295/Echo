@@ -13,7 +13,8 @@ from app.api.routes import (
     patterns_router,
     tts_router,
     conversations_router,
-    diary_chat_router
+    diary_chat_router,
+    audio_router
 )
 from app.core.config import settings
 
@@ -34,3 +35,4 @@ api_router.include_router(patterns_router)
 api_router.include_router(tts_router)
 api_router.include_router(conversations_router)
 api_router.include_router(diary_chat_router)
+api_router.include_router(audio_router)

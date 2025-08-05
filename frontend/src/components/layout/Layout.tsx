@@ -19,7 +19,8 @@ import {
   Flame,
   Sparkles,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  FileAudio2
 } from 'lucide-react'
 import { api } from '@/lib/api'
 
@@ -97,6 +98,12 @@ function Layout({ children }: LayoutProps) {
       label: 'New Entry',
       alwaysShow: true,
       gradient: true
+    },
+    {
+      path: '/voice-upload',
+      icon: FileAudio2,
+      label: 'Voice Upload',
+      alwaysShow: true
     },
     {
       path: '/entries',

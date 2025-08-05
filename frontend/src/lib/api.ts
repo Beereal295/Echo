@@ -61,7 +61,9 @@ class ApiClient {
   ): Promise<ApiResponse<T>> {
     const url = `${this.baseUrl}${endpoint}`
     
-    const defaultHeaders = {
+    // Don't set Content-Type for FormData - let browser handle it
+    const isFormData = options.body instanceof FormData
+    const defaultHeaders = isFormData ? {} : {
       'Content-Type': 'application/json',
     }
 
@@ -573,6 +575,19 @@ class ApiClient {
   async initializeTTS(): Promise<ApiResponse<any>> {
     return this.request('/tts/initialize', {
       method: 'POST'
+    })
+  }
+
+  // Audio upload and transcription
+  async uploadAndTranscribeAudio(formData: FormData): Promise<ApiResponse<{
+    transcription: string
+    duration?: number
+    confidence?: number
+  }>> {
+    return this.request('/audio/transcribe', {
+      method: 'POST',
+      body: formData,
+      headers: {} // Let browser set Content-Type for FormData
     })
   }
 }

@@ -4,7 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
-import { Mic, MicOff, Loader2, Keyboard, CheckCircle, Plus, FileText, Pen, BookOpen, Sparkles, Edit3, Save, X, Star, Lightbulb } from 'lucide-react'
+import { Calendar as CalendarComponent } from '@/components/ui/calendar'
+import { Mic, MicOff, Loader2, Keyboard, CheckCircle, Plus, FileText, Pen, BookOpen, Sparkles, Edit3, Save, X, Star, Lightbulb, Calendar, Clock, AlertCircle } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
 import { motion, AnimatePresence } from 'framer-motion'
 import { api } from '@/lib/api'
@@ -99,6 +100,42 @@ function NewEntryPage() {
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null)
   
+  // Backfill modal state
+  const [showBackfillModal, setShowBackfillModal] = useState(false)
+  const [backfillDate, setBackfillDate] = useState(() => {
+    const today = new Date()
+    return today.toISOString().split('T')[0] // YYYY-MM-DD format
+  })
+  const [backfillHour, setBackfillHour] = useState(() => {
+    const now = new Date()
+    let hour = now.getHours()
+    return hour === 0 ? 12 : hour > 12 ? hour - 12 : hour
+  })
+  const [backfillMinute, setBackfillMinute] = useState(() => {
+    return new Date().getMinutes()
+  })
+  const [backfillAmPm, setBackfillAmPm] = useState<'AM' | 'PM'>(() => {
+    return new Date().getHours() >= 12 ? 'PM' : 'AM'
+  })
+  const [showBackfillCalendar, setShowBackfillCalendar] = useState(false)
+  
+  // Temporary state for calendar popup (before Apply)
+  const [tempDate, setTempDate] = useState(() => {
+    const today = new Date()
+    return today.toISOString().split('T')[0] // YYYY-MM-DD format
+  })
+  const [tempHour, setTempHour] = useState(() => {
+    const now = new Date()
+    let hour = now.getHours()
+    return hour === 0 ? 12 : hour > 12 ? hour - 12 : hour
+  })
+  const [tempMinute, setTempMinute] = useState(() => {
+    return new Date().getMinutes()
+  })
+  const [tempAmPm, setTempAmPm] = useState<'AM' | 'PM'>(() => {
+    return new Date().getHours() >= 12 ? 'PM' : 'AM'
+  })
+  
   // New state for UI flow
   const [showInputUI, setShowInputUI] = useState(true)
   const [showResults, setShowResults] = useState(false)
@@ -124,6 +161,62 @@ function NewEntryPage() {
       ...params,
       duration: 2000 // 2 seconds for quick dismissal
     })
+  }
+
+  // Helper functions for time conversion and validation
+  const convertTo24Hour = (hour: number, minute: number, amPm: 'AM' | 'PM'): string => {
+    let hour24 = hour
+    if (amPm === 'AM' && hour === 12) {
+      hour24 = 0
+    } else if (amPm === 'PM' && hour !== 12) {
+      hour24 = hour + 12
+    }
+    return `${hour24.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
+  }
+
+  const getFormattedTime = (): string => {
+    return convertTo24Hour(backfillHour, backfillMinute, backfillAmPm)
+  }
+
+  // Check if selected date/time is in the future
+  const isSelectedTimeFuture = (): boolean => {
+    if (!backfillDate) return false
+    const selectedDateTime = new Date(`${backfillDate}T${getFormattedTime()}`)
+    return selectedDateTime > new Date()
+  }
+  
+  // Check if temp date/time is in the future (for popup validation)
+  const isTempTimeFuture = (): boolean => {
+    if (!tempDate) return false
+    const tempTime = convertTo24Hour(tempHour, tempMinute, tempAmPm)
+    const selectedDateTime = new Date(`${tempDate}T${tempTime}`)
+    return selectedDateTime > new Date()
+  }
+
+  // Check if selected date is today
+  const isSelectedDateToday = (): boolean => {
+    if (!backfillDate) return false
+    const selectedDate = new Date(backfillDate)
+    const today = new Date()
+    return selectedDate.toDateString() === today.toDateString()
+  }
+
+  // Funny error messages for future time validation
+  const futureTimeMessages = [
+    "Whoa there, Doc Brown. No journaling from the future. Pick a time that's already happened.",
+    "Unless you've got a working time machine, try selecting a past time, not a prophecy.",
+    "Future entries are how sci-fi thrillers start. Let's not.",
+    "Echo can't read the future... yet. Pick a time you've actually lived, mystic.",
+    "Future time selected. Plot twist: you haven't done that yet. Try again.",
+    "Nice try, Nostradamus. But Echo only reflects on what has been, not what will be.",
+    "Unless you're journaling from a wormhole, select a time that exists.",
+    "Back to the past, buddy. Echo doesn't support premonitions... yet.",
+    "Time machines are sold separately. Please enter something from the actual timeline."
+  ]
+
+  // Get random funny error message
+  const getRandomFutureTimeMessage = (): string => {
+    return futureTimeMessages[Math.floor(Math.random() * futureTimeMessages.length)]
   }
 
   // Reset state when navigating back to /new (sidebar click)
@@ -239,6 +332,19 @@ function NewEntryPage() {
       }
     }
   }, [toast])
+
+  // Close backfill calendar when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element
+      if (showBackfillCalendar && !target.closest('.backfill-calendar-container')) {
+        setShowBackfillCalendar(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showBackfillCalendar])
 
   // Listen for F8 hotkey press events (HOLD to record)
   useEffect(() => {
@@ -705,6 +811,7 @@ function NewEntryPage() {
         const { results, raw_text } = response.data
         
         // Store processed results in state for display
+        console.log('Processing results:', results)  // Debug log
         setCreatedEntries({
           raw: {
             id: 0, // Temporary ID since not in database yet
@@ -1481,6 +1588,25 @@ function NewEntryPage() {
                   Start Over
                 </span>
               </motion.button>
+
+              {/* Choose Date & Time Button */}
+              <motion.button
+                onClick={() => {
+                  setShowBackfillModal(true)
+                }}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.6 }}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="relative overflow-hidden group px-6 py-4 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-blue-500/10 border border-blue-500/20 text-blue-400 hover:bg-blue-500/20 hover:text-blue-300"
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-blue-400/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                <span className="relative z-10 font-semibold transition-colors duration-300 flex items-center">
+                  <Calendar className="mr-2 h-5 w-5" />
+                  Choose Date & Time
+                </span>
+              </motion.button>
             </div>
           </motion.div>
         )}
@@ -1562,6 +1688,233 @@ function NewEntryPage() {
                     Save Changes
                   </button>
                 </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Backfill Entry Modal */}
+      <AnimatePresence>
+        {showBackfillModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => {
+              setShowBackfillModal(false)
+              setShowBackfillCalendar(false)
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.3 }}
+              className="bg-card/90 backdrop-blur-xl border border-border/50 rounded-2xl shadow-2xl max-w-md w-full"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between p-6 border-b border-border/50">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
+                    <Calendar className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-white">
+                      Backfill Entry
+                    </h3>
+                    <p className="text-sm text-gray-400">
+                      Choose a date and time for this entry
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowBackfillModal(false)
+                    setShowBackfillCalendar(false)
+                  }}
+                  className="p-2 rounded-full hover:bg-muted/50 transition-colors"
+                >
+                  <X className="h-5 w-5 text-gray-400" />
+                </button>
+              </div>
+              
+              {/* Content */}
+              <div className="p-6">
+                <div className="space-y-4">
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-blue-400" />
+                      <div className="relative flex-1 backfill-calendar-container">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            // Reset temp values to current main values when opening
+                            setTempDate(backfillDate)
+                            setTempHour(backfillHour)
+                            setTempMinute(backfillMinute)
+                            setTempAmPm(backfillAmPm)
+                            setShowBackfillCalendar(!showBackfillCalendar)
+                          }}
+                          className="w-full bg-background/50 border border-border rounded-lg px-3 py-2 text-white text-sm text-left hover:bg-background/70 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200"
+                        >
+                          {backfillDate ? new Date(`${backfillDate}T${getFormattedTime()}`).toLocaleString('en-US', {
+                            weekday: 'short',
+                            year: 'numeric',
+                            month: 'short', 
+                            day: 'numeric',
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            hour12: true
+                          }) : 'Select date and time'}
+                        </button>
+                        {showBackfillCalendar && (
+                          <>
+                            {/* Background blur overlay */}
+                            <div 
+                              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[99]"
+                              onClick={() => setShowBackfillCalendar(false)}
+                            />
+                            {/* Calendar popup - positioned to avoid clipping */}
+                            <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[100] min-w-[320px]">
+                              <div className="bg-card/95 backdrop-blur-xl border border-border/70 rounded-lg shadow-2xl p-4">
+                                <CalendarComponent
+                                  selected={tempDate}
+                                  maxDate={new Date()}
+                                  onSelect={(date) => {
+                                    setTempDate(date)
+                                    // Don't auto-close - let user set time too
+                                  }}
+                                  className="shadow-lg border border-border/50"
+                                />
+                                {/* Time picker */}
+                                <div className="mt-4 space-y-3">
+                                  <div className="flex items-center gap-3">
+                                    <Clock className="h-4 w-4 text-purple-400" />
+                                    <div className="flex items-center gap-2">
+                                      {/* Hour Input */}
+                                      <input
+                                        type="number"
+                                        min="1"
+                                        max="12"
+                                        value={tempHour}
+                                        onChange={(e) => {
+                                          const hour = parseInt(e.target.value) || 1
+                                          if (hour >= 1 && hour <= 12) {
+                                            setTempHour(hour)
+                                          }
+                                        }}
+                                        className="w-16 px-3 py-2 bg-background/70 border border-border/70 rounded-lg text-white text-sm text-center focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 hover:bg-background/80 transition-colors"
+                                      />
+                                      
+                                      <span className="text-white">:</span>
+                                      
+                                      {/* Minute Input */}
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        max="59"
+                                        value={tempMinute.toString().padStart(2, '0')}
+                                        onChange={(e) => {
+                                          const minute = parseInt(e.target.value) || 0
+                                          if (minute >= 0 && minute <= 59) {
+                                            setTempMinute(minute)
+                                          }
+                                        }}
+                                        className="w-16 px-3 py-2 bg-background/70 border border-border/70 rounded-lg text-white text-sm text-center focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 hover:bg-background/80 transition-colors"
+                                      />
+                                      
+                                      {/* AM/PM Toggle */}
+                                      <button
+                                        type="button"
+                                        onClick={() => setTempAmPm(tempAmPm === 'AM' ? 'PM' : 'AM')}
+                                        className="ml-2 px-3 py-2 bg-gradient-to-br from-blue-500 to-purple-600 text-white text-sm font-medium rounded-lg hover:from-blue-600 hover:to-purple-700 transition-all duration-200 hover:scale-105 shadow-md"
+                                      >
+                                        {tempAmPm}
+                                      </button>
+                                    </div>
+                                  </div>
+                                  {/* Validation Error */}
+                                  <AnimatePresence>
+                                    {isTempTimeFuture() && (
+                                      <motion.div
+                                        initial={{ opacity: 0, height: 0, marginTop: 0 }}
+                                        animate={{ opacity: 1, height: "auto", marginTop: 12 }}
+                                        exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                                        transition={{ duration: 0.3, ease: "easeInOut" }}
+                                        className="overflow-hidden"
+                                      >
+                                        <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 flex items-start gap-2">
+                                          <AlertCircle className="h-4 w-4 text-red-400 flex-shrink-0 mt-0.5" />
+                                          <p className="text-red-400 text-xs leading-relaxed">
+                                            {getRandomFutureTimeMessage()}
+                                          </p>
+                                        </div>
+                                      </motion.div>
+                                    )}
+                                  </AnimatePresence>
+                                  
+                                  {/* Apply button */}
+                                  <Button
+                                    onClick={() => {
+                                      if (!isTempTimeFuture()) {
+                                        // Apply temp values to main state
+                                        setBackfillDate(tempDate)
+                                        setBackfillHour(tempHour)
+                                        setBackfillMinute(tempMinute)
+                                        setBackfillAmPm(tempAmPm)
+                                        setShowBackfillCalendar(false)
+                                      }
+                                    }}
+                                    disabled={isTempTimeFuture()}
+                                    className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white border-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    Apply
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <p className="text-xs text-gray-400">
+                    Entry will be saved with the selected date/time to maintain your diary timeline
+                  </p>
+                </div>
+              </div>
+              
+              {/* Footer */}
+              <div className="flex items-center justify-between p-6 border-t border-border/50">
+                <button
+                  onClick={() => {
+                    setShowBackfillModal(false)
+                    setShowBackfillCalendar(false)
+                  }}
+                  className="px-6 py-2 rounded-lg border border-border/50 text-gray-400 hover:bg-muted/50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    if (!isSelectedTimeFuture()) {
+                      setShowBackfillModal(false)
+                      setShowBackfillCalendar(false)
+                    }
+                  }}
+                  disabled={!backfillDate || isSelectedTimeFuture()}
+                  className="relative overflow-hidden group px-8 py-3 rounded-md font-medium shadow-md hover:shadow-lg hover:scale-[1.02] transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  <span className="relative z-10 text-primary font-medium group-hover:text-primary transition-colors duration-300">
+                    Save
+                  </span>
+                </button>
               </div>
             </motion.div>
           </motion.div>

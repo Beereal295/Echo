@@ -85,8 +85,9 @@ async def create_entry(entry_data: EntryCreate, background_tasks: BackgroundTask
             enhanced_text=entry_data.enhanced_text,
             structured_summary=entry_data.structured_summary,
             mode=mode_str,
-            timestamp=datetime.now(),
-            word_count=len(entry_data.raw_text.split())
+            timestamp=entry_data.custom_timestamp if entry_data.custom_timestamp else datetime.now(),
+            word_count=len(entry_data.raw_text.split()),
+            processing_metadata=entry_data.processing_metadata if entry_data.processing_metadata else None
         )
         
         # Save to database first
@@ -358,7 +359,7 @@ async def create_and_process_entry(
 ):
     """Create a new entry and queue it for processing in specified modes"""
     try:
-        # Create raw entry first
+        # Create raw entry first - processing metadata will be added by processing pipeline
         entry = Entry(
             raw_text=request.raw_text,
             mode="raw",

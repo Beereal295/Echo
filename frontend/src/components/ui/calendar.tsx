@@ -12,6 +12,7 @@ import {
   subMonths, 
   isSameMonth, 
   isSameDay,
+  isAfter,
   parseISO 
 } from 'date-fns'
 
@@ -20,9 +21,10 @@ interface CalendarProps {
   onSelect: (date: string) => void
   disabled?: boolean
   className?: string
+  maxDate?: Date
 }
 
-export function Calendar({ selected, onSelect, disabled = false, className = '' }: CalendarProps) {
+export function Calendar({ selected, onSelect, disabled = false, className = '', maxDate }: CalendarProps) {
   const [currentMonth, setCurrentMonth] = useState(() => {
     if (selected) {
       try {
@@ -64,16 +66,19 @@ export function Calendar({ selected, onSelect, disabled = false, className = '' 
         const isCurrentMonth = isSameMonth(day, monthStart)
         const isSelected = selectedDate && isSameDay(day, selectedDate)
         const isToday = isSameDay(day, new Date())
+        const isFutureDate = maxDate && isAfter(day, maxDate)
 
         days.push(
           <button
             key={day.toString()}
-            onClick={() => !disabled && onSelect(format(cloneDay, 'yyyy-MM-dd'))}
-            disabled={disabled || !isCurrentMonth}
+            onClick={() => !disabled && !isFutureDate && onSelect(format(cloneDay, 'yyyy-MM-dd'))}
+            disabled={disabled || !isCurrentMonth || isFutureDate}
             className={`
               h-9 w-9 text-sm rounded-md flex items-center justify-center transition-all duration-200 font-medium
               ${!isCurrentMonth 
                 ? 'text-muted-foreground/20 cursor-not-allowed' 
+                : isFutureDate
+                ? 'text-muted-foreground/40 cursor-not-allowed opacity-50'
                 : 'text-white hover:bg-muted/60 cursor-pointer hover:scale-105'
               }
               ${isSelected 
@@ -84,7 +89,7 @@ export function Calendar({ selected, onSelect, disabled = false, className = '' 
                 ? 'bg-muted/40 border-2 border-purple-400 font-bold text-purple-400' 
                 : ''
               }
-              ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
+              ${disabled || isFutureDate ? 'opacity-50 cursor-not-allowed' : ''}
             `}
           >
             {formattedDate}

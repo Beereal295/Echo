@@ -3,6 +3,7 @@ import { Toaster } from '@/components/ui/toaster'
 import Layout from '@/components/layout/Layout'
 import HomePage from '@/pages/HomePage'
 import NewEntryPage from '@/pages/NewEntryPage'
+import VoiceUploadPage from '@/pages/VoiceUploadPage'
 import ViewEntriesPage from '@/pages/ViewEntriesPage'
 import TalkToYourDiaryPage from '@/pages/TalkToYourDiaryPage'
 import PatternInsightsPage from '@/pages/PatternInsightsPage'
@@ -15,6 +16,7 @@ function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/new" element={<NewEntryPage />} />
+          <Route path="/voice-upload" element={<VoiceUploadPage />} />
           <Route path="/entries" element={<ViewEntriesPage />} />
           <Route path="/talk" element={<TalkToYourDiaryPage />} />
           <Route path="/patterns" element={<PatternInsightsPage />} />
