@@ -355,7 +355,12 @@ function NewEntryPage() {
                 console.log('Pipeline recovery successful - WebSocket reconnected and server reset')
                 
                 // Show recovery success message instead of error
+                // Force blur immediately and with longer delay
+                if (document.activeElement && document.activeElement !== document.body) {
+                  (document.activeElement as HTMLElement).blur()
+                }
                 setTimeout(() => {
+                  // Blur again before showing toast
                   if (document.activeElement && document.activeElement !== document.body) {
                     (document.activeElement as HTMLElement).blur()
                   }
@@ -363,7 +368,7 @@ function NewEntryPage() {
                     title: "🔄 Recording recovered",
                     description: "Pipeline automatically restored. You can record again.",
                   })
-                }, 10)
+                }, 50)
                 return
               }
             } else {
@@ -371,7 +376,12 @@ function NewEntryPage() {
               wsClient.resetRecording()
               wsClient.subscribeToChannels(['stt', 'recording', 'transcription'])
               
+              // Force blur immediately and with longer delay
+              if (document.activeElement && document.activeElement !== document.body) {
+                (document.activeElement as HTMLElement).blur()
+              }
               setTimeout(() => {
+                // Blur again before showing toast
                 if (document.activeElement && document.activeElement !== document.body) {
                   (document.activeElement as HTMLElement).blur()
                 }
@@ -379,7 +389,7 @@ function NewEntryPage() {
                   title: "🔄 Recording recovered",
                   description: "Pipeline automatically restored. You can record again.",
                 })
-              }, 10)
+              }, 50)
               return
             }
           } catch (recoveryError) {

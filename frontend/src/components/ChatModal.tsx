@@ -253,7 +253,12 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
                 console.log('Pipeline recovery successful - WebSocket reconnected and server reset')
                 
                 // Show recovery success message instead of error
+                // Force blur immediately and with longer delay
+                if (document.activeElement && document.activeElement !== document.body) {
+                  (document.activeElement as HTMLElement).blur()
+                }
                 setTimeout(() => {
+                  // Blur again before showing toast
                   if (document.activeElement && document.activeElement !== document.body) {
                     (document.activeElement as HTMLElement).blur()
                   }
@@ -261,7 +266,7 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
                     title: "🔄 Recording recovered",
                     description: "Pipeline automatically restored. You can record again.",
                   })
-                }, 10)
+                }, 50)
                 return
               }
             } else {
@@ -269,7 +274,12 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
               wsClient.resetRecording()
               wsClient.subscribeToChannels(['stt', 'recording', 'transcription'])
               
+              // Force blur immediately and with longer delay
+              if (document.activeElement && document.activeElement !== document.body) {
+                (document.activeElement as HTMLElement).blur()
+              }
               setTimeout(() => {
+                // Blur again before showing toast
                 if (document.activeElement && document.activeElement !== document.body) {
                   (document.activeElement as HTMLElement).blur()
                 }
@@ -277,7 +287,7 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
                   title: "🔄 Recording recovered",
                   description: "Pipeline automatically restored. You can record again.",
                 })
-              }, 10)
+              }, 50)
               return
             }
           } catch (recoveryError) {
@@ -346,13 +356,23 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
     }
   }, [currentHotkey, recordingState])
 
-  // Initialize modal with greeting
+  // Initialize modal without immediate greeting
   useEffect(() => {
     if (isOpen) {
-      initializeChat()
+      setStartTime(new Date())
       if (voiceEnabled) {
         initializeTTS()
       }
+      
+      // Set up delayed greeting - only show if user hasn't sent anything in 10 seconds
+      const greetingTimer = setTimeout(() => {
+        // Only show greeting if no messages have been sent yet
+        if (messages.length === 0) {
+          initializeChat()
+        }
+      }, 10000) // 10 seconds
+      
+      return () => clearTimeout(greetingTimer)
     } else {
       // Reset state when modal closes
       setMessages([])
@@ -375,7 +395,7 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
         audioContextRef.current = null
       }
     }
-  }, [isOpen])
+  }, [isOpen, messages.length])
 
   // Initialize TTS when voice is enabled
   useEffect(() => {
@@ -414,7 +434,6 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
 
 
   const initializeChat = async () => {
-    setStartTime(new Date())
     try {
       const response = await api.getDiaryGreeting()
       if (response.success && response.data) {
@@ -427,14 +446,12 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
           id: messageIdCounter.current++,
           role: 'assistant',
           content: greetingText,
-          timestamp: new Date()
+          timestamp: new Date(),
+          isStreaming: true // Enable typewriter animation
         }
         setMessages([greetingMessage])
         
-        // Play greeting if voice is enabled
-        if (voiceEnabled && ttsInitialized) {
-          playAudioForMessage(greetingText)
-        }
+        // TTS will be handled by the TypewriterText onComplete callback
       }
     } catch (error) {
       console.error('Failed to get greeting:', error)
@@ -443,14 +460,12 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
         id: messageIdCounter.current++,
         role: 'assistant',
         content: "Hi! I'm Echo, your diary companion. You can type or use the voice button to talk with me. What's on your mind?",
-        timestamp: new Date()
+        timestamp: new Date(),
+        isStreaming: true // Enable typewriter animation
       }
       setMessages([fallbackGreeting])
       
-      // Play fallback greeting if voice is enabled
-      if (voiceEnabled && ttsInitialized) {
-        playAudioForMessage(fallbackGreeting.content)
-      }
+      // TTS will be handled by the TypewriterText onComplete callback
     }
   }
 
@@ -759,14 +774,7 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
 
         setMessages(prev => [...prev, aiMessage])
         
-        // Play audio after message is added if voice is enabled
-        // We'll let the typewriter animation handle the display
-        if (voiceEnabled && ttsInitialized) {
-          // Delay audio to let typewriter finish
-          setTimeout(() => {
-            playAudioForMessage(responseText)
-          }, responseText.length * 25) // Match typewriter speed
-        }
+        // TTS will be handled by the TypewriterText onComplete callback
 
       } else {
         console.error('Response not successful or missing data:', response)
@@ -843,7 +851,6 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-      onClick={handleClose}
     >
       <motion.div
         initial={{ scale: 0.9, opacity: 0 }}
@@ -915,6 +922,11 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
                                 ? { ...msg, isStreaming: false }
                                 : msg
                             ))
+                            
+                            // Play TTS when typewriter animation completes
+                            if (voiceEnabled && ttsInitialized) {
+                              playAudioForMessage(message.content)
+                            }
                           }}
                         />
                       ) : (

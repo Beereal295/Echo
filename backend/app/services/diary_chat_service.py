@@ -319,16 +319,16 @@ class DiaryChatService:
         
         # AI greeting variants for modal initialization
         self.greeting_variants = [
-            "Hi there! I'm Echo, your diary companion. You can type your thoughts or use the voice button to talk with me. What's on your mind today?",
-            "Hello! Echo here, ready to help you explore your diary. Feel free to type or speak - I'm listening. How can I assist you?",
-            "Hey! I'm Echo, and I'm here to chat about your journal entries. You can write or use voice - whatever feels comfortable. What would you like to discuss?",
-            "Hi! It's Echo, your personal diary AI. Type away or hit the mic button to speak with me. What are you curious about from your entries?",
-            "Hello there! I'm Echo, ready to dive into your diary with you. Use text or voice - I'm here either way. What's something you'd like to explore?",
-            "Hey! Echo at your service, ready to chat about your journal. Type your questions or speak them aloud - I'm all ears. What shall we talk about?",
-            "Hi! I'm Echo, your diary conversation partner. Whether you type or talk, I'm here to help. What memories or thoughts would you like to revisit?",
-            "Hello! Echo here, excited to explore your diary together. Use the keyboard or microphone - both work great. What's something interesting you'd like to find?",
-            "Hey there! I'm Echo, and I love helping you discover insights from your entries. Type or speak your thoughts - I'm ready. What's on your agenda today?",
-            "Hi! It's Echo, your journal AI companion. Feel free to type or use voice input - whatever suits you best. What would you like to uncover from your diary?"
+            "Hi there! I'm Echo. You can type or speak—whatever feels natural. Want to reflect, revisit, or brainstorm something together?",
+            "Hello! Echo here, listening in. Whether you're capturing thoughts or tracking progress, I'm here to help. Ready when you are.",
+            "Hey! I'm Echo. If you've got something on your mind—a thought, a memory, an idea—just type or talk it out. Let's explore.",
+            "Hi! It's Echo. I can help you make sense of your notes, thoughts, or just keep you company while you think aloud.",
+            "Hello there! Echo ready. Whether it's a passing thought or a long reflection, I'm here to connect the dots with you.",
+            "Hey! Echo at your side. Journal entries, random ideas, half-finished plans—whatever it is, I can help you navigate it.",
+            "Hi! I'm Echo. No pressure, no rush. Just speak or type whenever you're ready. I'm here to help you think things through.",
+            "Hello! Echo here. You've got the space, I've got the memory. Share a thought or ask about one—we'll take it from there.",
+            "Hey there! I'm Echo. Whether you're capturing moments or mapping out ideas, I've got your back. What's first on your mind?",
+            "Hi! It's Echo, your thoughtful assistant. Just type or tap the mic to get started. Ready when you are."
         ]
     
     async def _ensure_initialized(self):
