@@ -14,6 +14,8 @@ from sklearn.metrics.pairwise import cosine_similarity
 from app.db.database import db
 from app.services.embedding_service import EmbeddingService
 from app.services.ollama.ollama_service import OllamaService
+from app.db.repositories.preferences_repository import PreferencesRepository
+from app.core.config import settings
 from .pattern_types import Pattern, PatternType
 
 
@@ -345,9 +347,14 @@ Create a specific, descriptive title for this topic pattern. Examples:
 Respond with only the specific topic title (max 8 words). Be precise, not generic."""
 
         try:
+            # Get model and settings from preferences
+            model = await PreferencesRepository.get_value('ollama_model', settings.OLLAMA_DEFAULT_MODEL)
+            temperature = await PreferencesRepository.get_value('ollama_temperature', 0.3)
+            
             response = await self.ollama_service.generate(
                 prompt=prompt,
-                temperature=0.3  # Lower temperature for more consistent output
+                model=model,
+                temperature=temperature
             )
             
             if response and response.response:

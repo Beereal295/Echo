@@ -215,9 +215,39 @@ function NewEntryPage() {
     "Time machines are sold separately. Please enter something from the actual timeline."
   ]
 
+  const reviewTips = [
+    "AI did its best, but it's not a mind reader. Yet.",
+    "Your voice said 'chicken', but the diary thinks you said 'existential crisis'. Double check!",
+    "This entry was transcribed by a sleep-deprived robot. Maybe proofread it?",
+    "Review before you regret—unless you *meant* to write 'fluffy despair'.",
+    "Typos happen. Even AI ones. Give it a look before saving!",
+    "Edit your entry unless you're cool with 'banana thoughts' becoming a theme.",
+    "One small review for you, one giant leap for diary accuracy.",
+    "AI listens well, but it doesn't always *understand*. Like your ex.",
+    "Save responsibly. Your future self will thank you. Or sue you.",
+    "Read twice, save once. Trust issues? Valid.",
+    "If the AI heard 'my cat is the president,' maybe double check before saving.",
+    "Voice-to-text is magical. But even magic needs proofreading.",
+    "If this looks like it was written by a haunted typewriter, maybe give it a once-over.",
+    "Typos have feelings too, but maybe don't let them live in your journal forever.",
+    "It's all fun and games until 'went jogging' becomes 'ate fog king'.",
+    "Just because the AI is confident doesn't mean it's *correct*.",
+    "Echo heard something. It might not be what you said. Check it.",
+    "Avoid future cringe—review your entry like your inner editor is watching.",
+    "If something feels... off, it probably is. Read it again, brave soul.",
+    "Even Shakespeare proofread (probably). Be like Shakespeare. Sort of.",
+    "Echo doesn't judge. But typos do. Silently. Forever.",
+    "Double check now or discover embarrassing poetry later. Your call."
+  ]
+
   // Get random funny error message
   const getRandomFutureTimeMessage = (): string => {
     return futureTimeMessages[Math.floor(Math.random() * futureTimeMessages.length)]
+  }
+
+  // Get random review tip
+  const getRandomReviewTip = (): string => {
+    return reviewTips[Math.floor(Math.random() * reviewTips.length)]
   }
 
   // Reset state when navigating back to /new (sidebar click)
@@ -1250,7 +1280,7 @@ function NewEntryPage() {
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                   placeholder={`Start typing or hold ${currentHotkey} to speak...`}
-                  className="flex-1 resize-none pr-16 text-sm leading-relaxed text-white placeholder:text-gray-400 bg-transparent border-border focus:border-primary/50 transition-colors max-w-none w-full"
+                  className="flex-1 resize-none pr-16 text-sm leading-relaxed text-white placeholder:text-gray-400 bg-transparent border-border focus:border-primary/50 transition-colors max-w-none w-full focus-visible:ring-1 focus-visible:ring-offset-0"
                   disabled={recordingState !== RecordingState.IDLE || isProcessing}
                 />
 
@@ -1439,10 +1469,10 @@ function NewEntryPage() {
                 <Lightbulb className="h-5 w-5 text-yellow-400 flex-shrink-0 mt-0.5 drop-shadow-[0_0_8px_rgba(250,204,21,0.6)] animate-pulse" />
                 <div>
                   <p className="text-sm text-yellow-200 font-medium mb-1">
-                    TIP: Review Before Saving
+                    Review Before Saving
                   </p>
                   <p className="text-xs text-gray-300">
-                    AI can make mistakes and voice processing might transcribe words incorrectly. Please review your entries and edit if needed before adding to your diary.
+                    {getRandomReviewTip()}
                   </p>
                 </div>
               </div>
