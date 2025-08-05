@@ -890,9 +890,16 @@ function SettingsPage() {
                   </div>
 
                   {/* Info message about downloading voices */}
-                  <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 mt-4">
-                    <p className="text-sm text-blue-400">
-                      <strong>Note:</strong> To add more voices, download Piper TTS voice models (.onnx and .onnx.json files) 
+                  <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-500/20 rounded-lg p-3 mt-4">
+                    <p className="text-sm text-purple-300">
+                      <strong>Note:</strong> To add more voices, <a 
+                        href="https://huggingface.co/rhasspy/piper-voices/tree/main/en" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-pink-400 hover:text-pink-300 underline hover:no-underline transition-colors duration-200"
+                      >
+                        download Piper TTS voice models
+                      </a> (.onnx and .onnx.json files) 
                       and place them in the <code className="bg-background/50 px-1 py-0.5 rounded">backend/TTS</code> directory.
                     </p>
                   </div>

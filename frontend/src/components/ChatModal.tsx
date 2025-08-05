@@ -5,7 +5,8 @@ import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { Mic, MicOff, Send, Volume2, X, Loader2 } from 'lucide-react'
 import { api } from '@/lib/api'
-import { useSTT } from '@/hooks/useSTT'
+import { wsClient } from '@/lib/websocket'
+import type { STTState, TranscriptionResult } from '@/lib/websocket'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useToast } from '@/components/ui/use-toast'
 
@@ -113,45 +114,152 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
   const inputRef = useRef<HTMLInputElement>(null)
   const messageIdCounter = useRef(0)
 
-  // STT integration - exact same as NewEntryPage
-  const { 
-    recordingState,
-    startRecording, 
-    stopRecording, 
-    error: sttError,
-    transcription: sttTranscription,
-    isTranscribing,
-    isRecording
-  } = useSTT()
+  // STT state management - exact same as NewEntryPage
+  const RecordingState = {
+    IDLE: 'idle',
+    RECORDING: 'recording',
+    PROCESSING: 'processing',
+    TRANSCRIBING: 'transcribing'
+  }
 
-  // Load hotkey from preferences
-  const [hotkey, setHotkey] = useState('F8')
+  const [recordingState, setRecordingState] = useState(RecordingState.IDLE)
+  const [sttTranscription, setSttTranscription] = useState('')
+  const [sttError, setSttError] = useState<string | null>(null)
+  const [isConnected, setIsConnected] = useState(false)
+  const [recordingSource, setRecordingSource] = useState<'hotkey' | 'button' | null>(null)
+  const isStartingRef = useRef(false)
+
+  // Load hotkey from preferences - exact same as NewEntryPage
+  const [currentHotkey, setCurrentHotkey] = useState('F8')
   
-  useEffect(() => {
-    const loadHotkey = async () => {
-      try {
-        const response = await api.getPreferences()
-        if (response.success && response.data?.preferences) {
-          const hotkeyPref = response.data.preferences.find(p => p.key === 'hotkey')
-          if (hotkeyPref) {
-            setHotkey(hotkeyPref.value)
-          }
+  const loadPreferences = async () => {
+    try {
+      const response = await api.getPreferences()
+      if (response.success && response.data && response.data.preferences) {
+        // Load hotkey preference
+        const hotkey = response.data.preferences.find((pref: any) => pref.key === 'hotkey')
+        if (hotkey && hotkey.typed_value) {
+          setCurrentHotkey(hotkey.typed_value)
         }
-      } catch (error) {
-        console.error('Failed to load hotkey:', error)
       }
+    } catch (error) {
+      console.error('Failed to load preferences:', error)
     }
-    loadHotkey()
+  }
+
+  useEffect(() => {
+    loadPreferences()
   }, [])
 
-  // Listen for hotkey press events (HOLD to record) - same as NewEntryPage
+  // WebSocket connection and STT state management - exact same as NewEntryPage
+  useEffect(() => {
+    const safeToast = (toastProps: any) => {
+      try {
+        toast(toastProps)
+      } catch (error) {
+        console.error('Toast error:', error)
+      }
+    }
+
+    // Subscribe to connection changes first (before connecting)
+    const unsubscribeConnection = wsClient.onConnectionChange((connected) => {
+      console.log('WebSocket connection state changed:', connected)
+      setIsConnected(connected)
+      if (connected) {
+        // Subscribe to STT channels
+        wsClient.subscribeToChannels(['stt', 'recording', 'transcription'])
+      }
+    })
+
+    // Connect to WebSocket with retry logic
+    const connectWithRetry = async () => {
+      try {
+        await wsClient.connect()
+        // Check if connected and update state
+        if (wsClient.isConnected()) {
+          console.log('WebSocket connected successfully')
+          setIsConnected(true)
+          wsClient.subscribeToChannels(['stt', 'recording', 'transcription'])
+        }
+      } catch (error) {
+        console.error('Initial WebSocket connection failed:', error)
+        // Don't show error on initial connection failure - let user trigger manually
+        setIsConnected(false)
+      }
+    }
+    
+    if (isOpen) {
+      connectWithRetry()
+    }
+
+    // Subscribe to state changes
+    const unsubscribeState = wsClient.onStateChange((state: STTState) => {
+      console.log('STT State:', state)
+      // Reset the starting flag when we get any state update from backend
+      isStartingRef.current = false
+      
+      // Map backend states to frontend states
+      if (state.state === 'idle') {
+        setRecordingState(RecordingState.IDLE)
+      } else if (state.state === 'recording') {
+        setRecordingState(RecordingState.RECORDING)
+      } else if (state.state === 'processing') {
+        setRecordingState(RecordingState.PROCESSING)
+      } else if (state.state === 'transcribing') {
+        setRecordingState(RecordingState.TRANSCRIBING)
+      }
+    })
+
+    // Subscribe to transcription results
+    const unsubscribeTranscription = wsClient.onTranscription((result: TranscriptionResult) => {
+      console.log('Transcription result:', result)
+      if (result.text) {
+        setSttTranscription(result.text)
+        setRecordingState(RecordingState.IDLE)
+        // Add the transcribed text to input automatically
+        setInput(prev => prev + (prev ? ' ' : '') + result.text)
+      }
+    })
+
+    // Subscribe to errors
+    const unsubscribeError = wsClient.onError((error: string) => {
+      console.error('WebSocket error:', error)
+      // Only show error for critical errors
+      const shouldSkipError = error.includes('connection') || 
+                             error.includes('WebSocket') || 
+                             error.includes('Cannot start recording in state') ||
+                             error.includes('Failed to start STT recording') ||
+                             !error.trim()
+      
+      if (!shouldSkipError) {
+        setSttError(error.trim() || "An unknown error occurred")
+        safeToast({
+          title: "Recording Error",
+          description: error || "Failed to process speech",
+          variant: "destructive"
+        })
+      }
+      setRecordingState(RecordingState.IDLE)
+    })
+
+    // Cleanup on unmount or when modal closes
+    return () => {
+      unsubscribeConnection()
+      unsubscribeState()
+      unsubscribeTranscription()
+      unsubscribeError()
+    }
+  }, [isOpen, toast])
+
+  // Listen for hotkey press events (HOLD to record) - exact same as NewEntryPage
   useEffect(() => {
     const handleKeyDown = async (e: KeyboardEvent) => {
       // Check if it's the recording hotkey
-      if (e.key === hotkey || e.key.toUpperCase() === hotkey.toUpperCase()) {
-        if (!e.repeat && recordingState === 'idle') {
+      if (e.key === currentHotkey || e.key.toUpperCase() === currentHotkey.toUpperCase()) {
+        if (!e.repeat && recordingState === RecordingState.IDLE) {
           e.preventDefault()
-          await handleStartRecording()
+          setRecordingSource('hotkey')
+          await startRecording()
         } else if (e.repeat) {
           // Prevent repeated key presses while already recording
           e.preventDefault()
@@ -161,10 +269,11 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
 
     const handleKeyUp = (e: KeyboardEvent) => {
       // Check if it's the recording hotkey
-      if (e.key === hotkey || e.key.toUpperCase() === hotkey.toUpperCase()) {
-        if (recordingState === 'recording') {
+      if (e.key === currentHotkey || e.key.toUpperCase() === currentHotkey.toUpperCase()) {
+        if (recordingState === RecordingState.RECORDING) {
           e.preventDefault()
-          handleStopRecording()
+          stopRecording()
+          setRecordingSource(null)
         }
       }
     }
@@ -176,7 +285,7 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [hotkey, recordingState])
+  }, [currentHotkey, recordingState])
 
   // Initialize modal with greeting
   useEffect(() => {
@@ -417,12 +526,60 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
 
 
 
-  const handleStartRecording = () => {
-    startRecording()
+  // Recording functions - exact same as NewEntryPage
+  const startRecording = async () => {
+    // Only proceed if we're truly idle and not already starting
+    if (isStartingRef.current || recordingState !== RecordingState.IDLE) {
+      return
+    }
+    
+    // Check actual WebSocket connection state
+    if (!wsClient.isConnected()) {
+      toast({
+        title: "Connection Error",
+        description: "Please ensure connection is established",
+        variant: "destructive"
+      })
+      return
+    }
+    
+    isStartingRef.current = true
+    // Don't reset the flag immediately - let the state change handler reset it
+    wsClient.startRecording()
   }
 
-  const handleStopRecording = () => {
-    stopRecording()
+  const stopRecording = () => {
+    if (recordingState === RecordingState.RECORDING) {
+      setRecordingState(RecordingState.PROCESSING)
+      wsClient.stopRecording()
+    }
+  }
+
+  const toggleRecording = async () => {
+    if (recordingState === RecordingState.IDLE) {
+      setRecordingSource('button')
+      await startRecording()
+    } else if (recordingState === RecordingState.RECORDING) {
+      stopRecording()
+      setRecordingSource(null)
+    }
+  }
+
+  const getRecordingStatusText = () => {
+    switch (recordingState) {
+      case RecordingState.RECORDING:
+        if (recordingSource === 'hotkey') {
+          return `Recording... Release ${currentHotkey} to stop`
+        } else {
+          return "Recording... Click button to stop"
+        }
+      case RecordingState.PROCESSING:
+        return "Processing audio..."
+      case RecordingState.TRANSCRIBING:
+        return "Transcribing speech..."
+      default:
+        return ""
+    }
   }
 
   const handleSendMessage = async () => {
@@ -686,55 +843,64 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
           )}
 
           {/* Input Area */}
-          <div className="border-t px-6 py-4">
-            <div className="flex items-center gap-2">
-              <Input
+          <div className="border-t px-6 py-2">
+            <div className="relative">
+              {/* Large text input area */}
+              <textarea
                 ref={inputRef}
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="Type your message or use the mic..."
-                disabled={isProcessing || isRecording || isTranscribing}
-                className="flex-1 h-12 px-4"
+                onKeyDown={handleKeyPress}
+                placeholder={`Type your message, use the mic, or hold ${currentHotkey} to record...`}
+                disabled={isProcessing || recordingState !== RecordingState.IDLE}
+                className="w-full h-24 p-4 pr-28 pb-14 resize-none rounded-lg bg-background/50 border border-border text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                rows={3}
               />
-              <button
-                onClick={isRecording ? handleStopRecording : handleStartRecording}
-                disabled={isProcessing || isTranscribing}
-                className={`relative overflow-hidden group p-2.5 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer inline-flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed ${
-                  isRecording 
-                    ? 'bg-red-500/20 border border-red-500/30 text-red-400 hover:bg-red-500/30'
-                    : 'bg-gradient-to-br from-purple-500/20 to-pink-500/20 border border-purple-500/30 text-purple-300 hover:from-purple-500/30 hover:to-pink-500/30'
-                }`}
-              >
-                <div className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 ${
-                  isRecording 
-                    ? 'bg-gradient-to-r from-red-500/10 to-red-600/10'
-                    : 'bg-gradient-to-r from-purple-500/10 to-pink-500/10'
-                }`} />
-                <span className="relative z-10">
-                  {isRecording ? (
-                    <MicOff className="h-4 w-4" />
-                  ) : (
-                    <Mic className="h-4 w-4" />
-                  )}
-                </span>
-              </button>
-              <button
-                onClick={handleSendMessage}
-                disabled={!inputText.trim() || isProcessing}
-                className="relative overflow-hidden group px-4 py-2.5 rounded-lg font-medium shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-primary/20 border border-primary/40 text-primary hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-secondary/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                <span className="relative z-10">
-                  <Send className="h-4 w-4" />
-                </span>
-              </button>
+              
+              {/* Buttons positioned inside at bottom right with breathing room */}
+              <div className="absolute bottom-3 right-3 flex flex-col gap-2">
+                <button
+                  onClick={toggleRecording}
+                  disabled={isProcessing || recordingState === RecordingState.PROCESSING || recordingState === RecordingState.TRANSCRIBING}
+                  className={`relative overflow-hidden group p-2 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer inline-flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed w-8 h-8 ${
+                    recordingState === RecordingState.RECORDING 
+                      ? 'bg-red-500/20 border border-red-500/30 text-red-400 hover:bg-red-500/30'
+                      : 'bg-gradient-to-br from-purple-500/20 to-pink-500/20 border border-purple-500/30 text-purple-300 hover:from-purple-500/30 hover:to-pink-500/30'
+                  }`}
+                >
+                  <div className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 ${
+                    recordingState === RecordingState.RECORDING 
+                      ? 'bg-gradient-to-r from-red-500/10 to-red-600/10'
+                      : 'bg-gradient-to-r from-purple-500/10 to-pink-500/10'
+                  }`} />
+                  <span className="relative z-10">
+                    {recordingState === RecordingState.RECORDING ? (
+                      <MicOff className="h-4 w-4" />
+                    ) : (
+                      <Mic className="h-4 w-4" />
+                    )}
+                  </span>
+                </button>
+                <button
+                  onClick={handleSendMessage}
+                  disabled={!inputText.trim() || isProcessing}
+                  className="relative overflow-hidden group p-2 rounded-lg font-medium shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-primary/20 border border-primary/40 text-primary hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed w-8 h-8"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-secondary/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  <span className="relative z-10">
+                    <Send className="h-4 w-4" />
+                  </span>
+                </button>
+              </div>
             </div>
-            {(isRecording || isTranscribing) && (
-              <p className="text-xs text-muted-foreground mt-2">
-                {isRecording ? 'Recording... Click to stop' : 'Transcribing...'}
-              </p>
-            )}
+            {/* Always show recording status area to prevent layout shift */}
+            <div className="mt-2 h-4 flex items-center">
+              {(recordingState !== RecordingState.IDLE) && (
+                <p className="text-xs text-muted-foreground">
+                  {getRecordingStatusText()}
+                </p>
+              )}
+            </div>
             {sttError && (
               <p className="text-xs text-destructive mt-2">{sttError}</p>
             )}
