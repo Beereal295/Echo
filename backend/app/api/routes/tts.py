@@ -7,7 +7,9 @@ This module provides endpoints for:
 """
 
 import logging
-from typing import Optional
+import os
+from typing import Optional, List
+from pathlib import Path
 from fastapi import APIRouter, HTTPException, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -35,6 +37,63 @@ class TTSModelInfoResponse(BaseModel):
     sample_rate: int = Field(..., description="Audio sample rate")
     channels: int = Field(..., description="Number of audio channels")
     model_path: str = Field(..., description="Path to the model file")
+
+
+class TTSVoiceOption(BaseModel):
+    """Response model for available TTS voice options."""
+    name: str = Field(..., description="Display name for the voice")
+    filename: str = Field(..., description="Filename without extension")
+
+
+class TTSVoicesResponse(BaseModel):
+    """Response model for available TTS voices."""
+    voices: List[TTSVoiceOption] = Field(..., description="List of available voice options")
+
+
+@router.get("/voices", response_model=SuccessResponse[TTSVoicesResponse])
+async def get_available_voices():
+    """
+    Get list of available TTS voice models from the TTS directory.
+    
+    Returns:
+        List of voice models found in backend/TTS directory
+    """
+    try:
+        # Get the TTS directory path
+        # Try TTS folder first (when running from backend)
+        tts_dir = Path("TTS")
+        if not tts_dir.exists():
+            # Try with backend prefix (when running from project root)
+            tts_dir = Path("backend/TTS")
+        
+        voices = []
+        
+        # Look for .onnx files in the directory
+        if tts_dir.exists() and tts_dir.is_dir():
+            for file_path in tts_dir.glob("*.onnx"):
+                # Skip .onnx.json files
+                if not file_path.name.endswith(".onnx.json"):
+                    filename_without_ext = file_path.stem
+                    # Create a display name from the filename
+                    display_name = filename_without_ext.replace("_", " ").replace("-", " ").title()
+                    
+                    voices.append(TTSVoiceOption(
+                        name=display_name,
+                        filename=filename_without_ext
+                    ))
+        
+        return SuccessResponse(
+            success=True,
+            message="Available voices retrieved successfully",
+            data=TTSVoicesResponse(voices=voices)
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to get available voices: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get available voices: {str(e)}"
+        )
 
 
 @router.post("/synthesize")
@@ -152,12 +211,15 @@ async def initialize_tts_model():
         
         await tts_service.initialize()
         
+        # Get model info after initialization
+        model_info = await tts_service.get_model_info()
+        
         return SuccessResponse(
             success=True,
             message="TTS model initialized successfully",
             data={
                 "status": "initialized",
-                "model_name": "en_US-hfc_female-medium"
+                "model_name": model_info.get("model_name", "Unknown")
             }
         )
         
@@ -182,13 +244,22 @@ async def get_tts_status():
         
         is_ready = tts_service.is_ready()
         
+        # Get current model name
+        model_name = "Not loaded"
+        if is_ready:
+            try:
+                model_info = await tts_service.get_model_info()
+                model_name = model_info.get("model_name", "Unknown")
+            except:
+                pass
+        
         return SuccessResponse(
             success=True,
             message="TTS status retrieved successfully",
             data={
                 "is_ready": is_ready,
                 "is_initialized": tts_service._is_initialized,
-                "model_name": "en_US-hfc_female-medium"
+                "model_name": model_name
             }
         )
         

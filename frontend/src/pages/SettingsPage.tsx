@@ -9,7 +9,7 @@ import { Switch } from '@/components/ui/switch'
 import { Slider } from '@/components/ui/slider'
 import { useToast } from '@/components/ui/use-toast'
 import { api } from '@/lib/api'
-import { Keyboard, Globe, Mic, Settings2, Loader2, CheckCircle2, XCircle } from 'lucide-react'
+import { Keyboard, Globe, Mic, Settings2, Loader2, CheckCircle2, XCircle, FileText, MessageSquare } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 
 function SettingsPage() {
@@ -40,17 +40,17 @@ function SettingsPage() {
   const [diaryContextWindow, setDiaryContextWindow] = useState('8192')
   
   // TTS settings
-  const [ttsEngine, setTtsEngine] = useState('kokoro')
-  const [ttsVoice, setTtsVoice] = useState('default')
+  const [ttsEngine, setTtsEngine] = useState('piper')
+  const [ttsVoice, setTtsVoice] = useState('hfc_female')
   const [ttsSpeed, setTtsSpeed] = useState('1.0')
-  const [ttsPitch, setTtsPitch] = useState('1.0')
   const [ttsVolume, setTtsVolume] = useState('1.0')
+  const [availableVoices, setAvailableVoices] = useState<Array<{name: string, filename: string}>>([])
+  const [loadingVoices, setLoadingVoices] = useState(false)
   
   // General settings
   const [autoSave, setAutoSave] = useState(true)
   const [autoSaveInterval, setAutoSaveInterval] = useState('30')
   const [theme, setTheme] = useState('system')
-  const [patternThreshold, setPatternThreshold] = useState('30')
 
   // Get current tab from URL or default to 'general'
   const currentTab = searchParams.get('tab') || 'general'
@@ -59,6 +59,13 @@ function SettingsPage() {
   useEffect(() => {
     loadPreferences()
   }, [])
+
+  // Load available voices when TTS tab is active
+  useEffect(() => {
+    if (currentTab === 'tts') {
+      loadAvailableVoices()
+    }
+  }, [currentTab])
 
   const loadPreferences = async () => {
     setLoading(true)
@@ -98,16 +105,13 @@ function SettingsPage() {
               setDiaryContextWindow(String(pref.typed_value || '8192'))
               break
             case 'tts_engine':
-              setTtsEngine(pref.typed_value || 'kokoro')
+              setTtsEngine(pref.typed_value || 'piper')
               break
             case 'tts_voice':
-              setTtsVoice(pref.typed_value || 'default')
+              setTtsVoice(pref.typed_value || 'hfc_female')
               break
             case 'tts_speed':
               setTtsSpeed(String(pref.typed_value || '1.0'))
-              break
-            case 'tts_pitch':
-              setTtsPitch(String(pref.typed_value || '1.0'))
               break
             case 'tts_volume':
               setTtsVolume(String(pref.typed_value || '1.0'))
@@ -120,9 +124,6 @@ function SettingsPage() {
               break
             case 'theme':
               setTheme(pref.typed_value || 'system')
-              break
-            case 'pattern_detection_threshold':
-              setPatternThreshold(String(pref.typed_value || '30'))
               break
           }
         })
@@ -155,6 +156,25 @@ function SettingsPage() {
     } catch (error) {
       console.error('Failed to load Ollama models:', error)
       setOllamaConnected(false)
+    }
+  }
+
+  const loadAvailableVoices = async () => {
+    setLoadingVoices(true)
+    try {
+      const response = await api.getAvailableVoices()
+      if (response.success && response.data?.data?.voices) {
+        setAvailableVoices(response.data.data.voices)
+      }
+    } catch (error) {
+      console.error('Failed to load available voices:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to load available voices',
+        variant: 'destructive'
+      })
+    } finally {
+      setLoadingVoices(false)
     }
   }
 
@@ -215,12 +235,25 @@ function SettingsPage() {
     await savePreferences(preferences)
   }
 
+  const handleSaveOllama = async () => {
+    const preferences = [
+      { key: 'ollama_host', value: ollamaHost, value_type: 'string' },
+      { key: 'ollama_port', value: parseInt(ollamaPort), value_type: 'int' },
+      { key: 'ollama_model', value: journalModel, value_type: 'string' },
+      { key: 'ollama_temperature', value: parseFloat(journalTemperature), value_type: 'float' },
+      { key: 'ollama_context_window', value: parseInt(journalContextWindow), value_type: 'int' },
+      { key: 'talk_to_diary_model', value: diaryModel, value_type: 'string' },
+      { key: 'talk_to_diary_temperature', value: parseFloat(diaryTemperature), value_type: 'float' },
+      { key: 'talk_to_diary_context_window', value: parseInt(diaryContextWindow), value_type: 'int' }
+    ]
+    await savePreferences(preferences)
+  }
+
   const handleSaveTTS = async () => {
     const preferences = [
       { key: 'tts_engine', value: ttsEngine, value_type: 'string' },
       { key: 'tts_voice', value: ttsVoice, value_type: 'string' },
       { key: 'tts_speed', value: parseFloat(ttsSpeed), value_type: 'float' },
-      { key: 'tts_pitch', value: parseFloat(ttsPitch), value_type: 'float' },
       { key: 'tts_volume', value: parseFloat(ttsVolume), value_type: 'float' }
     ]
     await savePreferences(preferences)
@@ -231,7 +264,6 @@ function SettingsPage() {
       { key: 'auto_save', value: autoSave, value_type: 'bool' },
       { key: 'auto_save_interval', value: parseInt(autoSaveInterval), value_type: 'int' },
       { key: 'theme', value: theme, value_type: 'string' },
-      { key: 'pattern_detection_threshold', value: parseInt(patternThreshold), value_type: 'int' }
     ]
     await savePreferences(preferences)
     
@@ -322,7 +354,7 @@ function SettingsPage() {
   }
 
   return (
-    <div className="h-screen flex flex-col p-4 md:p-6 overflow-hidden">
+    <div className="min-h-screen flex flex-col p-4 md:p-6">
       <div className="max-w-5xl mx-auto w-full flex flex-col flex-1">
         {/* Header */}
         <div className="mb-4">
@@ -332,8 +364,8 @@ function SettingsPage() {
           </p>
         </div>
 
-        <Tabs value={currentTab} onValueChange={handleTabChange} className="flex-1 flex flex-col overflow-hidden">
-          <TabsList className="grid w-full max-w-2xl grid-cols-5 mb-4 bg-card/50 backdrop-blur-sm border border-border/50 flex-shrink-0">
+        <Tabs value={currentTab} onValueChange={handleTabChange} className="flex-1 flex flex-col">
+          <TabsList className="grid w-full max-w-2xl grid-cols-4 mb-4 bg-card/50 backdrop-blur-sm border border-border/50 flex-shrink-0">
             <TabsTrigger value="general" className="flex items-center gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
               <Settings2 className="h-4 w-4" />
               <span className="hidden sm:inline">General</span>
@@ -342,13 +374,9 @@ function SettingsPage() {
               <Keyboard className="h-4 w-4" />
               <span className="hidden sm:inline">Hotkey</span>
             </TabsTrigger>
-            <TabsTrigger value="journal" className="flex items-center gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
+            <TabsTrigger value="ollama" className="flex items-center gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
               <Globe className="h-4 w-4" />
-              <span className="hidden sm:inline">Journal</span>
-            </TabsTrigger>
-            <TabsTrigger value="diary" className="flex items-center gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
-              <Globe className="h-4 w-4" />
-              <span className="hidden sm:inline">Diary</span>
+              <span className="hidden sm:inline">Ollama</span>
             </TabsTrigger>
             <TabsTrigger value="tts" className="flex items-center gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
               <Mic className="h-4 w-4" />
@@ -431,25 +459,6 @@ function SettingsPage() {
                   </p>
                 </div>
 
-                {/* Pattern Detection Threshold */}
-                <div className="bg-muted/10 rounded-lg p-3 border border-border/50">
-                  <Label htmlFor="pattern-threshold" className="text-white font-medium mb-2 block">Pattern Detection Threshold</Label>
-                  <div className="flex items-center gap-3">
-                    <Input
-                      id="pattern-threshold"
-                      type="number"
-                      min="5"
-                      max="100"
-                      value={patternThreshold}
-                      onChange={(e) => setPatternThreshold(e.target.value)}
-                      className="w-24 bg-background/50 border-border text-white placeholder:text-gray-500 focus:ring-0 focus:ring-offset-0 focus:border-primary/50"
-                    />
-                    <span className="text-sm text-gray-400">entries</span>
-                  </div>
-                  <p className="text-sm text-gray-400 mt-1">
-                    Number of journal entries required before pattern detection is enabled (default: 30)
-                  </p>
-                </div>
 
                 {/* Save Button */}
                 <div className="flex justify-end pt-2">
@@ -552,305 +561,262 @@ function SettingsPage() {
             </motion.div>
           </TabsContent>
 
-          <TabsContent value="journal" className="flex-1 overflow-hidden">
+          <TabsContent value="ollama" className="flex-1">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3 }}
             >
-              <Card className="bg-card/50 backdrop-blur-sm border-border/50 h-full flex flex-col overflow-hidden">
-              <CardHeader className="pb-2 flex-shrink-0">
-                <div className="flex items-center gap-2">
-                  <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center flex-shrink-0">
-                    <Globe className="h-4 w-4 text-white" />
-                  </div>
-                  <div className="min-w-0">
-                    <CardTitle className="text-lg text-white">Journal Processing</CardTitle>
-                    <CardDescription className="text-gray-400 text-sm">
-                      Configure AI model for journal entry processing (3 modes)
-                    </CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="flex-1 overflow-y-auto space-y-4 p-4">
-                {/* Connection Settings */}
-                <div className="bg-muted/10 rounded-lg p-3 border border-border/50">
-                  <h3 className="text-white font-medium mb-2 text-sm">Connection</h3>
-                  <div className="grid grid-cols-2 gap-3 mb-3">
-                    <div className="space-y-1">
-                      <Label htmlFor="ollama-host" className="text-white font-medium text-sm">Host</Label>
-                      <Input
-                        id="ollama-host"
-                        value={ollamaHost}
-                        onChange={(e) => setOllamaHost(e.target.value)}
-                        placeholder="localhost"
-                        className="bg-background/50 border-border text-white placeholder:text-gray-500 h-9"
-                      />
+              <Card className="bg-card/50 backdrop-blur-sm border-border/50">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+                      <Globe className="h-4 w-4 text-white" />
                     </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="ollama-port" className="text-white font-medium text-sm">Port</Label>
-                      <Input
-                        id="ollama-port"
-                        type="number"
-                        value={ollamaPort}
-                        onChange={(e) => setOllamaPort(e.target.value)}
-                        placeholder="11434"
-                        className="bg-background/50 border-border text-white placeholder:text-gray-500 h-9"
-                      />
+                    <div className="min-w-0">
+                      <CardTitle className="text-base text-white">Ollama Configuration</CardTitle>
+                      <CardDescription className="text-gray-400 text-xs">
+                        Configure Ollama server connection and AI models
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4 p-3">
+                  
+                  {/* Connection Section */}
+                  <div className="bg-muted/10 rounded-lg p-3 border border-border/50">
+                    <h3 className="text-white font-medium mb-3 text-sm flex items-center gap-2">
+                      <Globe className="h-4 w-4 text-blue-500" />
+                      Connection
+                    </h3>
+                    <div className="grid grid-cols-2 gap-3 mb-3">
+                      <div className="space-y-1">
+                        <Label htmlFor="ollama-host" className="text-white font-medium text-sm">Host</Label>
+                        <Input
+                          id="ollama-host"
+                          value={ollamaHost}
+                          onChange={(e) => setOllamaHost(e.target.value)}
+                          placeholder="localhost"
+                          className="bg-background/50 border-border text-white placeholder:text-gray-500 h-9"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="ollama-port" className="text-white font-medium text-sm">Port</Label>
+                        <Input
+                          id="ollama-port"
+                          type="number"
+                          value={ollamaPort}
+                          onChange={(e) => setOllamaPort(e.target.value)}
+                          placeholder="11434"
+                          className="bg-background/50 border-border text-white placeholder:text-gray-500 h-9"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Test Connection */}
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={testOllamaConnection}
+                        disabled={testingOllama}
+                        className="relative overflow-hidden group px-3 py-1.5 rounded-md font-medium shadow hover:shadow-lg hover:scale-[1.02] transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                      >
+                        <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                        <span className="relative z-10 flex items-center font-medium">
+                          {testingOllama ? (
+                            <>
+                              <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                              Testing...
+                            </>
+                          ) : (
+                            'Test Connection'
+                          )}
+                        </span>
+                      </button>
+                      {ollamaConnected !== null && (
+                        <div className="flex items-center gap-2">
+                          {ollamaConnected ? (
+                            <>
+                              <CheckCircle2 className="h-4 w-4 text-green-500" />
+                              <span className="text-sm text-green-500 font-medium">Connected</span>
+                            </>
+                          ) : (
+                            <>
+                              <XCircle className="h-4 w-4 text-red-500" />
+                              <span className="text-sm text-red-500 font-medium">Not connected</span>
+                            </>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  {/* Test Connection */}
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={testOllamaConnection}
-                      disabled={testingOllama}
-                      className="relative overflow-hidden group px-3 py-1.5 rounded-md font-medium shadow hover:shadow-lg hover:scale-[1.02] transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                  {/* Processing Model Section */}
+                  {ollamaConnected && ollamaModels.length > 0 && (
+                    <div className="bg-muted/10 rounded-lg p-3 border border-border/50">
+                      <h3 className="text-white font-medium mb-3 text-sm flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-emerald-500" />
+                        Processing Model
+                      </h3>
+                      
+                      {/* Journal Model */}
+                      <div className="space-y-1 mb-3">
+                        <Select value={journalModel} onValueChange={setJournalModel}>
+                          <SelectTrigger className="bg-background/50 border-border text-white hover:bg-muted/50 h-9">
+                            <SelectValue placeholder="Select a model" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-background border-border">
+                            {ollamaModels.map((model) => (
+                              <SelectItem key={model} value={model} className="text-white hover:bg-muted/50 focus:bg-muted/50">
+                                {model}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-gray-400">
+                          Model for raw → enhanced → structured processing (fast, reliable models recommended)
+                        </p>
+                      </div>
+
+                      {/* Model Parameters */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label htmlFor="journal-temperature" className="text-white font-medium text-sm">Temperature</Label>
+                          <div className="flex items-center gap-2">
+                            <Slider
+                              id="journal-temperature"
+                              min={0}
+                              max={1}
+                              step={0.1}
+                              value={[parseFloat(journalTemperature)]}
+                              onValueChange={(value) => setJournalTemperature(value[0].toString())}
+                              className="flex-1 [&>*:first-child]:bg-muted/30 [&>*:first-child]:border-border/50"
+                            />
+                            <span className="w-10 text-sm text-white font-mono bg-background/50 px-1.5 py-0.5 rounded">
+                              {journalTemperature}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-400">
+                            0 = focused, 1 = creative
+                          </p>
+                        </div>
+                        
+                        <div className="space-y-1">
+                          <Label htmlFor="journal-context" className="text-white font-medium text-sm">Context Window</Label>
+                          <Select value={journalContextWindow} onValueChange={setJournalContextWindow}>
+                            <SelectTrigger className="bg-background/50 border-border text-white hover:bg-muted/50 h-9">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="bg-background border-border">
+                              <SelectItem value="2048" className="text-white hover:bg-muted/50 focus:bg-muted/50">2048 tokens</SelectItem>
+                              <SelectItem value="4096" className="text-white hover:bg-muted/50 focus:bg-muted/50">4096 tokens</SelectItem>
+                              <SelectItem value="8192" className="text-white hover:bg-muted/50 focus:bg-muted/50">8192 tokens</SelectItem>
+                              <SelectItem value="16384" className="text-white hover:bg-muted/50 focus:bg-muted/50">16384 tokens</SelectItem>
+                              <SelectItem value="32768" className="text-white hover:bg-muted/50 focus:bg-muted/50">32768 tokens</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-gray-400">
+                            Max entry length
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Talk to Echo Model Section */}
+                  {ollamaConnected && ollamaModels.length > 0 && (
+                    <div className="bg-muted/10 rounded-lg p-3 border border-border/50">
+                      <h3 className="text-white font-medium mb-3 text-sm flex items-center gap-2">
+                        <MessageSquare className="h-4 w-4 text-purple-500" />
+                        Talk to Echo Model
+                      </h3>
+                      
+                      {/* Diary Chat Model */}
+                      <div className="space-y-1 mb-3">
+                        <Select value={diaryModel} onValueChange={setDiaryModel}>
+                          <SelectTrigger className="bg-background/50 border-border text-white hover:bg-muted/50 h-9">
+                            <SelectValue placeholder="Select a model" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-background border-border">
+                            {ollamaModels.map((model) => (
+                              <SelectItem key={model} value={model} className="text-white hover:bg-muted/50 focus:bg-muted/50">
+                                {model}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-gray-400">
+                          Model for diary conversations (thinking models like Qwen recommended)
+                        </p>
+                      </div>
+
+                      {/* Model Parameters */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label htmlFor="diary-temperature" className="text-white font-medium text-sm">Temperature</Label>
+                          <div className="flex items-center gap-2">
+                            <Slider
+                              id="diary-temperature"
+                              min={0}
+                              max={1}
+                              step={0.1}
+                              value={[parseFloat(diaryTemperature)]}
+                              onValueChange={(value) => setDiaryTemperature(value[0].toString())}
+                              className="flex-1 [&>*:first-child]:bg-muted/30 [&>*:first-child]:border-border/50"
+                            />
+                            <span className="w-10 text-sm text-white font-mono bg-background/50 px-1.5 py-0.5 rounded">
+                              {diaryTemperature}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-400">
+                            0 = focused, 1 = creative
+                          </p>
+                        </div>
+                        
+                        <div className="space-y-1">
+                          <Label htmlFor="diary-context" className="text-white font-medium text-sm">Context Window</Label>
+                          <Select value={diaryContextWindow} onValueChange={setDiaryContextWindow}>
+                            <SelectTrigger className="bg-background/50 border-border text-white hover:bg-muted/50 h-9">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="bg-background border-border">
+                              <SelectItem value="2048" className="text-white hover:bg-muted/50 focus:bg-muted/50">2048 tokens</SelectItem>
+                              <SelectItem value="4096" className="text-white hover:bg-muted/50 focus:bg-muted/50">4096 tokens</SelectItem>
+                              <SelectItem value="8192" className="text-white hover:bg-muted/50 focus:bg-muted/50">8192 tokens</SelectItem>
+                              <SelectItem value="16384" className="text-white hover:bg-muted/50 focus:bg-muted/50">16384 tokens</SelectItem>
+                              <SelectItem value="32768" className="text-white hover:bg-muted/50 focus:bg-muted/50">32768 tokens</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-gray-400">
+                            Max conversation length
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Save Button */}
+                  <div className="flex justify-end pt-2">
+                    <button 
+                      onClick={handleSaveOllama} 
+                      disabled={saving}
+                      className="relative overflow-hidden group px-5 py-2 rounded-lg font-medium shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                       <span className="relative z-10 flex items-center font-medium">
-                        {testingOllama ? (
+                        {saving ? (
                           <>
-                            <Loader2 className="mr-2 h-3 w-3 animate-spin" />
-                            Testing...
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Saving...
                           </>
                         ) : (
-                          'Test Connection'
+                          'Save Settings'
                         )}
                       </span>
                     </button>
-                    {ollamaConnected !== null && (
-                      <div className="flex items-center gap-2">
-                        {ollamaConnected ? (
-                          <>
-                            <CheckCircle2 className="h-4 w-4 text-green-500" />
-                            <span className="text-sm text-green-500 font-medium">Connected</span>
-                          </>
-                        ) : (
-                          <>
-                            <XCircle className="h-4 w-4 text-red-500" />
-                            <span className="text-sm text-red-500 font-medium">Not connected</span>
-                          </>
-                        )}
-                      </div>
-                    )}
                   </div>
-                </div>
 
-                {/* Model Configuration */}
-                {ollamaConnected && ollamaModels.length > 0 && (
-                  <div className="bg-muted/10 rounded-lg p-3 border border-border/50">
-                    <h3 className="text-white font-medium mb-2 text-sm">Model Configuration</h3>
-                    
-                    {/* Journal Model */}
-                    <div className="space-y-1 mb-3">
-                      <Label htmlFor="journal-model" className="text-white font-medium text-sm">Journal Processing Model</Label>
-                      <Select value={journalModel} onValueChange={setJournalModel}>
-                        <SelectTrigger className="bg-background/50 border-border text-white hover:bg-muted/50 h-9">
-                          <SelectValue placeholder="Select a model" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-background border-border">
-                          {ollamaModels.map((model) => (
-                            <SelectItem key={model} value={model} className="text-white hover:bg-muted/50 focus:bg-muted/50">
-                              {model}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <p className="text-sm text-gray-400">
-                        Model for raw → enhanced → structured processing (fast, reliable models recommended)
-                      </p>
-                    </div>
-
-                    {/* Model Parameters */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <Label htmlFor="journal-temperature" className="text-white font-medium text-sm">Temperature</Label>
-                        <div className="flex items-center gap-2">
-                          <Slider
-                            id="journal-temperature"
-                            min={0}
-                            max={1}
-                            step={0.1}
-                            value={[parseFloat(journalTemperature)]}
-                            onValueChange={(value) => setJournalTemperature(value[0].toString())}
-                            className="flex-1 [&>*:first-child]:bg-muted/30 [&>*:first-child]:border-border/50"
-                          />
-                          <span className="w-10 text-sm text-white font-mono bg-background/50 px-1.5 py-0.5 rounded">
-                            {journalTemperature}
-                          </span>
-                        </div>
-                        <p className="text-sm text-gray-400">
-                          0 = focused, 1 = creative
-                        </p>
-                      </div>
-                      
-                      <div className="space-y-1">
-                        <Label htmlFor="journal-context" className="text-white font-medium text-sm">Context Window</Label>
-                        <Select value={journalContextWindow} onValueChange={setJournalContextWindow}>
-                          <SelectTrigger className="bg-background/50 border-border text-white hover:bg-muted/50 h-9">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="bg-background border-border">
-                            <SelectItem value="2048" className="text-white hover:bg-muted/50 focus:bg-muted/50">2048 tokens</SelectItem>
-                            <SelectItem value="4096" className="text-white hover:bg-muted/50 focus:bg-muted/50">4096 tokens</SelectItem>
-                            <SelectItem value="8192" className="text-white hover:bg-muted/50 focus:bg-muted/50">8192 tokens</SelectItem>
-                            <SelectItem value="16384" className="text-white hover:bg-muted/50 focus:bg-muted/50">16384 tokens</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <p className="text-sm text-gray-400">
-                          Max entry length
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Save Button */}
-                <div className="flex justify-end pt-2">
-                  <button 
-                    onClick={handleSaveJournal} 
-                    disabled={saving}
-                    className="relative overflow-hidden group px-5 py-2 rounded-lg font-medium shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                    <span className="relative z-10 flex items-center font-medium">
-                      {saving ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Saving...
-                        </>
-                      ) : (
-                        'Save Settings'
-                      )}
-                    </span>
-                  </button>
-                </div>
-              </CardContent>
-            </Card>
-            </motion.div>
-          </TabsContent>
-
-          <TabsContent value="diary" className="flex-1 overflow-hidden">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3 }}
-            >
-              <Card className="bg-card/50 backdrop-blur-sm border-border/50 h-full flex flex-col overflow-hidden">
-              <CardHeader className="pb-2 flex-shrink-0">
-                <div className="flex items-center gap-2">
-                  <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center flex-shrink-0">
-                    <Globe className="h-4 w-4 text-white" />
-                  </div>
-                  <div className="min-w-0">
-                    <CardTitle className="text-lg text-white">Talk to Your Diary</CardTitle>
-                    <CardDescription className="text-gray-400 text-sm">
-                      Configure AI model for conversational diary interaction
-                    </CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="flex-1 overflow-y-auto space-y-4 p-4">
-                {/* Model Configuration */}
-                {ollamaConnected && ollamaModels.length > 0 && (
-                  <div className="bg-muted/10 rounded-lg p-3 border border-border/50">
-                    <h3 className="text-white font-medium mb-2 text-sm">Model Configuration</h3>
-                    
-                    {/* Diary Chat Model */}
-                    <div className="space-y-1 mb-3">
-                      <Label htmlFor="diary-model" className="text-white font-medium text-sm">Conversation Model</Label>
-                      <Select value={diaryModel} onValueChange={setDiaryModel}>
-                        <SelectTrigger className="bg-background/50 border-border text-white hover:bg-muted/50 h-9">
-                          <SelectValue placeholder="Select a model" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-background border-border">
-                          {ollamaModels.map((model) => (
-                            <SelectItem key={model} value={model} className="text-white hover:bg-muted/50 focus:bg-muted/50">
-                              {model}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <p className="text-sm text-gray-400">
-                        Model for diary conversations (thinking models like Qwen recommended)
-                      </p>
-                    </div>
-
-                    {/* Model Parameters */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <Label htmlFor="diary-temperature" className="text-white font-medium text-sm">Temperature</Label>
-                        <div className="flex items-center gap-2">
-                          <Slider
-                            id="diary-temperature"
-                            min={0}
-                            max={1}
-                            step={0.1}
-                            value={[parseFloat(diaryTemperature)]}
-                            onValueChange={(value) => setDiaryTemperature(value[0].toString())}
-                            className="flex-1 [&>*:first-child]:bg-muted/30 [&>*:first-child]:border-border/50"
-                          />
-                          <span className="w-10 text-sm text-white font-mono bg-background/50 px-1.5 py-0.5 rounded">
-                            {diaryTemperature}
-                          </span>
-                        </div>
-                        <p className="text-sm text-gray-400">
-                          0 = focused, 1 = creative
-                        </p>
-                      </div>
-                      
-                      <div className="space-y-1">
-                        <Label htmlFor="diary-context" className="text-white font-medium text-sm">Context Window</Label>
-                        <Select value={diaryContextWindow} onValueChange={setDiaryContextWindow}>
-                          <SelectTrigger className="bg-background/50 border-border text-white hover:bg-muted/50 h-9">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="bg-background border-border">
-                            <SelectItem value="2048" className="text-white hover:bg-muted/50 focus:bg-muted/50">2048 tokens</SelectItem>
-                            <SelectItem value="4096" className="text-white hover:bg-muted/50 focus:bg-muted/50">4096 tokens</SelectItem>
-                            <SelectItem value="8192" className="text-white hover:bg-muted/50 focus:bg-muted/50">8192 tokens</SelectItem>
-                            <SelectItem value="16384" className="text-white hover:bg-muted/50 focus:bg-muted/50">16384 tokens</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <p className="text-sm text-gray-400">
-                          Max conversation length
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Info Notice */}
-                <div className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 rounded-lg p-4 border border-purple-500/20">
-                  <h3 className="text-white font-medium mb-2">About Talk to Your Diary</h3>
-                  <p className="text-sm text-gray-400">
-                    This model handles conversational interactions with your diary entries. Thinking models (like Qwen) provide better reasoning but internal thinking blocks are automatically stripped for clean responses.
-                  </p>
-                </div>
-
-                {/* Save Button */}
-                <div className="flex justify-end pt-2">
-                  <button 
-                    onClick={handleSaveDiary} 
-                    disabled={saving}
-                    className="relative overflow-hidden group px-5 py-2 rounded-lg font-medium shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                    <span className="relative z-10 flex items-center font-medium">
-                      {saving ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Saving...
-                        </>
-                      ) : (
-                        'Save Settings'
-                      )}
-                    </span>
-                  </button>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
             </motion.div>
           </TabsContent>
 
@@ -869,112 +835,104 @@ function SettingsPage() {
                   <div>
                     <CardTitle className="text-xl text-white">Text-to-Speech Configuration</CardTitle>
                     <CardDescription className="text-gray-400 text-sm">
-                      Configure voice output settings (Kokoro TTS - Coming Soon)
+                      Configure voice output settings for Talk to Echo feature
                     </CardDescription>
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-8">
-                {/* Coming Soon Notice */}
-                <div className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 rounded-lg p-4 border border-purple-500/20">
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center">
-                      <Mic className="h-4 w-4 text-white" />
-                    </div>
-                    <h3 className="text-white font-medium">Coming Soon</h3>
-                  </div>
-                  <p className="text-sm text-gray-400">
-                    Text-to-Speech integration with Kokoro TTS is coming soon. These settings will be used for the "Talk to Your Diary" feature.
-                  </p>
-                </div>
-
+              <CardContent className="space-y-6">
                 {/* TTS Engine Settings */}
-                <div className="bg-muted/10 rounded-lg p-4 border border-border/50 opacity-60">
+                <div className="bg-muted/10 rounded-lg p-4 border border-border/50">
                   <h3 className="text-white font-medium mb-4">Engine Configuration</h3>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                     <div className="space-y-2">
                       <Label htmlFor="tts-engine" className="text-white font-medium">TTS Engine</Label>
-                      <Select value={ttsEngine} onValueChange={setTtsEngine} disabled>
+                      <Select value={ttsEngine} onValueChange={setTtsEngine}>
                         <SelectTrigger className="bg-background/50 border-border text-white hover:bg-muted/50">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="bg-background border-border">
-                          <SelectItem value="kokoro" className="text-white hover:bg-muted/50 focus:bg-muted/50">Kokoro TTS</SelectItem>
+                          <SelectItem value="piper" className="text-white hover:bg-muted/50 focus:bg-muted/50">Piper</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     
                     <div className="space-y-2">
                       <Label htmlFor="tts-voice" className="text-white font-medium">Voice</Label>
-                      <Select value={ttsVoice} onValueChange={setTtsVoice} disabled>
-                        <SelectTrigger className="bg-background/50 border-border text-white hover:bg-muted/50">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="bg-background border-border">
-                          <SelectItem value="default" className="text-white hover:bg-muted/50 focus:bg-muted/50">Default Voice</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      {loadingVoices ? (
+                        <div className="flex items-center justify-center h-10 bg-background/50 rounded-md border border-border">
+                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        </div>
+                      ) : availableVoices.length > 0 ? (
+                        <Select value={ttsVoice} onValueChange={setTtsVoice}>
+                          <SelectTrigger className="bg-background/50 border-border text-white hover:bg-muted/50">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="bg-background border-border">
+                            {availableVoices.map((voice) => (
+                              <SelectItem 
+                                key={voice.filename} 
+                                value={voice.filename} 
+                                className="text-white hover:bg-muted/50 focus:bg-muted/50"
+                              >
+                                {voice.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <div className="bg-background/50 border border-border rounded-md p-3">
+                          <p className="text-sm text-gray-400">No voices found. Please add voice files to the backend/TTS directory.</p>
+                        </div>
+                      )}
                     </div>
                   </div>
 
+                  {/* Info message about downloading voices */}
+                  <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 mt-4">
+                    <p className="text-sm text-blue-400">
+                      <strong>Note:</strong> To add more voices, download Piper TTS voice models (.onnx and .onnx.json files) 
+                      and place them in the <code className="bg-background/50 px-1 py-0.5 rounded">backend/TTS</code> directory.
+                    </p>
+                  </div>
+
                   {/* Voice Parameters */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                     <div className="space-y-3">
                       <Label htmlFor="tts-speed" className="text-white font-medium">Speed</Label>
                       <div className="flex items-center gap-3">
-                        <Input
+                        <Slider
                           id="tts-speed"
-                          type="range"
-                          min="0.5"
-                          max="2"
-                          step="0.1"
-                          value={ttsSpeed}
-                          onChange={(e) => setTtsSpeed(e.target.value)}
-                          disabled
-                          className="flex-1 bg-background/50 border-border"
+                          min={0}
+                          max={2}
+                          step={0.5}
+                          value={[parseFloat(ttsSpeed)]}
+                          onValueChange={(value) => setTtsSpeed(value[0].toString())}
+                          className="flex-1 [&>*:first-child]:bg-muted/30 [&>*:first-child]:border-border/50"
                         />
-                        <span className="w-12 text-sm text-white font-mono bg-background/50 px-2 py-1 rounded">
+                        <span className="w-12 text-sm text-white font-mono bg-background/50 px-2 py-1 rounded text-center">
                           {ttsSpeed}x
                         </span>
                       </div>
-                    </div>
-                    
-                    <div className="space-y-3">
-                      <Label htmlFor="tts-pitch" className="text-white font-medium">Pitch</Label>
-                      <div className="flex items-center gap-3">
-                        <Input
-                          id="tts-pitch"
-                          type="range"
-                          min="0.5"
-                          max="2"
-                          step="0.1"
-                          value={ttsPitch}
-                          onChange={(e) => setTtsPitch(e.target.value)}
-                          disabled
-                          className="flex-1 bg-background/50 border-border"
-                        />
-                        <span className="w-12 text-sm text-white font-mono bg-background/50 px-2 py-1 rounded">
-                          {ttsPitch}
-                        </span>
-                      </div>
+                      <p className="text-xs text-gray-400">
+                        0x = silent, 0.5x = slow, 1x = normal, 1.5x = fast, 2x = fastest
+                      </p>
                     </div>
                     
                     <div className="space-y-3">
                       <Label htmlFor="tts-volume" className="text-white font-medium">Volume</Label>
                       <div className="flex items-center gap-3">
-                        <Input
+                        <Slider
                           id="tts-volume"
-                          type="range"
-                          min="0"
-                          max="1"
-                          step="0.1"
-                          value={ttsVolume}
-                          onChange={(e) => setTtsVolume(e.target.value)}
-                          disabled
-                          className="flex-1 bg-background/50 border-border"
+                          min={0}
+                          max={1}
+                          step={0.1}
+                          value={[parseFloat(ttsVolume)]}
+                          onValueChange={(value) => setTtsVolume(value[0].toString())}
+                          className="flex-1 [&>*:first-child]:bg-muted/30 [&>*:first-child]:border-border/50"
                         />
-                        <span className="w-12 text-sm text-white font-mono bg-background/50 px-2 py-1 rounded">
+                        <span className="w-12 text-sm text-white font-mono bg-background/50 px-2 py-1 rounded text-center">
                           {Math.round(parseFloat(ttsVolume) * 100)}%
                         </span>
                       </div>
@@ -982,15 +940,23 @@ function SettingsPage() {
                   </div>
                 </div>
 
-                {/* Disabled Save Button */}
-                <div className="flex justify-end pt-4">
+                {/* Save Button */}
+                <div className="flex justify-end pt-2">
                   <button 
                     onClick={handleSaveTTS} 
-                    disabled={true}
-                    className="relative overflow-hidden group px-6 py-3 rounded-lg font-medium shadow-lg transition-all duration-300 cursor-not-allowed inline-flex items-center justify-center bg-gray-500/10 border border-gray-500/20 text-gray-500 disabled:opacity-50"
+                    disabled={saving}
+                    className="relative overflow-hidden group px-5 py-2 rounded-lg font-medium shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
+                    <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                     <span className="relative z-10 flex items-center font-medium">
-                      Coming Soon
+                      {saving ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        'Save Settings'
+                      )}
                     </span>
                   </button>
                 </div>

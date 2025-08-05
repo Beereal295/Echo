@@ -566,6 +566,10 @@ class ApiClient {
     return this.request('/tts/status')
   }
 
+  async getAvailableVoices(): Promise<ApiResponse<any>> {
+    return this.request('/tts/voices')
+  }
+
   async initializeTTS(): Promise<ApiResponse<any>> {
     return this.request('/tts/initialize', {
       method: 'POST'
