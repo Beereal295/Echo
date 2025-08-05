@@ -67,8 +67,10 @@ Return only the JSON array, nothing else."""
                 prompt=text,
                 system=self._mood_system_prompt,
                 model=model,
-                temperature=temperature,
-                num_ctx=context_window
+                options={
+                    'temperature': temperature,
+                    'num_ctx': context_window
+                }
             )
             
             processing_time = (datetime.now() - start_time).total_seconds() * 1000

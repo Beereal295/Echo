@@ -132,8 +132,10 @@ Return ONLY the improved text with no introduction, explanation, or commentary."
                 prompt=raw_text,
                 system=self._enhanced_system_prompt,
                 model=model,
-                temperature=temperature,
-                num_ctx=context_window
+                options={
+                    'temperature': temperature,
+                    'num_ctx': context_window
+                }
             )
             return response.response.strip()
         except Exception as e:
@@ -152,8 +154,10 @@ Return ONLY the improved text with no introduction, explanation, or commentary."
                 prompt=raw_text,
                 system=self._structured_system_prompt,
                 model=model,
-                temperature=temperature,
-                num_ctx=context_window
+                options={
+                    'temperature': temperature,
+                    'num_ctx': context_window
+                }
             )
             return response.response.strip()
         except Exception as e:

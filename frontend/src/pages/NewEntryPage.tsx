@@ -334,11 +334,16 @@ function NewEntryPage() {
                              !error.trim()
       
       if (!shouldSkipError) {
-        safeToast({
-          title: "Recording Error",
-          description: error.trim() || "An unknown error occurred",
-          variant: "destructive"
-        })
+        // Remove focus from any active element to prevent focus ring on toast
+        if (document.activeElement && document.activeElement !== document.body) {
+          (document.activeElement as HTMLElement).blur()
+        }
+        setTimeout(() => {
+          safeToast({
+            title: "❌ Recording failed",
+            description: error.trim() || "An unknown error occurred",
+          })
+        }, 10) // Small delay to ensure blur takes effect
       }
       setRecordingState(RecordingState.IDLE)
     })
@@ -1234,29 +1239,27 @@ function NewEntryPage() {
       <div className="flex items-center justify-between mb-4 min-h-[40px]">
         <h2 className="text-2xl font-bold text-white">New Entry</h2>
         <div className="flex items-center gap-2 flex-shrink-0">
-          <Badge 
-            className={`flex items-center gap-2 ${
-              isConnected
-                ? 'bg-green-500/20 border border-green-500/30 text-green-400' 
-                : 'bg-red-500/20 border border-red-500/30 text-red-400 animate-pulse'
-            }`}
-          >
-            <div 
-              className={`w-2 h-2 rounded-full ${
-                isConnected ? 'bg-green-500' : 'bg-red-500'
-              }`}
-            />
-            {isConnected ? 'Connected' : 'Disconnected'}
-          </Badge>
-          {recordingState !== RecordingState.IDLE && showInputUI && (
-            <div className="relative overflow-hidden px-4 py-2 rounded-md font-medium shadow-md transition-all duration-300 flex items-center justify-center bg-primary/10 border border-primary/20 text-primary max-w-xs shrink-0">
-              <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-70 transition-opacity duration-300" />
-              <div className="relative z-10 flex items-center gap-2">
-                {getStateIcon()}
-                <span className="text-sm font-medium truncate">{getStateMessage()}</span>
-              </div>
-            </div>
-          )}
+          <AnimatePresence>
+            {recordingState !== RecordingState.IDLE && showInputUI && (
+              <motion.div
+                key={recordingState}
+                initial={{ width: 0, paddingLeft: 0, paddingRight: 0 }}
+                animate={{ width: "auto", paddingLeft: 16, paddingRight: 16 }}
+                exit={{ width: 0, paddingLeft: 0, paddingRight: 0 }}
+                transition={{ 
+                  duration: 0.15, 
+                  ease: "easeOut"
+                }}
+                className="relative overflow-hidden py-2 rounded-md font-medium shadow-md transition-all duration-300 flex items-center justify-center bg-primary/10 border border-primary/20 text-primary max-w-xs shrink-0"
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-70 transition-opacity duration-300" />
+                <div className="relative z-10 flex items-center gap-2 whitespace-nowrap">
+                  {getStateIcon()}
+                  <span className="text-sm font-medium">{getStateMessage()}</span>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 

@@ -365,7 +365,7 @@ function SettingsPage() {
         </div>
 
         <Tabs value={currentTab} onValueChange={handleTabChange} className="flex-1 flex flex-col">
-          <TabsList className="grid w-full max-w-2xl grid-cols-4 mb-4 bg-card/50 backdrop-blur-sm border border-border/50 flex-shrink-0">
+          <TabsList className="grid w-full max-w-lg grid-cols-4 mb-4 bg-card/50 backdrop-blur-sm border border-border/50 flex-shrink-0">
             <TabsTrigger value="general" className="flex items-center gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
               <Settings2 className="h-4 w-4" />
               <span className="hidden sm:inline">General</span>

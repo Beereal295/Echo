@@ -150,9 +150,11 @@ async def generate_text(request: GenerateRequest):
             prompt=request.prompt,
             model=request.model,
             system=request.system,
-            temperature=request.temperature,
-            max_tokens=request.max_tokens,
-            stream=request.stream
+            stream=request.stream,
+            options={
+                'temperature': request.temperature,
+                'num_predict': request.max_tokens
+            }
         )
         
         return {
@@ -205,9 +207,11 @@ async def chat_completion(request: ChatRequest):
         response = await ollama_service.chat(
             messages=request.messages,
             model=request.model,
-            temperature=request.temperature,
-            max_tokens=request.max_tokens,
-            stream=request.stream
+            stream=request.stream,
+            options={
+                'temperature': request.temperature,
+                'num_predict': request.max_tokens
+            }
         )
         
         return {
@@ -310,8 +314,10 @@ async def test_ollama_service():
             try:
                 test_response = await ollama_service.generate(
                     prompt="Hello, world!",
-                    max_tokens=10,
-                    temperature=0.1
+                    options={
+                        'num_predict': 10,
+                        'temperature': 0.1
+                    }
                 )
                 generation_test = {
                     "success": True,

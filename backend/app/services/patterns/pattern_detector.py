@@ -350,11 +350,15 @@ Respond with only the specific topic title (max 8 words). Be precise, not generi
             # Get model and settings from preferences
             model = await PreferencesRepository.get_value('ollama_model', settings.OLLAMA_DEFAULT_MODEL)
             temperature = await PreferencesRepository.get_value('ollama_temperature', 0.3)
+            context_window = await PreferencesRepository.get_value('ollama_context_window', 4096)
             
             response = await self.ollama_service.generate(
                 prompt=prompt,
                 model=model,
-                temperature=temperature
+                options={
+                    'temperature': temperature,
+                    'num_ctx': context_window
+                }
             )
             
             if response and response.response:
