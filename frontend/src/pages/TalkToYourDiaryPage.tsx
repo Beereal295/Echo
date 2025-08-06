@@ -345,8 +345,8 @@ function TalkToYourDiaryPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left Card - Talk to Echo */}
         <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
         >
           <Card className="bg-card/50 backdrop-blur-sm border-border/50 h-[700px] flex flex-col">
@@ -490,8 +490,8 @@ function TalkToYourDiaryPage() {
 
         {/* Right Card - Saved Conversations */}
         <motion.div
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.1 }}
         >
           <Card className="bg-card/50 backdrop-blur-sm border-border/50 h-[700px] flex flex-col">

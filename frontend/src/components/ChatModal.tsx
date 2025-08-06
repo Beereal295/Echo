@@ -216,8 +216,7 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
       if (result.text) {
         setSttTranscription(result.text)
         setRecordingState(RecordingState.IDLE)
-        // Add the transcribed text to input automatically
-        setInput(prev => prev + (prev ? ' ' : '') + result.text)
+        // Text will be added to input via the useEffect that watches sttTranscription
       }
     })
 
@@ -364,10 +363,10 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
         initializeTTS()
       }
       
-      // Set up delayed greeting - only show if user hasn't sent anything in 10 seconds
+      // Set up delayed greeting - only show if user hasn't sent anything in 10 seconds and isn't actively using STT or typing
       const greetingTimer = setTimeout(() => {
-        // Only show greeting if no messages have been sent yet
-        if (messages.length === 0) {
+        // Only show greeting if no messages have been sent yet, no STT activity, and no text in input
+        if (messages.length === 0 && recordingState === RecordingState.IDLE && !inputText.trim()) {
           initializeChat()
         }
       }, 10000) // 10 seconds
@@ -395,7 +394,7 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
         audioContextRef.current = null
       }
     }
-  }, [isOpen, messages.length])
+  }, [isOpen, messages.length, recordingState, inputText])
 
   // Initialize TTS when voice is enabled
   useEffect(() => {
@@ -422,6 +421,8 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
         // Add space for continuation
         return prevText + ' ' + sttTranscription
       })
+      // Clear the transcription after adding it to prevent duplicates
+      setSttTranscription('')
     }
   }, [sttTranscription])
 

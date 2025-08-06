@@ -175,6 +175,25 @@ function ViewEntriesPage() {
     }
   }, [location.state?.selectedEntryId])
 
+  // Handle preview mode from homepage cards
+  useEffect(() => {
+    const previewMode = location.state?.previewMode
+    
+    if (previewMode && entries.length > 0) {
+      // Set the selected version to match the clicked mode
+      setSelectedVersion(previewMode as 'raw' | 'enhanced' | 'structured')
+      
+      // Auto-select the latest entry for preview
+      const latestEntry = entries[0] // entries are sorted by timestamp desc
+      if (latestEntry) {
+        setSelectedEntry(latestEntry)
+      }
+      
+      // Clear navigation state
+      window.history.replaceState({}, document.title)
+    }
+  }, [location.state?.previewMode, entries])
+
   // Reload entries when clearing search
   useEffect(() => {
     if (!searchQuery) {

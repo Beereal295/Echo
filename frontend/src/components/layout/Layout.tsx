@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -36,7 +36,9 @@ function Layout({ children }: LayoutProps) {
   })
   const [dailyStreak, setDailyStreak] = useState(0)
   const [streakLoading, setStreakLoading] = useState(true)
+  const [showPlusMenu, setShowPlusMenu] = useState(false)
   const location = useLocation()
+  const navigate = useNavigate()
 
   // Calculate daily streak from entries
   const calculateDailyStreak = async () => {
@@ -114,7 +116,7 @@ function Layout({ children }: LayoutProps) {
     {
       path: '/talk',
       icon: MessageSquare,
-      label: 'Talk to Your Diary',
+      label: 'Talk to Echo',
       alwaysShow: true
     },
     {
@@ -419,33 +421,90 @@ function Layout({ children }: LayoutProps) {
         </motion.div>
       </main>
 
-      {/* Floating Plus Button with Enhanced Design - Only show on homepage */}
+      {/* Floating Plus Button with Popup Menu - Only show on homepage */}
       <AnimatePresence>
         {location.pathname === '/' && (
           <motion.div
             initial={{ scale: 0, rotate: -180 }}
             animate={{ 
-              scale: [1, 1.1, 1], 
+              scale: showPlusMenu ? 1 : [1, 1.1, 1], 
               rotate: 0 
             }}
             exit={{ scale: 0, rotate: -180, opacity: 0 }}
             transition={{ 
-              scale: { duration: 2.5, repeat: Infinity, ease: "easeInOut", delay: 2 },
+              scale: showPlusMenu 
+                ? { duration: 0.3 } 
+                : { duration: 2.5, repeat: Infinity, ease: "easeInOut", delay: 2 },
               rotate: { type: "spring", stiffness: 260, damping: 20, delay: 1 },
               exit: { duration: 0.3 }
             }}
             className="fixed bottom-4 right-4 md:bottom-8 md:right-8 z-50"
           >
-            <Link to="/new" className="focus:outline-none outline-none">
+            {/* Plus Button */}
+            <motion.div
+              whileHover={{ rotate: 90, scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              transition={{ type: "spring", stiffness: 400, damping: 17 }}
+              className="flex items-center justify-center cursor-pointer focus:outline-none outline-none relative"
+              onClick={() => setShowPlusMenu(!showPlusMenu)}
+            >
+              <Plus className="h-16 w-16 stroke-2 text-white" />
+            </motion.div>
+
+            {/* Popup Menu */}
+            <AnimatePresence>
+              {showPlusMenu && (
+                <motion.div
+                  initial={{ opacity: 0, y: 60, scale: 0.3, transformOrigin: "bottom right" }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 40, scale: 0.5, transformOrigin: "bottom right" }}
+                  transition={{ 
+                    type: "spring", 
+                    stiffness: 300, 
+                    damping: 25,
+                    duration: 0.4 
+                  }}
+                  className="absolute bottom-20 right-0 bg-card/90 backdrop-blur-md border border-border/50 rounded-lg shadow-xl overflow-hidden min-w-[160px]"
+                >
+                  <motion.button
+                    whileHover={{ backgroundColor: "rgba(255, 255, 255, 0.1)" }}
+                    className="w-full px-4 py-3 flex items-center gap-3 text-left text-white hover:bg-white/10 transition-colors"
+                    onClick={() => {
+                      navigate('/new')
+                      setShowPlusMenu(false)
+                    }}
+                  >
+                    <FileText className="h-5 w-5 text-blue-400" />
+                    <span className="text-sm font-medium">New Entry</span>
+                  </motion.button>
+                  
+                  <div className="w-full h-px bg-border/30" />
+                  
+                  <motion.button
+                    whileHover={{ backgroundColor: "rgba(255, 255, 255, 0.1)" }}
+                    className="w-full px-4 py-3 flex items-center gap-3 text-left text-white hover:bg-white/10 transition-colors"
+                    onClick={() => {
+                      navigate('/voice-upload')
+                      setShowPlusMenu(false)
+                    }}
+                  >
+                    <FileAudio2 className="h-5 w-5 text-purple-400" />
+                    <span className="text-sm font-medium">Voice Upload</span>
+                  </motion.button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Backdrop to close menu */}
+            {showPlusMenu && (
               <motion.div
-                whileHover={{ rotate: 90, scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                transition={{ type: "spring", stiffness: 400, damping: 17 }}
-                className="flex items-center justify-center cursor-pointer focus:outline-none outline-none"
-              >
-                <Plus className="h-16 w-16 stroke-2 text-white" />
-              </motion.div>
-            </Link>
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-[-1]"
+                onClick={() => setShowPlusMenu(false)}
+              />
+            )}
           </motion.div>
         )}
       </AnimatePresence>
