@@ -210,28 +210,22 @@ function TalkToYourDiaryPage() {
   }
 
   const handleChatClose = async (transcription: string, duration: number, messageCount: number, searchQueries: string[]) => {
-    // Auto-save on X button close
-    try {
-      await api.createConversation({
-        transcription,
-        conversation_type: 'chat',
-        duration,
-        message_count: messageCount,
-        search_queries_used: searchQueries
-      })
-      safeToast({
-        title: 'Conversation saved',
-        description: 'Your chat with Echo has been saved successfully'
-      })
-      loadConversations()
-    } catch (error) {
-      console.error('Failed to save conversation:', error)
-      safeToast({
-        title: 'Failed to save conversation',
-        description: 'Please try again'
-      })
-    }
+    // Store conversation data for the save modal
+    setCurrentTranscription(transcription)
+    setConversationToSave({
+      transcription,
+      duration,
+      messageCount,
+      searchQueries
+    })
+    
+    // Close ChatModal first
     setIsChatModalOpen(false)
+    
+    // Wait for ChatModal exit animation to complete (300ms) then show SaveDiscardModal
+    setTimeout(() => {
+      setIsSaveModalOpen(true)
+    }, 300)
   }
 
   const handleSaveConversation = async () => {

@@ -58,14 +58,20 @@ function SaveDiscardModal({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
+        transition={{ duration: 0.3, ease: "easeInOut" }}
         className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
         onClick={onClose}
       >
         <motion.div
-          initial={{ scale: 0.9, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.9, opacity: 0 }}
-          transition={{ type: "spring", stiffness: 300, damping: 30 }}
+          initial={{ scale: 0.9, opacity: 0, y: 20 }}
+          animate={{ scale: 1, opacity: 1, y: 0 }}
+          exit={{ scale: 0.85, opacity: 0, y: -20 }}
+          transition={{ 
+            type: "spring", 
+            stiffness: 300, 
+            damping: 30,
+            exit: { duration: 0.25, ease: "easeIn" }
+          }}
           className="bg-card border border-border rounded-lg shadow-2xl overflow-hidden max-w-4xl w-full max-h-[85vh] flex flex-col"
           onClick={(e) => e.stopPropagation()}
         >
@@ -145,25 +151,27 @@ function SaveDiscardModal({
 
           {/* Footer */}
           <div className="px-6 py-4 border-t border-border">
-            <div className="flex items-center justify-end gap-3">
-              <Button
-                variant="outline"
-                size="sm"
+            <div className="flex items-center justify-between gap-4">
+              <button
                 onClick={onDiscard}
-                className="flex items-center gap-2 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/50"
+                className="relative overflow-hidden group px-6 py-3 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 gap-2"
               >
-                <Trash2 className="h-4 w-4" />
-                Discard Conversation
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
+                <div className="absolute inset-0 bg-gradient-to-r from-red-500/10 to-red-600/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                <span className="relative z-10 flex items-center font-medium">
+                  <Trash2 className="h-4 w-4" />
+                  Discard Conversation
+                </span>
+              </button>
+              <button
                 onClick={onSave}
-                className="flex items-center gap-2 hover:bg-green-500/20 hover:text-green-400 hover:border-green-500/50"
+                className="relative overflow-hidden group px-6 py-3 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-green-500/10 border border-green-500/20 text-green-400 hover:bg-green-500/20 gap-2"
               >
-                <Save className="h-4 w-4" />
-                Save Conversation
-              </Button>
+                <div className="absolute inset-0 bg-gradient-to-r from-green-500/10 to-emerald-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                <span className="relative z-10 flex items-center font-medium">
+                  <Save className="h-4 w-4" />
+                  Save Conversation
+                </span>
+              </button>
             </div>
           </div>
         </motion.div>
