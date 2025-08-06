@@ -69,7 +69,8 @@ Return only the JSON array, nothing else."""
                 model=model,
                 options={
                     'temperature': temperature,
-                    'num_ctx': context_window
+                    'num_ctx': context_window,
+                    'num_gpu': -1  # Use all GPU layers for maximum performance
                 }
             )
             

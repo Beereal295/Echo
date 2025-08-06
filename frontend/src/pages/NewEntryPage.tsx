@@ -141,6 +141,7 @@ function NewEntryPage() {
   const [showInputUI, setShowInputUI] = useState(true)
   const [showResults, setShowResults] = useState(false)
   const [currentLoadingMessage, setCurrentLoadingMessage] = useState('')
+  const [currentReviewTip, setCurrentReviewTip] = useState('')
   
   // Edit state
   const [editingCard, setEditingCard] = useState<string | null>(null)
@@ -976,6 +977,7 @@ function NewEntryPage() {
         
         // Show results immediately
         setRecordingState(RecordingState.SUCCESS)
+        setCurrentReviewTip(getRandomReviewTip())  // Set tip once before showing results
         setShowResults(true)
         setTimeout(() => setRecordingState(RecordingState.IDLE), 2000)
         
@@ -1084,6 +1086,7 @@ function NewEntryPage() {
 
             // Show success state and results
             setRecordingState(RecordingState.SUCCESS)
+            setCurrentReviewTip(getRandomReviewTip())  // Set tip once before showing results
             setShowResults(true)
             setTimeout(() => setRecordingState(RecordingState.IDLE), 2000)
             
@@ -1572,7 +1575,7 @@ function NewEntryPage() {
                     Review Before Saving
                   </p>
                   <p className="text-xs text-gray-300">
-                    {getRandomReviewTip()}
+                    {currentReviewTip}
                   </p>
                 </div>
               </div>

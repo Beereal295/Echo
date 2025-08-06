@@ -109,6 +109,7 @@ function VoiceUploadPage() {
   const [processingMetadata, setProcessingMetadata] = useState<any>(null)
   const [showModal, setShowModal] = useState(false)
   const [showResults, setShowResults] = useState(false)
+  const [currentReviewTip, setCurrentReviewTip] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -544,6 +545,7 @@ function VoiceUploadPage() {
         })
         
         // Show results immediately (like NewEntryPage)
+        setCurrentReviewTip(getRandomReviewTip())  // Set tip once before showing results
         setShowResults(true)
         setShowUploadCard(false)
       } else {
@@ -1163,7 +1165,7 @@ function VoiceUploadPage() {
                       Review Before Saving
                     </p>
                     <p className="text-xs text-gray-300">
-                      {getRandomReviewTip()}
+                      {currentReviewTip}
                     </p>
                   </div>
                 </div>

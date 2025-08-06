@@ -134,7 +134,8 @@ Return ONLY the improved text with no introduction, explanation, or commentary."
                 model=model,
                 options={
                     'temperature': temperature,
-                    'num_ctx': context_window
+                    'num_ctx': context_window,
+                    'num_gpu': -1  # Use all GPU layers for maximum performance
                 }
             )
             return response.response.strip()
@@ -156,7 +157,8 @@ Return ONLY the improved text with no introduction, explanation, or commentary."
                 model=model,
                 options={
                     'temperature': temperature,
-                    'num_ctx': context_window
+                    'num_ctx': context_window,
+                    'num_gpu': -1  # Use all GPU layers for maximum performance
                 }
             )
             return response.response.strip()

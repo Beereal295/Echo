@@ -148,7 +148,7 @@ class EntryRepository:
     
     @staticmethod
     async def get_entries_with_embeddings(
-        limit: int = 100, 
+        limit: Optional[int] = 100, 
         offset: int = 0,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
@@ -180,9 +180,13 @@ class EntryRepository:
             if mood_conditions:
                 query += f" AND ({' OR '.join(mood_conditions)})"
         
-        # Add ordering and pagination
-        query += " ORDER BY timestamp DESC LIMIT ? OFFSET ?"
-        params.extend([limit, offset])
+        # Add ordering
+        query += " ORDER BY timestamp DESC"
+        
+        # Add pagination only if limit is specified
+        if limit is not None:
+            query += " LIMIT ? OFFSET ?"
+            params.extend([limit, offset])
         
         rows = await db.fetch_all(query, tuple(params))
         return [Entry.from_dict(row) for row in rows]

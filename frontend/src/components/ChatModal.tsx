@@ -500,8 +500,9 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
   }
 
   const stripTTSProblematicChars = (text: string): string => {
-    // Remove markdown emphasis (*, **)
+    // Remove markdown emphasis (*, **) and hash symbols
     let cleanText = text.replace(/\*+/g, '')
+      .replace(/#/g, '') // Remove hash/pound symbols
     
     // Remove emojis (common Unicode ranges)
     cleanText = cleanText

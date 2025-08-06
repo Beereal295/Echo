@@ -43,7 +43,7 @@ def strip_thinking_block(response_text: str) -> str:
     return response_text
 
 @tool
-async def search_diary_entries(query: str, limit: int = 20) -> Dict[str, Any]:
+async def search_diary_entries(query: str, limit: int = 50) -> Dict[str, Any]:
     """Search user's diary entries by content using semantic search.
     
     Use this tool when the user asks about:
@@ -70,7 +70,7 @@ async def search_diary_entries(query: str, limit: int = 20) -> Dict[str, Any]:
             return {"success": False, "error": "Query cannot be empty"}
         
         if limit < 1 or limit > 100:
-            limit = 20
+            limit = 50
             
         query = query.strip()[:1000]  # Limit query length
         
@@ -82,9 +82,9 @@ async def search_diary_entries(query: str, limit: int = 20) -> Dict[str, Any]:
             is_query=True  # Mark as query for BGE formatting
         )
         
-        # Get all entries with embeddings (no date filtering)
+        # Get all entries with embeddings (no date filtering, no limit for complete accuracy)
         entries_with_embeddings = await EntryRepository.get_entries_with_embeddings(
-            limit=1000  # Get a large batch for comprehensive search
+            limit=None  # Get ALL entries for comprehensive search - accuracy over performance
         )
         
         if not entries_with_embeddings:
@@ -162,9 +162,11 @@ async def get_entries_by_date(date_filter: str, limit: int = 100) -> Dict[str, A
     - "yesterday", "today", "last week"
     - "last Saturday", "this Monday", "two days ago"
     - "January 15th", "last month", "this year"
+    - "my last entry", "most recent entries", "latest journal"
+    - "latest diary entry", "my recent diary", "last diary note"
     
     args:
-        date_filter: Natural language date filter (e.g., "yesterday", "last Saturday", "this week")
+        date_filter: Natural language date filter (e.g., "yesterday", "last Saturday", "this week", "latest entry")
         limit: Maximum number of results to return (100)
         
     Returns:
@@ -350,7 +352,8 @@ class DiaryChatService:
                 model=model_name,
                 base_url=base_url,
                 temperature=float(temperature),
-                num_ctx=int(num_ctx)
+                num_ctx=int(num_ctx),
+                num_gpu=-1  # Use all GPU layers for maximum performance
             )
             
             logger.info(f"Initialized LLM with model: {model_name}")
@@ -361,12 +364,25 @@ class DiaryChatService:
             
         except Exception as e:
             logger.error(f"Failed to initialize DiaryChatService: {e}")
-            # Fallback to defaults
+            # Fallback - still try to use Talk to Your Diary specific preferences
+            try:
+                fallback_model = await PreferencesRepository.get_value('talk_to_diary_model', settings.OLLAMA_DEFAULT_MODEL)
+                fallback_temp = await PreferencesRepository.get_value('talk_to_diary_temperature', 0.2)
+                fallback_ctx = await PreferencesRepository.get_value('talk_to_diary_context_window', 8192)
+                fallback_url = await PreferencesRepository.get_value('ollama_url', 'http://localhost:11434')
+            except:
+                # If even preference lookup fails, use absolute defaults
+                fallback_model = settings.OLLAMA_DEFAULT_MODEL
+                fallback_temp = 0.2
+                fallback_ctx = 8192
+                fallback_url = 'http://localhost:11434'
+            
             self.llm = ChatOllama(
-                model=settings.OLLAMA_DEFAULT_MODEL,
-                base_url='http://localhost:11434',
-                temperature=0.1,
-                num_ctx=4096
+                model=fallback_model,
+                base_url=fallback_url,
+                temperature=float(fallback_temp),
+                num_ctx=int(fallback_ctx),
+                num_gpu=-1  # Use all GPU layers for maximum performance
             )
             self.llm_with_tools = self.llm.bind_tools([search_diary_entries, get_entries_by_date])
             self._initialized = True
@@ -395,11 +411,11 @@ class DiaryChatService:
             # Build message history for LangChain with system date awareness
             today = date.today()
             messages = [
-                SystemMessage(content=f"""You are Echo, a diary companion. Today is {today.strftime('%A, %B %d, %Y')}.
+                SystemMessage(content=f"""You are Echo, a journaling companion. Today is {today.strftime('%A, %B %d, %Y')}.
 
-When users ask about their diary entries, use the available tools:
+When users ask about their entries, use the available tools:
 - search_diary_entries: for content-based searches like "hiking", "work", "friends"
-- get_entries_by_date: for recent entries like "yesterday", "last few days"
+- get_entries_by_date: for recent entries like "yesterday", "last few days", "my last/latest entry", "recent diary"
 
 Use tools to find relevant entries.""")
             ]
@@ -478,7 +494,7 @@ Use tools to find relevant entries.""")
                 
                 # Add focused system prompt for response generation
                 response_messages = [
-                    SystemMessage(content="You are Echo. Look for tool results containing diary entry data. Analyze those diary entries and thoughtfully reply as if you are talking to the user naturally using 'you' and 'your'."),
+                    SystemMessage(content="You are Echo. Look for tool results containing user's journal entry data. Analyze those journal entries and analyze the user's question. Then thoughtfully reply as if you are talking to the user naturally using 'you' and 'your'. Keep the answers short (3-4 sentences) UNLESS the user asks otherwise or asks to show the whole entry."),
                     *messages[1:]  # Skip original system message, keep user message, AI response, and tool results
                 ]
                 

@@ -206,6 +206,7 @@ class OllamaService:
         # Build options
         options = {
             "temperature": temperature,
+            "num_gpu": -1,  # Use all GPU layers for maximum performance
             **kwargs
         }
         
@@ -276,6 +277,7 @@ class OllamaService:
         # Build options
         options = {
             "temperature": temperature,
+            "num_gpu": -1,  # Use all GPU layers for maximum performance
             **kwargs
         }
         

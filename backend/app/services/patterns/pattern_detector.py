@@ -357,7 +357,8 @@ Respond with only the specific topic title (max 8 words). Be precise, not generi
                 model=model,
                 options={
                     'temperature': temperature,
-                    'num_ctx': context_window
+                    'num_ctx': context_window,
+                    'num_gpu': -1  # Use all GPU layers for maximum performance
                 }
             )
             
