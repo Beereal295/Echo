@@ -9,6 +9,7 @@ import { wsClient } from '@/lib/websocket'
 import type { STTState, TranscriptionResult } from '@/lib/websocket'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useToast } from '@/components/ui/use-toast'
+import { useVoiceSettings } from '@/hooks/useVoiceSettings'
 
 // Typewriter Text Component for chat messages
 interface TypewriterTextProps {
@@ -80,11 +81,10 @@ interface ChatModalProps {
   isOpen: boolean
   onClose: (transcription: string, duration: number, messageCount: number, searchQueries: string[]) => void
   onEndChat: (transcription: string, duration: number, messageCount: number, searchQueries: string[]) => void
-  voiceEnabled: boolean
-  onVoiceToggle: (enabled: boolean) => void
 }
 
-function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: ChatModalProps) {
+function ChatModal({ isOpen, onClose, onEndChat }: ChatModalProps) {
+  const { voiceEnabled, setVoiceEnabled } = useVoiceSettings()
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [inputText, setInputText] = useState('')
   const [isProcessing, setIsProcessing] = useState(false)
@@ -97,6 +97,9 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
   const audioContextRef = useRef<AudioContext | null>(null)
   const currentAudioSourceRef = useRef<AudioBufferSourceNode | null>(null)
   const { toast } = useToast()
+  
+  // Track processing stages per entry for consolidated completion notification
+  const [processingStages, setProcessingStages] = useState<Record<number, Set<string>>>({})
 
   // Helper function to ensure toast content is valid (same as NewEntryPage)
   const safeToast = (params: Parameters<typeof toast>[0]) => {
@@ -114,26 +117,42 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
   const handleProcessingStatusUpdate = (data: any) => {
     const { type, entry_id, message } = data
     
+    // Track completion stages for each entry
+    if (entry_id && (type === 'chat_entry_embedding_completed' || type === 'chat_entry_mood_completed')) {
+      setProcessingStages(prev => {
+        const entryStages = prev[entry_id] || new Set()
+        const newStages = new Set(entryStages)
+        
+        if (type === 'chat_entry_embedding_completed') {
+          newStages.add('embedding')
+        } else if (type === 'chat_entry_mood_completed') {
+          newStages.add('mood')
+        }
+        
+        // Check if all processing is complete (both embedding and mood analysis)
+        if (newStages.has('embedding') && newStages.has('mood')) {
+          // Show consolidated completion toast
+          safeToast({
+            title: "✅ Entry added",
+            description: "Your entry has been saved and fully processed",
+            duration: 4000
+          })
+          
+          // Clean up tracking for this entry
+          const updatedStages = { ...prev }
+          delete updatedStages[entry_id]
+          return updatedStages
+        }
+        
+        return { ...prev, [entry_id]: newStages }
+      })
+      return
+    }
+    
     switch (type) {
       case 'chat_entry_processing_started':
         // Optional: show processing start notification (could be too noisy)
         console.log(`Processing started for chat entry ${entry_id}`)
-        break
-        
-      case 'chat_entry_embedding_completed':
-        safeToast({
-          title: "✨ Entry indexed",
-          description: "Your chat entry has been indexed for semantic search",
-          duration: 3000
-        })
-        break
-        
-      case 'chat_entry_mood_completed':
-        safeToast({
-          title: "🎭 Mood analyzed", 
-          description: "Emotional analysis completed for your entry",
-          duration: 3000
-        })
         break
         
       case 'chat_entry_processing_completed':
@@ -273,9 +292,14 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
       // Only handle processing-related messages
       if (message.data?.type?.includes('chat_entry_processing') || 
           message.data?.type?.includes('chat_entry_embedding') ||
-          message.data?.type?.includes('chat_entry_mood')) {
+          message.data?.type?.includes('chat_entry_mood') ||
+          (message.data?.job?.type?.includes('chat_entry_processing')) ||
+          (message.data?.job?.type?.includes('chat_entry_embedding')) ||
+          (message.data?.job?.type?.includes('chat_entry_mood'))) {
         console.log('Processing status update:', message)
-        handleProcessingStatusUpdate(message.data)
+        // Handle both direct type and job.type formats
+        const statusData = message.data?.job || message.data
+        handleProcessingStatusUpdate(statusData)
       }
     })
 
@@ -958,7 +982,7 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
                 <Switch
                   id="modal-voice-toggle"
                   checked={voiceEnabled}
-                  onCheckedChange={onVoiceToggle}
+                  onCheckedChange={setVoiceEnabled}
                 />
                 <Volume2 className={`h-4 w-4 ${voiceEnabled ? 'text-primary' : 'text-muted-foreground'}`} />
               </div>

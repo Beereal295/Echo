@@ -9,6 +9,7 @@ import { api } from '@/lib/api'
 import { format } from 'date-fns'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useToast } from '@/components/ui/use-toast'
+import { useVoiceSettings } from '@/hooks/useVoiceSettings'
 
 // Typewriter Text Component
 interface TypewriterTextProps {
@@ -81,7 +82,7 @@ interface Conversation {
 }
 
 function TalkToYourDiaryPage() {
-  const [voiceEnabled, setVoiceEnabled] = useState(true)
+  const { voiceEnabled, setVoiceEnabled } = useVoiceSettings()
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [isChatModalOpen, setIsChatModalOpen] = useState(false)
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false)
@@ -118,39 +119,10 @@ function TalkToYourDiaryPage() {
     })
   }
 
-  // Load voice preference and conversations on mount
+  // Load conversations on mount
   useEffect(() => {
-    loadVoicePreference()
     loadConversations()
   }, [])
-
-
-  // Save voice preference whenever it changes
-  useEffect(() => {
-    saveVoicePreference()
-  }, [voiceEnabled])
-
-  const loadVoicePreference = async () => {
-    try {
-      const response = await api.getPreferences()
-      if (response.success && response.data?.preferences) {
-        const voicePref = response.data.preferences.find(p => p.key === 'voice_enabled')
-        if (voicePref) {
-          setVoiceEnabled(voicePref.value === 'true')
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load voice preference:', error)
-    }
-  }
-
-  const saveVoicePreference = async () => {
-    try {
-      await api.updatePreference('voice_enabled', voiceEnabled.toString())
-    } catch (error) {
-      console.error('Failed to save voice preference:', error)
-    }
-  }
 
   const loadConversations = async () => {
     setLoading(true)
@@ -663,8 +635,6 @@ function TalkToYourDiaryPage() {
         isOpen={isChatModalOpen}
         onClose={handleChatClose}
         onEndChat={handleChatEnd}
-        voiceEnabled={voiceEnabled}
-        onVoiceToggle={setVoiceEnabled}
       />
 
       {/* Save/Discard Modal */}

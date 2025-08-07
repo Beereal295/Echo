@@ -47,6 +47,9 @@ function SettingsPage() {
   const [availableVoices, setAvailableVoices] = useState<Array<{name: string, filename: string}>>([])
   const [loadingVoices, setLoadingVoices] = useState(false)
   
+  // Voice settings (master toggle)
+  const [voiceEnabled, setVoiceEnabled] = useState(false) // Default to OFF
+  
   // General settings
   const [autoSave, setAutoSave] = useState(true)
   const [autoSaveInterval, setAutoSaveInterval] = useState('30')
@@ -115,6 +118,9 @@ function SettingsPage() {
               break
             case 'tts_volume':
               setTtsVolume(String(pref.typed_value || '1.0'))
+              break
+            case 'voice_enabled':
+              setVoiceEnabled(pref.typed_value === true || pref.typed_value === 'true')
               break
             case 'auto_save':
               setAutoSave(pref.typed_value !== false)
@@ -191,6 +197,15 @@ function SettingsPage() {
           title: 'Settings saved',
           description: 'Your preferences have been updated'
         })
+        
+        // Broadcast settings change to refresh other components
+        window.dispatchEvent(new CustomEvent('settingsChanged', { 
+          detail: { voiceEnabled: preferences.find(p => p.key === 'voice_enabled')?.value }
+        }))
+        
+        // Also update localStorage timestamp to force refresh
+        localStorage.setItem('voiceSettingsLastUpdated', Date.now().toString())
+        
         return true
       } else {
         throw new Error(response.error || 'Failed to save preferences')
@@ -251,12 +266,18 @@ function SettingsPage() {
 
   const handleSaveTTS = async () => {
     const preferences = [
+      { key: 'voice_enabled', value: voiceEnabled, value_type: 'bool' },
       { key: 'tts_engine', value: ttsEngine, value_type: 'string' },
       { key: 'tts_voice', value: ttsVoice, value_type: 'string' },
       { key: 'tts_speed', value: parseFloat(ttsSpeed), value_type: 'float' },
       { key: 'tts_volume', value: parseFloat(ttsVolume), value_type: 'float' }
     ]
     await savePreferences(preferences)
+    
+    // Broadcast voice change to other components
+    window.dispatchEvent(new CustomEvent('voiceSettingChanged', { 
+      detail: { voiceEnabled } 
+    }))
   }
 
   const handleSaveGeneral = async () => {
@@ -841,6 +862,20 @@ function SettingsPage() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-6">
+                {/* Voice Toggle Settings */}
+                <div className="bg-muted/10 rounded-lg p-4 border border-border/50">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-white font-medium">Voice Output</h3>
+                    </div>
+                    <Switch
+                      checked={voiceEnabled}
+                      onCheckedChange={setVoiceEnabled}
+                      className="ml-4"
+                    />
+                  </div>
+                </div>
+
                 {/* TTS Engine Settings */}
                 <div className="bg-muted/10 rounded-lg p-4 border border-border/50">
                   <h3 className="text-white font-medium mb-4">Engine Configuration</h3>
