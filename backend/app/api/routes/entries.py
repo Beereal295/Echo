@@ -22,6 +22,8 @@ from app.services.entry_processing import get_entry_processing_service
 from app.services.processing_queue import get_processing_queue
 from app.services.embedding_service import get_embedding_service
 from app.services.mood_analysis import get_mood_analysis_service
+from app.services.diary_chat_service import invalidate_diary_cache
+from app.services.smart_tagging_service import get_smart_tagging_service
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +54,9 @@ async def _generate_embedding_for_entry(entry_id: int, text: str = None):
         # Update entry with embedding
         await EntryRepository.update_embedding(entry_id, embedding)
         
+        # Invalidate cache since we have new embeddings
+        invalidate_diary_cache()
+        
         logger.info(f"Successfully generated embedding for entry {entry_id} using text: '{text[:50]}...'")
         
     except Exception as e:
@@ -80,6 +85,14 @@ async def create_entry(entry_data: EntryCreate, background_tasks: BackgroundTask
         # Create entry model with all provided data
         # Handle mode as string (from API schema) 
         mode_str = entry_data.mode if isinstance(entry_data.mode, str) else entry_data.mode.value
+        
+        # Generate smart tags for the entry
+        smart_tagging_service = get_smart_tagging_service()
+        smart_tags_result = smart_tagging_service.generate_smart_tags(entry_data.raw_text)
+        
+        # Extract just the tags array for the smart_tags column
+        smart_tags_list = smart_tags_result["tags"]
+        
         entry = Entry(
             raw_text=entry_data.raw_text,
             enhanced_text=entry_data.enhanced_text,
@@ -87,11 +100,15 @@ async def create_entry(entry_data: EntryCreate, background_tasks: BackgroundTask
             mode=mode_str,
             timestamp=entry_data.custom_timestamp if entry_data.custom_timestamp else datetime.now(),
             word_count=len(entry_data.raw_text.split()),
-            processing_metadata=entry_data.processing_metadata if entry_data.processing_metadata else None
+            processing_metadata=entry_data.processing_metadata,  # Keep original processing metadata
+            smart_tags=smart_tags_list  # Store smart tags in dedicated column
         )
         
         # Save to database first
         created_entry = await EntryRepository.create(entry)
+        
+        # Invalidate diary cache since we have a new entry
+        invalidate_diary_cache()
         
         # Generate embedding in background - will use best available text
         background_tasks.add_task(
@@ -111,7 +128,8 @@ async def create_entry(entry_data: EntryCreate, background_tasks: BackgroundTask
             timestamp=created_entry.timestamp,
             mood_tags=created_entry.mood_tags,
             word_count=created_entry.word_count,
-            processing_metadata=created_entry.processing_metadata
+            processing_metadata=created_entry.processing_metadata,
+            smart_tags=created_entry.smart_tags
         )
         
     except Exception as e:
@@ -151,7 +169,8 @@ async def list_entries(
                 timestamp=entry.timestamp,
                 mood_tags=entry.mood_tags,
                 word_count=entry.word_count,
-                processing_metadata=entry.processing_metadata
+                processing_metadata=entry.processing_metadata,
+                smart_tags=entry.smart_tags
             )
             for entry in entries
         ]
@@ -188,7 +207,8 @@ async def get_entry(entry_id: int = Path(..., description="Entry ID")):
             timestamp=entry.timestamp,
             mood_tags=entry.mood_tags,
             word_count=entry.word_count,
-            processing_metadata=entry.processing_metadata
+            processing_metadata=entry.processing_metadata,
+            smart_tags=entry.smart_tags
         )
         
     except HTTPException:
@@ -235,6 +255,9 @@ async def update_entry(
         # Save updates
         updated_entry = await EntryRepository.update(entry)
         
+        # Invalidate diary cache since entry was updated
+        invalidate_diary_cache()
+        
         # Regenerate embedding if any text was updated and we have background tasks
         if (text_updated or 
             entry_data.enhanced_text is not None or 
@@ -255,7 +278,8 @@ async def update_entry(
             timestamp=updated_entry.timestamp,
             mood_tags=updated_entry.mood_tags,
             word_count=updated_entry.word_count,
-            processing_metadata=updated_entry.processing_metadata
+            processing_metadata=updated_entry.processing_metadata,
+            smart_tags=updated_entry.smart_tags
         )
         
     except HTTPException:
@@ -308,7 +332,8 @@ async def search_entries(search_request: EntrySearchRequest):
                 timestamp=entry.timestamp,
                 mood_tags=entry.mood_tags,
                 word_count=entry.word_count,
-                processing_metadata=entry.processing_metadata
+                processing_metadata=entry.processing_metadata,
+                smart_tags=entry.smart_tags
             )
             for entry in entries
         ]
@@ -359,15 +384,27 @@ async def create_and_process_entry(
 ):
     """Create a new entry and queue it for processing in specified modes"""
     try:
+        # Generate smart tags for the entry
+        smart_tagging_service = get_smart_tagging_service()
+        smart_tags_result = smart_tagging_service.generate_smart_tags(request.raw_text)
+        
+        # Extract just the tags array for the smart_tags column
+        smart_tags_list = smart_tags_result["tags"]
+        
         # Create raw entry first - processing metadata will be added by processing pipeline
         entry = Entry(
             raw_text=request.raw_text,
             mode="raw",
             timestamp=datetime.now(),
-            word_count=len(request.raw_text.split())
+            word_count=len(request.raw_text.split()),
+            processing_metadata=None,  # Will be set by processing pipeline
+            smart_tags=smart_tags_list  # Store smart tags in dedicated column
         )
         
         created_entry = await EntryRepository.create(entry)
+        
+        # Invalidate diary cache since we have a new entry
+        invalidate_diary_cache()
         
         # Generate embedding in background - will use best available text
         background_tasks.add_task(

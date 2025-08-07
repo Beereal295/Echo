@@ -223,6 +223,24 @@ class EntryRepository:
         return result["count"] if result else 0
     
     @staticmethod
+    async def get_entries_before_timestamp(timestamp: datetime, limit: int = 5) -> List[Entry]:
+        """Get entries before a specific timestamp"""
+        rows = await db.fetch_all(
+            "SELECT * FROM entries WHERE timestamp < ? ORDER BY timestamp DESC LIMIT ?",
+            (timestamp, limit)
+        )
+        return [Entry.from_dict(row) for row in rows]
+    
+    @staticmethod
+    async def get_entries_after_timestamp(timestamp: datetime, limit: int = 5) -> List[Entry]:
+        """Get entries after a specific timestamp"""
+        rows = await db.fetch_all(
+            "SELECT * FROM entries WHERE timestamp > ? ORDER BY timestamp ASC LIMIT ?",
+            (timestamp, limit)
+        )
+        return [Entry.from_dict(row) for row in rows]
+    
+    @staticmethod
     async def clear_all_embeddings() -> int:
         """Clear all embeddings from all entries. Returns count of affected rows."""
         import logging

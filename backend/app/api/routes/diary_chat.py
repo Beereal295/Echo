@@ -34,6 +34,8 @@ class DiaryChatResponse(BaseModel):
     tool_calls_made: List[Dict[str, Any]] = Field(default_factory=list, description="Search tools that were used")
     search_queries_used: List[str] = Field(default_factory=list, description="Queries used to search diary")
     search_feedback: Optional[str] = Field(None, description="Feedback message about search process")
+    tool_feedback: Optional[str] = Field(None, description="Tool-specific feedback message")
+    processing_phases: List[Dict[str, Any]] = Field(default_factory=list, description="Processing phases for frontend status")
     conversation_id: Optional[int] = Field(None, description="ID of the conversation if saved")
 
 
@@ -69,7 +71,8 @@ async def chat_with_diary(
         # Process the message with LLM and tools
         chat_response = await chat_service.process_message(
             message=request.message,
-            conversation_history=request.conversation_history
+            conversation_history=request.conversation_history,
+            background_tasks=background_tasks
         )
         
         # Prepare response data
@@ -78,6 +81,8 @@ async def chat_with_diary(
             tool_calls_made=chat_response.get("tool_calls_made", []),
             search_queries_used=chat_response.get("search_queries_used", []),
             search_feedback=None,  # Will be set by frontend via separate endpoint
+            tool_feedback=chat_response.get("tool_feedback"),
+            processing_phases=chat_response.get("processing_phases", []),
             conversation_id=request.conversation_id
         )
         

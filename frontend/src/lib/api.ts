@@ -440,6 +440,8 @@ class ApiClient {
     tool_calls_made: Array<{ tool: string; arguments: any; result: any }>
     search_queries_used: string[]
     search_feedback?: string
+    tool_feedback?: string
+    processing_phases: Array<{ phase: string; message: string; tools?: string[] }>
     conversation_id?: number
   }>> {
     return this.request('/diary/chat', {

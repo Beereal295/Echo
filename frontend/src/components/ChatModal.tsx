@@ -109,6 +109,54 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
       duration: 2000 // 2 seconds for quick dismissal
     })
   }
+
+  // Handle processing status updates from WebSocket
+  const handleProcessingStatusUpdate = (data: any) => {
+    const { type, entry_id, message } = data
+    
+    switch (type) {
+      case 'chat_entry_processing_started':
+        // Optional: show processing start notification (could be too noisy)
+        console.log(`Processing started for chat entry ${entry_id}`)
+        break
+        
+      case 'chat_entry_embedding_completed':
+        safeToast({
+          title: "✨ Entry indexed",
+          description: "Your chat entry has been indexed for semantic search",
+          duration: 3000
+        })
+        break
+        
+      case 'chat_entry_mood_completed':
+        safeToast({
+          title: "🎭 Mood analyzed", 
+          description: "Emotional analysis completed for your entry",
+          duration: 3000
+        })
+        break
+        
+      case 'chat_entry_processing_completed':
+        safeToast({
+          title: "✅ Entry processed",
+          description: "Your chat entry has been fully processed and saved",
+          duration: 4000
+        })
+        break
+        
+      case 'chat_entry_processing_failed':
+        safeToast({
+          title: "❌ Processing failed",
+          description: "Failed to process your chat entry",
+          variant: "destructive",
+          duration: 4000
+        })
+        break
+        
+      default:
+        console.log('Unknown processing status:', type)
+    }
+  }
   
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -166,8 +214,8 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
       console.log('WebSocket connection state changed:', connected)
       setIsConnected(connected)
       if (connected) {
-        // Subscribe to STT channels
-        wsClient.subscribeToChannels(['stt', 'recording', 'transcription'])
+        // Subscribe to STT channels and processing channel
+        wsClient.subscribeToChannels(['stt', 'recording', 'transcription', 'processing'])
       }
     })
 
@@ -179,7 +227,7 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
         if (wsClient.isConnected()) {
           console.log('WebSocket connected successfully')
           setIsConnected(true)
-          wsClient.subscribeToChannels(['stt', 'recording', 'transcription'])
+          wsClient.subscribeToChannels(['stt', 'recording', 'transcription', 'processing'])
         }
       } catch (error) {
         console.error('Initial WebSocket connection failed:', error)
@@ -220,6 +268,17 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
       }
     })
 
+    // Subscribe to processing status updates
+    const unsubscribeProcessing = wsClient.onMessage('*', (message) => {
+      // Only handle processing-related messages
+      if (message.data?.type?.includes('chat_entry_processing') || 
+          message.data?.type?.includes('chat_entry_embedding') ||
+          message.data?.type?.includes('chat_entry_mood')) {
+        console.log('Processing status update:', message)
+        handleProcessingStatusUpdate(message.data)
+      }
+    })
+
     // Subscribe to errors
     const unsubscribeError = wsClient.onError((error: string) => {
       console.error('WebSocket error:', error)
@@ -246,7 +305,7 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
               console.log('Reconnecting WebSocket for pipeline recovery...')
               await wsClient.connect()
               if (wsClient.isConnected()) {
-                wsClient.subscribeToChannels(['stt', 'recording', 'transcription'])
+                wsClient.subscribeToChannels(['stt', 'recording', 'transcription', 'processing'])
                 // Reset server-side recording session
                 wsClient.resetRecording()
                 console.log('Pipeline recovery successful - WebSocket reconnected and server reset')
@@ -271,7 +330,7 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
             } else {
               // WebSocket is connected, reset server-side recording and channels
               wsClient.resetRecording()
-              wsClient.subscribeToChannels(['stt', 'recording', 'transcription'])
+              wsClient.subscribeToChannels(['stt', 'recording', 'transcription', 'processing'])
               
               // Force blur immediately and with longer delay
               if (document.activeElement && document.activeElement !== document.body) {
@@ -315,6 +374,7 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
       unsubscribeConnection()
       unsubscribeState()
       unsubscribeTranscription()
+      unsubscribeProcessing()
       unsubscribeError()
     }
   }, [isOpen, toast])
@@ -619,7 +679,7 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
       try {
         await wsClient.connect()
         if (wsClient.isConnected()) {
-          wsClient.subscribeToChannels(['stt', 'recording', 'transcription'])
+          wsClient.subscribeToChannels(['stt', 'recording', 'transcription', 'processing'])
           console.log('WebSocket reconnected successfully')
         } else {
           throw new Error('Failed to reconnect')
@@ -713,18 +773,8 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
     setInputText('')
     setIsProcessing(true)
 
-    // Get processing feedback
-    try {
-      const feedbackResponse = await api.getDiarySearchFeedback()
-      if (feedbackResponse.success && feedbackResponse.data) {
-        const feedbackText = typeof feedbackResponse.data === 'string' ? feedbackResponse.data : 
-                           (feedbackResponse.data as any)?.message || 
-                           String(feedbackResponse.data)
-        setProcessingMessage(feedbackText)
-      }
-    } catch (error) {
-      setProcessingMessage('Processing...')
-    }
+    // Set initial processing message
+    setProcessingMessage('Connecting to Echo...')
 
     // Send message to AI
     try {
@@ -750,6 +800,19 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
         const hasToolCalls = chatData.tool_calls_made?.length > 0
         setIsToolCall(hasToolCalls)
         
+        // Simulate progressive status updates using processing phases
+        if (chatData.processing_phases && chatData.processing_phases.length > 0) {
+          for (let i = 0; i < chatData.processing_phases.length; i++) {
+            const phase = chatData.processing_phases[i]
+            setProcessingMessage(phase.message)
+            
+            // Add a small delay between phases to show progression
+            if (i < chatData.processing_phases.length - 1) {
+              await new Promise(resolve => setTimeout(resolve, 800))
+            }
+          }
+        }
+        
         // Update search queries
         if (chatData.search_queries_used?.length > 0) {
           setSearchQueries(prev => [...prev, ...chatData.search_queries_used])
@@ -764,6 +827,21 @@ function ChatModal({ isOpen, onClose, onEndChat, voiceEnabled, onVoiceToggle }: 
         // Extract the actual response text from the nested structure
         const responseText = typeof chatData.response === 'string' ? chatData.response : 
                            String(chatData.response || 'No response received')
+
+        // Check for successful add_entry_to_diary tool calls and show toast
+        if (hasToolCalls && chatData.tool_calls_made) {
+          for (const toolCall of chatData.tool_calls_made) {
+            if (toolCall.name === 'add_entry_to_diary' && toolCall.result?.success) {
+              // Show immediate success toast for entry creation
+              safeToast({
+                title: "💾 Entry saved",
+                description: "Your note has been saved to your diary and is being processed",
+                duration: 3000
+              })
+              break // Only show one toast even if multiple entries were added
+            }
+          }
+        }
 
         // Create AI response message
         const aiMessage: ChatMessage = {

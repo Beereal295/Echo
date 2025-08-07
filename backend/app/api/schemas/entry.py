@@ -52,6 +52,7 @@ class EntryResponse(BaseModel):
     mood_tags: Optional[List[str]] = None
     word_count: int
     processing_metadata: Optional[dict] = None
+    smart_tags: Optional[List[str]] = None
     
     class Config:
         from_attributes = True

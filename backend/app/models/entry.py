@@ -17,12 +17,15 @@ class Entry:
     mood_tags: Optional[List[str]] = None
     word_count: int = 0
     processing_metadata: Optional[dict] = None
+    smart_tags: Optional[List[str]] = None
     
     def __post_init__(self):
         if self.timestamp is None:
             self.timestamp = datetime.now()
         if self.mood_tags is None:
             self.mood_tags = []
+        if self.smart_tags is None:
+            self.smart_tags = []
         # Don't automatically set processing_metadata to {} - keep it as None if not provided
         if self.word_count == 0 and self.raw_text:
             self.word_count = len(self.raw_text.split())
@@ -39,7 +42,8 @@ class Entry:
             "timestamp": self.timestamp.isoformat() if self.timestamp else None,
             "mood_tags": json.dumps(self.mood_tags) if self.mood_tags else None,
             "word_count": self.word_count,
-            "processing_metadata": json.dumps(self.processing_metadata) if self.processing_metadata else None
+            "processing_metadata": json.dumps(self.processing_metadata) if self.processing_metadata else None,
+            "smart_tags": json.dumps(self.smart_tags) if self.smart_tags else None
         }
     
     def update_processing_metadata(self, new_metadata: dict):
@@ -59,6 +63,8 @@ class Entry:
             data["mood_tags"] = json.loads(data["mood_tags"])
         if data.get("processing_metadata"):
             data["processing_metadata"] = json.loads(data["processing_metadata"])
+        if data.get("smart_tags"):
+            data["smart_tags"] = json.loads(data["smart_tags"])
         if data.get("timestamp"):
             data["timestamp"] = datetime.fromisoformat(data["timestamp"])
         

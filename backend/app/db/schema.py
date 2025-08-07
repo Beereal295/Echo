@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS entries (
     timestamp DATETIME NOT NULL,
     mood_tags TEXT,   -- JSON array of strings
     word_count INTEGER DEFAULT 0,
-    processing_metadata TEXT  -- JSON object
+    processing_metadata TEXT  -- JSON object for AI processing info
 )
 """
 

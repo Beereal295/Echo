@@ -35,6 +35,14 @@ CREATE INDEX IF NOT EXISTS idx_conversations_timestamp ON conversations(timestam
 CREATE INDEX IF NOT EXISTS idx_conversations_type ON conversations(conversation_type);""",
         """DROP TABLE IF EXISTS conversations;"""
     ),
+    (
+        4,
+        "Add smart_tags column to entries table",
+        """ALTER TABLE entries ADD COLUMN smart_tags TEXT;
+CREATE INDEX IF NOT EXISTS idx_entries_smart_tags ON entries(smart_tags);""",
+        """DROP INDEX IF EXISTS idx_entries_smart_tags;
+ALTER TABLE entries DROP COLUMN smart_tags;"""
+    ),
 ]
 
 
