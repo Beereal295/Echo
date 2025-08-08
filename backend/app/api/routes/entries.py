@@ -63,6 +63,35 @@ async def _generate_embedding_for_entry(entry_id: int, text: str = None):
         logger.error(f"Failed to generate embedding for entry {entry_id}: {e}")
 
 
+async def _extract_entry_memories(entry_id: int):
+    """Background task to extract memories from an entry"""
+    try:
+        from app.services.memory_service import MemoryService
+        
+        logger.info(f"Extracting memories from entry {entry_id}")
+        
+        # Get the entry
+        entry = await EntryRepository.get_by_id(entry_id)
+        if not entry:
+            logger.error(f"Entry {entry_id} not found for memory extraction")
+            return
+        
+        # Use enhanced text for memory extraction (better quality than raw)
+        enhanced_text = entry.enhanced_text or entry.raw_text
+        if not enhanced_text or not enhanced_text.strip():
+            logger.warning(f"No suitable text found for memory extraction for entry {entry_id}")
+            return
+        
+        # Extract memories
+        memory_service = MemoryService()
+        memory_count = await memory_service.process_entry_for_memories(entry_id, enhanced_text)
+        
+        logger.info(f"Extracted {memory_count} memories from entry {entry_id}")
+        
+    except Exception as e:
+        logger.error(f"Failed to extract memories from entry {entry_id}: {e}")
+
+
 def _select_best_text_for_embedding(entry) -> str:
     """
     Select the best text content for embedding generation.
@@ -115,7 +144,14 @@ async def create_entry(entry_data: EntryCreate, background_tasks: BackgroundTask
             _generate_embedding_for_entry,
             created_entry.id
         )
-        logger.info(f"Queued embedding generation for entry {created_entry.id}")
+        
+        # Extract memories in background - will use enhanced text if available
+        background_tasks.add_task(
+            _extract_entry_memories,
+            created_entry.id
+        )
+        
+        logger.info(f"Queued embedding generation and memory extraction for entry {created_entry.id}")
         
         # Convert to response format
         return EntryResponse(
@@ -411,7 +447,14 @@ async def create_and_process_entry(
             _generate_embedding_for_entry,
             created_entry.id
         )
-        logger.info(f"Queued embedding generation for entry {created_entry.id}")
+        
+        # Extract memories in background - will use enhanced text if available
+        background_tasks.add_task(
+            _extract_entry_memories,
+            created_entry.id
+        )
+        
+        logger.info(f"Queued embedding generation and memory extraction for entry {created_entry.id}")
         
         # Queue for processing in each requested mode
         processing_queue = await get_processing_queue()

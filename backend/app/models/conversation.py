@@ -16,6 +16,10 @@ class Conversation:
     search_queries_used: Optional[List[str]] = None
     created_at: datetime = None
     updated_at: Optional[datetime] = None
+    # Memory system fields
+    embedding: Optional[str] = None
+    summary: Optional[str] = None
+    key_topics: Optional[List[str]] = None
     
     def __post_init__(self):
         if self.timestamp is None:
@@ -36,7 +40,10 @@ class Conversation:
             "message_count": self.message_count,
             "search_queries_used": json.dumps(self.search_queries_used) if self.search_queries_used else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "embedding": self.embedding,
+            "summary": self.summary,
+            "key_topics": json.dumps(self.key_topics) if self.key_topics else None
         }
     
     def add_search_query(self, query: str):
@@ -69,6 +76,15 @@ class Conversation:
             else:
                 data["search_queries_used"] = []
             
+            # Parse key_topics JSON field
+            if data.get("key_topics"):
+                try:
+                    data["key_topics"] = json.loads(data["key_topics"])
+                except (json.JSONDecodeError, TypeError):
+                    data["key_topics"] = None
+            else:
+                data["key_topics"] = None
+            
             # Parse datetime fields
             if data.get("timestamp"):
                 try:
@@ -96,5 +112,8 @@ class Conversation:
                 transcription=data.get("transcription", ""),
                 conversation_type=data.get("conversation_type", "chat"),
                 duration=data.get("duration", 0),
-                message_count=data.get("message_count", 0)
+                message_count=data.get("message_count", 0),
+                embedding=data.get("embedding"),
+                summary=data.get("summary"),
+                key_topics=data.get("key_topics")
             )

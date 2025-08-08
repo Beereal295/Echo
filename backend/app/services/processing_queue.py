@@ -217,6 +217,16 @@ class ProcessingQueue:
             # Save to database
             await EntryRepository.update(entry)
             
+            # Extract memories if this is enhanced text processing
+            if job.mode == ProcessingMode.ENHANCED and entry.enhanced_text:
+                try:
+                    from app.services.memory_service import MemoryService
+                    memory_service = MemoryService()
+                    memory_count = memory_service.process_entry_for_memories(entry.id, entry.enhanced_text)
+                    logger.info(f"Extracted {memory_count} memories from entry {entry.id}")
+                except Exception as e:
+                    logger.error(f"Failed to extract memories from entry {entry.id}: {e}")
+            
             # Mark job as completed
             job.status = ProcessingStatus.COMPLETED
             job.completed_at = datetime.now()

@@ -16,6 +16,37 @@ function HomePage() {
   const [displayedSnark, setDisplayedSnark] = useState('')
   const [isTyping, setIsTyping] = useState(false)
   const [showPlusMenu, setShowPlusMenu] = useState(false)
+  const [heroMessage, setHeroMessage] = useState('')
+
+  // Hero messages array
+  const heroMessages = [
+    "Go ahead. Be messy. Echo gets it. And it's not even connected to the damn internet.",
+    "Say it how you feel it. Echo will sort it out later.",
+    "Echo listens. Not because it has to—because it was built to.",
+    "This is where chaos turns into memory. Silently. Locally. Without judgment.",
+    "Talk to yourself. Echo just makes it look productive.",
+    "Offline, but emotionally online. Welcome back to Echo.",
+    "Whatever's in your head? Echo's already creating tags for it.",
+    "Don't overthink it. Echo already did.",
+    "Speak. Type. Mumble. Echo will make sense of it—eventually.",
+    "No cloud. No crowd. Just you and your gloriously weird brain.",
+    "Echo stores your spirals like they're precious. Because they are.",
+    "You think out loud. Echo writes your autobiography in the background.",
+    "Echo doesn't need the internet to understand you. Lucky Echo.",
+    "Go off. Echo's heard worse. From you. Yesterday.",
+    "This isn't just journaling. This is emotional version control.",
+    "No rules. Just prompts, patterns, and poetic breakdowns.",
+    "Built for thinkers. And feelers. And very tired people.",
+    "Echo: where talking to yourself is suddenly very efficient.",
+    "Let your thoughts sprawl. Echo runs local garbage collection.",
+    "Say something weird. Echo thrives on weird."
+  ]
+
+  // Initialize random hero message
+  useEffect(() => {
+    const randomIndex = Math.floor(Math.random() * heroMessages.length)
+    setHeroMessage(heroMessages[randomIndex])
+  }, [])
 
   // Load user data for insights
   useEffect(() => {
@@ -357,10 +388,10 @@ function HomePage() {
           Welcome to Echo Journal
         </motion.h1>
         <motion.p 
-          className="text-gray-300 text-lg md:text-xl max-w-2xl mx-auto leading-relaxed"
+          className="text-gray-300 text-lg md:text-xl max-w-4xl mx-auto leading-relaxed"
           variants={itemVariants}
         >
-          Type it, say it, mumble it at 2AM - Echo remembers, privately
+          {heroMessage || "Getting Echo ready to make sense of your thoughts..."}
         </motion.p>
       </motion.div>
 

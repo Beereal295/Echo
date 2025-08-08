@@ -14,7 +14,7 @@ import sys
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 # Add the parent directory to Python path so we can import our services
 sys.path.append(str(Path(__file__).parent.parent))
@@ -32,9 +32,14 @@ logger = logging.getLogger(__name__)
 class AutoTaggingScript:
     """Script to add smart tags to existing diary entries."""
     
-    def __init__(self, db_path: str = "echo.db"):
+    def __init__(self, db_path: str = None):
         """Initialize the auto-tagging script."""
-        self.db_path = db_path
+        # Default to the backend directory's echo.db
+        if db_path is None:
+            backend_dir = Path(__file__).parent.parent
+            self.db_path = str(backend_dir / "echo.db")
+        else:
+            self.db_path = db_path
         self.smart_tagging_service = get_smart_tagging_service()
         
         # Verify database exists
@@ -196,7 +201,7 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(description="Auto-tag existing Echo diary entries")
-    parser.add_argument("--db-path", default="echo.db", help="Path to the database file")
+    parser.add_argument("--db-path", default=None, help="Path to the database file (default: ../echo.db)")
     parser.add_argument("--batch-size", type=int, default=50, help="Number of entries to process per batch")
     parser.add_argument("--max-entries", type=int, help="Maximum number of entries to process (for testing)")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be processed without making changes")

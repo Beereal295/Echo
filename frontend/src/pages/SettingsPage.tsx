@@ -465,19 +465,11 @@ function SettingsPage() {
                 {/* Theme Setting */}
                 <div className="bg-muted/10 rounded-lg p-3 border border-border/50">
                   <Label htmlFor="theme" className="text-white font-medium mb-2 block">Theme</Label>
-                  <Select value={theme} onValueChange={setTheme}>
-                    <SelectTrigger className="w-full max-w-xs bg-background/50 border-border text-white hover:bg-muted/50">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-background border-border">
-                      <SelectItem value="light" className="text-white hover:bg-muted/50 focus:bg-muted/50">Light</SelectItem>
-                      <SelectItem value="dark" className="text-white hover:bg-muted/50 focus:bg-muted/50">Dark</SelectItem>
-                      <SelectItem value="system" className="text-white hover:bg-muted/50 focus:bg-muted/50">System</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-sm text-gray-400 mt-1">
-                    Choose your preferred interface theme
-                  </p>
+                  <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-500/20 rounded-lg p-4">
+                    <p className="text-sm text-purple-300">
+                      Coming Soon - We're working on beautiful theme options for Echo
+                    </p>
+                  </div>
                 </div>
 
 

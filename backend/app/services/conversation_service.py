@@ -19,6 +19,8 @@ from enum import Enum
 from app.models.conversation import Conversation
 from app.db.repositories.conversation_repository import ConversationRepository
 from app.services.diary_chat_service import get_diary_chat_service
+from app.services.memory_service import MemoryService
+from sentence_transformers import SentenceTransformer
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +95,8 @@ class ConversationService:
         self.active_conversations: Dict[str, ActiveConversation] = {}
         self.repository = ConversationRepository()
         self.chat_service = None  # Lazy loaded
+        self.memory_service = MemoryService()
+        self.embedding_model = None  # Lazy loaded
         
     async def start_conversation(
         self, 
@@ -287,6 +291,43 @@ class ConversationService:
             conversation.conversation_id = saved_conversation.id
             conversation.state = ConversationState.SAVED
             
+            # Generate embedding, summary, and metadata for conversation
+            try:
+                if self.embedding_model is None:
+                    self.embedding_model = SentenceTransformer('BAAI/bge-small-en-v1.5')
+                
+                # Generate embedding from transcription
+                embedding_vector = self.embedding_model.encode(conversation.transcription)
+                embedding_json = json.dumps(embedding_vector.tolist())
+                
+                # Extract key topics from conversation (simple keyword extraction for now)
+                key_topics = self._extract_key_topics(conversation.transcription)
+                
+                # Generate AI summary using same model as entry processing (not truncation!)
+                summary = await self._generate_conversation_summary(conversation.transcription)
+                
+                # Update conversation with embedding and metadata
+                await self.repository.update_conversation_metadata(
+                    saved_conversation.id,
+                    embedding_json,
+                    summary,
+                    key_topics
+                )
+                
+                logger.info(f"Generated embedding and summary for conversation {saved_conversation.id}")
+            except Exception as e:
+                logger.error(f"Failed to generate embedding and summary for conversation: {e}")
+            
+            # Extract and store memories from conversation
+            try:
+                memory_count = self.memory_service.process_conversation_for_memories(
+                    saved_conversation.id,
+                    conversation.transcription
+                )
+                logger.info(f"Extracted {memory_count} memories from conversation {saved_conversation.id}")
+            except Exception as e:
+                logger.error(f"Failed to extract memories from conversation: {e}")
+            
             logger.info(f"Saved conversation {session_id} to database with ID {saved_conversation.id}")
             return saved_conversation.id
         
@@ -407,6 +448,104 @@ class ConversationService:
                 "content": turn.message
             })
         return history
+    
+    async def _generate_conversation_summary(self, transcription: str) -> str:
+        """
+        Generate AI summary of conversation using same model as entry processing.
+        Uses the same ollama preferences as enhanced/structured modes.
+        """
+        try:
+            # Import here to avoid circular dependencies
+            from app.db.repositories.preferences_repository import PreferencesRepository
+            from app.core.config import settings
+            import requests
+            
+            # Get same model preferences as entry processing
+            model = await PreferencesRepository.get_value('ollama_model', settings.OLLAMA_DEFAULT_MODEL)
+            temperature = await PreferencesRepository.get_value('ollama_temperature', 0.2)
+            context_window = await PreferencesRepository.get_value('ollama_context_window', 4096)
+            ollama_url = await PreferencesRepository.get_value('ollama_url', 'http://localhost:11434')
+            
+            # Summary generation prompt (similar to structured mode but for conversations)
+            system_prompt = """You are a conversation summarizer. Create a concise summary of this conversation between the user and Echo (their journal assistant). 
+
+INSTRUCTIONS:
+1. Summarize the key points discussed
+2. Capture the main topics and insights
+3. Keep it under 300 words
+4. Focus on what was meaningful or important
+5. Use a warm, personal tone as if speaking to the user
+
+Do not include timestamps or speaker labels in your summary."""
+            
+            # Prepare request
+            payload = {
+                "model": model,
+                "prompt": transcription,
+                "system": system_prompt,
+                "stream": False,
+                "options": {
+                    "temperature": float(temperature),
+                    "num_ctx": int(context_window)
+                }
+            }
+            
+            # Make request to Ollama
+            api_url = f"{ollama_url}/api/generate"
+            response = requests.post(api_url, json=payload, timeout=60)
+            
+            if response.status_code == 200:
+                result = response.json()
+                summary = result.get("response", "").strip()
+                
+                # Fallback if summary is empty or too short
+                if not summary or len(summary) < 20:
+                    logger.warning("AI generated summary too short, using fallback")
+                    return self._create_fallback_summary(transcription)
+                
+                logger.info(f"Generated AI conversation summary using model {model}")
+                return summary
+            else:
+                logger.error(f"Ollama API error: {response.status_code} - {response.text}")
+                return self._create_fallback_summary(transcription)
+                
+        except Exception as e:
+            logger.error(f"Failed to generate AI conversation summary: {e}")
+            return self._create_fallback_summary(transcription)
+    
+    def _create_fallback_summary(self, transcription: str) -> str:
+        """Create a simple fallback summary when AI generation fails."""
+        lines = transcription.split('\n')
+        
+        # Count user vs Echo turns
+        user_turns = len([l for l in lines if 'You:' in l])
+        echo_turns = len([l for l in lines if 'Echo:' in l])
+        
+        # Get first few significant lines
+        content_lines = [l for l in lines if l.strip() and not l.startswith('[')][:3]
+        preview = ' '.join(content_lines)[:200] + "..." if len(' '.join(content_lines)) > 200 else ' '.join(content_lines)
+        
+        return f"Conversation with {user_turns} user messages and {echo_turns} Echo responses. Topics discussed: {preview}"
+
+    def _extract_key_topics(self, transcription: str) -> List[str]:
+        """
+        Extract key topics from conversation transcription.
+        Simple keyword extraction for MVP.
+        """
+        # Common important keywords to look for
+        important_words = ['work', 'family', 'health', 'stress', 'happy', 'sad', 
+                          'anxious', 'project', 'relationship', 'goal', 'problem',
+                          'success', 'failure', 'love', 'fear', 'hope', 'dream']
+        
+        topics = []
+        text_lower = transcription.lower()
+        
+        for word in important_words:
+            if word in text_lower:
+                topics.append(word)
+        
+        # Limit to top 5 topics
+        return topics[:5]
 
 
 # Global conversation service instance

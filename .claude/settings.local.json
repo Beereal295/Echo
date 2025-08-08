@@ -16,7 +16,8 @@
       "Bash(sqlite3:*)",
       "mcp__context7__resolve-library-id",
       "mcp__context7__get-library-docs",
-      "WebFetch(domain:ollama.com)"
+      "WebFetch(domain:ollama.com)",
+      "Bash(grep:*)"
     ],
     "deny": []
   }

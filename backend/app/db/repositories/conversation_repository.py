@@ -106,13 +106,68 @@ class ConversationRepository:
         return await ConversationRepository.get_by_id(conversation_id)
     
     @staticmethod
-    async def delete(conversation_id: int) -> bool:
-        """Delete a conversation"""
-        cursor = await db.execute(
-            "DELETE FROM conversations WHERE id = ?", (conversation_id,)
-        )
+    async def update_conversation_metadata(
+        conversation_id: int,
+        embedding: str = None,
+        summary: str = None,
+        key_topics: List[str] = None
+    ) -> bool:
+        """Update conversation metadata for memory system - only updates non-None values"""
+        import json
+        
+        # Build dynamic query to only update provided fields
+        set_clauses = []
+        params = []
+        
+        if embedding is not None:
+            set_clauses.append("embedding = ?")
+            params.append(embedding)
+            
+        if summary is not None:
+            set_clauses.append("summary = ?")
+            params.append(summary)
+            
+        if key_topics is not None:
+            set_clauses.append("key_topics = ?")
+            params.append(json.dumps(key_topics))
+        
+        if not set_clauses:
+            return True  # Nothing to update
+            
+        # Always update timestamp
+        set_clauses.append("updated_at = ?")
+        params.append(datetime.now().isoformat())
+        params.append(conversation_id)
+        
+        query = f"""UPDATE conversations 
+                   SET {', '.join(set_clauses)}
+                   WHERE id = ?"""
+        
+        await db.execute(query, params)
         await db.commit()
-        return cursor.rowcount > 0
+        return True
+    
+    @staticmethod
+    async def delete(conversation_id: int) -> bool:
+        """Delete a conversation and related memories"""
+        try:
+            # First delete related agent_memories to avoid foreign key constraint violation
+            await db.execute(
+                "DELETE FROM agent_memories WHERE source_conversation_id = ?", 
+                (conversation_id,)
+            )
+            
+            # Then delete the conversation
+            cursor = await db.execute(
+                "DELETE FROM conversations WHERE id = ?", (conversation_id,)
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+            
+        except Exception as e:
+            # Rollback any partial changes
+            await db.rollback()
+            raise e
     
     @staticmethod
     async def count() -> int:

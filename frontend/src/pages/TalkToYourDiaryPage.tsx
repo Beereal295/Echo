@@ -79,6 +79,9 @@ interface Conversation {
   search_queries_used: string[]
   created_at: string
   updated_at?: string
+  embedding?: string | null
+  summary?: string | null
+  key_topics?: string[] | null
 }
 
 function TalkToYourDiaryPage() {
@@ -580,6 +583,30 @@ function TalkToYourDiaryPage() {
                                       {conv.search_queries_used.length} searches
                                     </Badge>
                                   )}
+                                  {/* Indexing status badge - same style as ViewEntriesPage */}
+                                  {(() => {
+                                    // Check if embedding is a valid JSON array with content
+                                    if (conv.embedding && conv.embedding !== null && conv.embedding.trim() !== '') {
+                                      try {
+                                        const embeddingArray = JSON.parse(conv.embedding)
+                                        if (Array.isArray(embeddingArray) && embeddingArray.length > 0) {
+                                          return (
+                                            <Badge className="bg-cyan-500/10 text-cyan-400 border-cyan-500/20 text-xs">
+                                              Indexed
+                                            </Badge>
+                                          )
+                                        }
+                                      } catch (error) {
+                                        // Invalid JSON, treat as not indexed
+                                      }
+                                    }
+                                    // No valid embedding found
+                                    return (
+                                      <Badge className="bg-orange-500/10 text-orange-400 border-orange-500/20 text-xs">
+                                        No Embeddings
+                                      </Badge>
+                                    )
+                                  })()}
                                 </div>
                                 <span className="text-muted-foreground text-xs">
                                   {Math.round(conv.transcription.length / 5)} words

@@ -28,6 +28,7 @@ from app.db.repositories.entry_repository import EntryRepository
 from app.db.repositories.preferences_repository import PreferencesRepository
 from app.services.embedding_service import get_embedding_service
 from app.services.hybrid_search import HybridSearchService
+from app.services.memory_service import MemoryService
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -289,13 +290,23 @@ async def search_diary_entries(query: str, limit: int = 50) -> Dict[str, Any]:
 
 @tool
 async def add_entry_to_diary(content: str, entry_type: str = "note") -> Dict[str, Any]:
-    """Add a new entry to the diary/notes.
+    """CRITICAL: ONLY use this tool when user EXPLICITLY requests to save/add content to diary.
     
-    Use this tool when the user wants to:
-    - Save a note or thought: "Add this to my notes"
-    - Create an entry: "Save this idea"
-    - Record something: "Remember this for me"
-    - Log information: "Add to my diary that..."
+    MANDATORY CONDITIONS - User must use these EXACT phrases:
+    - "Add this to my diary" / "Add to diary"
+    - "Save this" / "Save this entry" 
+    - "Add this to my journal" / "Add to journal"
+    - "Add entry" / "Create entry"
+    - "Save this as an entry"
+    
+    DO NOT USE if user is:
+    - Just sharing information without asking to save
+    - Asking questions about existing entries
+    - Having casual conversation
+    - Expressing thoughts without explicit save request
+    
+    WRONG: User says "I had a good day" -> DO NOT save automatically
+    CORRECT: User says "Save this: I had a good day" -> Use this tool
     
     args:
         content: The text content to save as an entry
@@ -1083,6 +1094,130 @@ Please format your response as a structured list of ideas and concepts."""
 
 
 @tool
+async def search_conversations(query: str, limit: int = 10) -> Dict[str, Any]:
+    """Search through past conversations with Echo using semantic search.
+    
+    Use this tool when user asks about:
+    - Previous chats or conversations with Echo
+    - What they discussed with Echo before
+    - Past topics they talked about in conversations
+    - Their name or personal details mentioned in conversations
+    
+    args:
+        query: Search term for conversations (1-1000 characters)
+        limit: Maximum number of results to return (default 10)
+        
+    Returns:
+        Relevant conversation snippets with similarity scores
+    """
+    try:
+        logger.info(f"Searching conversations: query='{query}', limit={limit}")
+        
+        # Validate inputs
+        if not query or len(query.strip()) == 0:
+            return {"success": False, "error": "Query cannot be empty"}
+        
+        if limit < 1 or limit > 50:
+            limit = 10
+            
+        query = query.strip()[:1000]  # Limit query length
+        
+        # Generate query embedding using the same service as entries
+        embedding_service = get_embedding_service()
+        query_embedding = await embedding_service.generate_embedding(
+            text=query,
+            normalize=True,
+            is_query=True  # Mark as query for BGE formatting
+        )
+        
+        # Import here to avoid circular dependency
+        from app.db.database import db
+        import json
+        
+        # Get conversations with embeddings - same pattern as entries
+        rows = await db.fetch_all("""
+            SELECT id, summary, transcription, timestamp, embedding, key_topics, conversation_type, duration
+            FROM conversations 
+            WHERE embedding IS NOT NULL AND embedding != ''
+            ORDER BY timestamp DESC
+            LIMIT 100
+        """)
+        
+        if not rows:
+            return {
+                "success": True,
+                "conversations": [],
+                "count": 0,
+                "query": query,
+                "message": "No past conversations with embeddings found"
+            }
+        
+        # Extract embeddings and calculate similarities - same pattern as entries
+        candidate_embeddings = []
+        conversation_metadata = []
+        
+        for row in rows:
+            if row['embedding']:
+                try:
+                    # Parse embedding JSON
+                    embedding_data = json.loads(row['embedding'])
+                    if isinstance(embedding_data, list) and len(embedding_data) > 0:
+                        candidate_embeddings.append(embedding_data)
+                        conversation_metadata.append(row)
+                except (json.JSONDecodeError, TypeError):
+                    continue
+        
+        if not candidate_embeddings:
+            return {
+                "success": True,
+                "conversations": [],
+                "count": 0,
+                "query": query,
+                "message": "No valid conversation embeddings found"
+            }
+        
+        # Use the same semantic search as entries
+        similar_conversations = embedding_service.search_similar_embeddings(
+            query_embedding=query_embedding,
+            candidate_embeddings=candidate_embeddings,
+            top_k=min(limit * 2, 50),  # Get 2x candidates for reranking
+            similarity_threshold=0.3  # Lower threshold than the old 0.5
+        )
+        
+        # Format results - same pattern as entries
+        results = []
+        for i, (candidate_idx, similarity) in enumerate(similar_conversations[:limit]):
+            conv_row = conversation_metadata[candidate_idx]
+            
+            # Get conversation snippet - prefer summary, fall back to transcription
+            snippet = conv_row['summary'] if conv_row['summary'] else conv_row['transcription'][:500]
+            if len(conv_row['transcription']) > 500:
+                snippet += "..."
+            
+            results.append({
+                'score': float(similarity),
+                'id': conv_row['id'],
+                'snippet': snippet,
+                'full_transcription': conv_row['transcription'],  # Include full text
+                'timestamp': conv_row['timestamp'],
+                'conversation_type': conv_row['conversation_type'],
+                'duration': conv_row['duration'],
+                'topics': json.loads(conv_row['key_topics']) if conv_row['key_topics'] else []
+            })
+        
+        return {
+            "success": True,
+            "conversations": results,
+            "count": len(results),
+            "query": query,
+            "message": f"Found {len(results)} relevant conversations"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error searching conversations: {e}")
+        return {"success": False, "error": str(e)}
+
+@tool
 async def extract_action_items(status: Optional[str] = None, time_period: Optional[str] = "all_time", limit: int = 30) -> Dict[str, Any]:
     """Extract action items and TODOs from diary entries using AI analysis.
     
@@ -1406,6 +1541,7 @@ class DiaryChatService:
         self.llm = None
         self.llm_with_tools = None
         self._initialized = False
+        self.memory_service = MemoryService()
         
         self.search_feedback_messages = [
             "Checking diary...",
@@ -1465,7 +1601,8 @@ class DiaryChatService:
                 get_context_before_after,
                 summarize_time_period,
                 extract_ideas_and_concepts,
-                extract_action_items
+                extract_action_items,
+                search_conversations
             ])
             self._initialized = True
             
@@ -1498,7 +1635,8 @@ class DiaryChatService:
                 get_context_before_after,
                 summarize_time_period,
                 extract_ideas_and_concepts,
-                extract_action_items
+                extract_action_items,
+                search_conversations
             ])
             self._initialized = True
     
@@ -1544,10 +1682,13 @@ TOOL STRATEGY - Use multiple tools when helpful:
 REQUIRED TOOLS:
 - search_diary_entries: Content searches ("work", "hiking", feelings, activities)
 - get_entries_by_date: Date searches ("yesterday", "last week", "recent") 
-- add_entry_to_diary: Save entries ("save this", "add to journal")
+- add_entry_to_diary: ONLY when user EXPLICITLY asks to save ("save this", "add to journal", "add entry")
 - summarize_time_period: Time-based summaries
 - extract_ideas_and_concepts/extract_action_items: Extract insights/tasks
 - get_context_before_after: Context around specific entries
+- search_conversations: Search past conversations with Echo
+
+CRITICAL: Never use add_entry_to_diary unless user explicitly requests saving content with clear save commands.
 
 The user has journal entries - you must search them using tools to give meaningful responses.""")
             ]
@@ -1622,6 +1763,8 @@ This requires searching their journal entries. You MUST use the search_diary_ent
                         tool_result = await extract_ideas_and_concepts.ainvoke(tool_args)
                     elif tool_name == "extract_action_items":
                         tool_result = await extract_action_items.ainvoke(tool_args)
+                    elif tool_name == "search_conversations":
+                        tool_result = await search_conversations.ainvoke(tool_args)
                     else:
                         logger.warning(f"Unknown tool: {tool_name}")
                         continue
@@ -1655,9 +1798,27 @@ This requires searching their journal entries. You MUST use the search_diary_ent
                         tool_call_id=tool_call_id
                     ))
                 
-                # Add focused system prompt for response generation
+                # Retrieve relevant memories for context injection
+                relevant_memories = []
+                memory_context = ""
+                try:
+                    # Get memories relevant to the user's question
+                    relevant_memories = await self.memory_service.retrieve_relevant_memories(message, limit=20)
+                    if relevant_memories:
+                        memory_context = self.memory_service.format_memories_for_context(relevant_memories)
+                        logger.info(f"Injecting {len(relevant_memories)} memories into response generation")
+                except Exception as e:
+                    logger.error(f"Failed to retrieve memories: {e}")
+                
+                # Build system prompt with memory context
+                system_prompt = "You are Echo. Look for tool results containing user's journal entry data. Analyze those journal entries and analyze the user's question. Then thoughtfully reply as if you are talking to the user naturally using 'you' and 'your'. Keep the answers short (3-4 sentences) UNLESS the user asks otherwise or asks to show the whole entry."
+                
+                if memory_context:
+                    system_prompt += f"\n\n## What you remember about the user:\n{memory_context}"
+                
+                # Add focused system prompt for response generation with memory
                 response_messages = [
-                    SystemMessage(content="You are Echo. Look for tool results containing user's journal entry data. Analyze those journal entries and analyze the user's question. Then thoughtfully reply as if you are talking to the user naturally using 'you' and 'your'. Keep the answers short (3-4 sentences) UNLESS the user asks otherwise or asks to show the whole entry."),
+                    SystemMessage(content=system_prompt),
                     *messages[1:]  # Skip original system message, keep user message, AI response, and tool results
                 ]
                 
