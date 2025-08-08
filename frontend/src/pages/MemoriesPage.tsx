@@ -3,7 +3,7 @@ import { motion, AnimatePresence, useMotionValue, useTransform, PanInfo } from '
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Brain, Heart, ThumbsUp, ThumbsDown, RotateCcw, Loader2, Sparkles, Users, Target } from 'lucide-react'
+import { Brain, Heart, ThumbsUp, ThumbsDown, RotateCcw, Loader2, Sparkles, Users, Target, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useToast } from '@/components/ui/use-toast'
 
@@ -29,29 +29,40 @@ function MemoriesPage() {
   const [loading, setLoading] = useState(true)
   const [isRating, setIsRating] = useState(false)
   const [showConfirmation, setShowConfirmation] = useState(false)
-  const [showFirstTimeModal, setShowFirstTimeModal] = useState(false)
+  const [showSwipeConfirmation, setShowSwipeConfirmation] = useState(false)
+  const [pendingSwipeAction, setPendingSwipeAction] = useState<{ memoryId: number, isRelevant: boolean } | null>(null)
   const [lastAction, setLastAction] = useState<{ type: 'relevant' | 'irrelevant', memoryId: number } | null>(null)
   const [stats, setStats] = useState<any>(null)
+  
+  // Pagination state for memory collection
+  const [memoryPage, setMemoryPage] = useState(1)
+  const [memoryTotalPages, setMemoryTotalPages] = useState(1)
+  const memoryPageSize = 6 // Show 6 memories per page in collection
+  
   const { toast } = useToast()
 
-  // Check if user has seen the tutorial
-  const [hasSeenTutorial, setHasSeenTutorial] = useState(() => {
-    return localStorage.getItem('memory-tutorial-seen') === 'true'
-  })
-
-  useEffect(() => {
-    // Show tutorial modal on first visit
-    if (!hasSeenTutorial && memories.length > 0) {
-      setShowFirstTimeModal(true)
+  // Helper function to ensure toast content is valid (same as other pages)
+  const safeToast = (params: Parameters<typeof toast>[0]) => {
+    if (!params.title?.trim() && !params.description?.toString()?.trim()) {
+      return // Don't show empty toasts
     }
-  }, [memories.length, hasSeenTutorial])
+    // Add shorter duration for quicker dismissal
+    toast({
+      ...params,
+      duration: 2000 // 2 seconds for quick dismissal
+    })
+  }
 
-  // Reset tutorial state when component unmounts (user navigates away)
+  // Track first swipes for each direction separately
+  const [hasSwipedLeft, setHasSwipedLeft] = useState(false)
+  const [hasSwipedRight, setHasSwipedRight] = useState(false)
+
+  // Reset swipe confirmation state when component unmounts (user navigates away)
   useEffect(() => {
     return () => {
-      if (hasSeenTutorial) {
-        localStorage.removeItem('memory-tutorial-seen')
-      }
+      // Reset both directions when navigating away
+      setHasSwipedLeft(false)
+      setHasSwipedRight(false)
     }
   }, [])
 
@@ -59,7 +70,6 @@ function MemoriesPage() {
   const x = useMotionValue(0)
   const y = useMotionValue(0)
   const rotate = useTransform(x, [-300, 300], [-25, 25])
-  const opacity = useTransform(x, [-300, -150, 0, 150, 300], [0, 0.5, 1, 0.5, 0])
   
   // Swipe threshold - increased for less reactivity
   const SWIPE_THRESHOLD = 120
@@ -76,19 +86,19 @@ function MemoriesPage() {
       if (response.success && response.data) {
         setMemories(response.data)
         setCurrentIndex(0)
+        // Calculate total pages for memory collection pagination
+        setMemoryTotalPages(Math.ceil(response.data.length / memoryPageSize))
       } else {
-        toast({
-          title: "Error",
-          description: "Failed to load memories",
-          variant: "destructive"
+        safeToast({
+          title: "Failed to load memories",
+          description: "Please try again"
         })
       }
     } catch (error) {
       console.error('Failed to load memories:', error)
-      toast({
-        title: "Error", 
-        description: "Network error while loading memories",
-        variant: "destructive"
+      safeToast({
+        title: "Failed to load memories",
+        description: "Please check your connection and try again"
       })
     } finally {
       setLoading(false)
@@ -130,18 +140,16 @@ function MemoriesPage() {
         // Reload stats
         loadStats()
       } else {
-        toast({
-          title: "Error",
-          description: response.error || "Failed to rate memory",
-          variant: "destructive"
+        safeToast({
+          title: "Failed to rate memory",
+          description: response.error || "Please try again"
         })
       }
     } catch (error) {
       console.error('Failed to rate memory:', error)
-      toast({
-        title: "Error",
-        description: "Network error while rating memory",
-        variant: "destructive"
+      safeToast({
+        title: "Failed to rate memory",
+        description: "Please check your connection and try again"
       })
     } finally {
       setIsRating(false)
@@ -157,21 +165,21 @@ function MemoriesPage() {
     if (Math.abs(offset.x) > SWIPE_THRESHOLD || Math.abs(velocity.x) > swipeVelocityThreshold) {
       const currentMemory = memories[currentIndex]
       if (currentMemory) {
-        // Show confirmation modal on first swipe if tutorial not seen
-        if (!hasSeenTutorial) {
-          setShowFirstTimeModal(true)
+        const isRelevant = offset.x > 0
+        
+        // Show confirmation dialog on first swipe of each direction
+        const needsConfirmation = isRelevant ? !hasSwipedRight : !hasSwipedLeft
+        
+        if (needsConfirmation) {
+          setPendingSwipeAction({ memoryId: currentMemory.id, isRelevant })
+          setShowSwipeConfirmation(true)
           x.set(0) // Reset position
           y.set(0)
           return
         }
         
-        if (offset.x > 0) {
-          // Swipe right - relevant (+2)
-          rateMemory(currentMemory.id, true)
-        } else {
-          // Swipe left - irrelevant (-3)
-          rateMemory(currentMemory.id, false)
-        }
+        // Direct action for subsequent swipes
+        rateMemory(currentMemory.id, isRelevant)
       }
     } else {
       // Snap back to center
@@ -180,19 +188,42 @@ function MemoriesPage() {
     }
   }
 
-  const handleTutorialComplete = () => {
-    setShowFirstTimeModal(false)
-    setHasSeenTutorial(true)
-    localStorage.setItem('memory-tutorial-seen', 'true')
+  const handleConfirmSwipe = () => {
+    if (pendingSwipeAction) {
+      // Mark the appropriate direction as confirmed
+      if (pendingSwipeAction.isRelevant) {
+        setHasSwipedRight(true)
+      } else {
+        setHasSwipedLeft(true)
+      }
+      
+      // Reset motion values before rating to ensure clean transition
+      x.set(0)
+      y.set(0)
+      
+      // Small delay to ensure position reset completes before rating animation
+      setTimeout(() => {
+        rateMemory(pendingSwipeAction.memoryId, pendingSwipeAction.isRelevant)
+      }, 50)
+      
+      setPendingSwipeAction(null)
+      setShowSwipeConfirmation(false)
+    }
+  }
+
+  const handleCancelSwipe = () => {
+    // Reset motion values when canceling
+    x.set(0)
+    y.set(0)
+    
+    setPendingSwipeAction(null)
+    setShowSwipeConfirmation(false)
   }
 
   const handleButtonRate = (isRelevant: boolean) => {
     const currentMemory = memories[currentIndex]
     if (currentMemory) {
-      if (!hasSeenTutorial) {
-        setShowFirstTimeModal(true)
-        return
-      }
+      // Buttons don't require confirmation - direct action
       rateMemory(currentMemory.id, isRelevant)
     }
   }
@@ -229,6 +260,13 @@ function MemoriesPage() {
 
   const formatMemoryType = (type: string) => {
     return type.charAt(0).toUpperCase() + type.slice(1)
+  }
+
+  // Get paginated memories for the collection display
+  const getPaginatedMemoriesForCollection = () => {
+    const startIndex = (memoryPage - 1) * memoryPageSize
+    const endIndex = startIndex + memoryPageSize
+    return memories.slice(startIndex, endIndex)
   }
 
   if (loading) {
@@ -287,258 +325,387 @@ function MemoriesPage() {
   }
 
   return (
-    <div className="flex-1 flex flex-col p-6 max-w-4xl mx-auto">
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold mb-2">Memory Review</h1>
-        <p className="text-muted-foreground">
-          Help Echo understand what's important to you by rating your memories
-        </p>
-        
-        {/* Stats */}
-        {stats && (
-          <div className="flex gap-4 mt-4">
-            <Badge variant="outline" className="flex items-center gap-2">
-              <Brain className="w-3 h-3" />
-              {stats.unrated_memories} unrated
-            </Badge>
-            <Badge variant="outline" className="flex items-center gap-2">
-              <ThumbsUp className="w-3 h-3" />
-              {stats.rated_memories} rated
-            </Badge>
-          </div>
-        )}
-      </div>
-
-      {/* Progress */}
-      <div className="mb-8">
-        <div className="flex justify-between text-sm text-muted-foreground mb-2">
-          <span>Progress</span>
-          <span>{currentIndex + 1} / {memories.length}</span>
-        </div>
-        <div className="w-full bg-muted rounded-full h-2">
-          <motion.div
-            className="bg-primary h-2 rounded-full"
-            initial={{ width: 0 }}
-            animate={{ width: `${((currentIndex + 1) / memories.length) * 100}%` }}
-            transition={{ duration: 0.3 }}
-          />
-        </div>
-      </div>
-
-      {/* Card Stack Container */}
-      <div className="flex-1 flex items-center justify-center relative">
-        <AnimatePresence>
-          {showConfirmation && lastAction && (
-            <motion.div
-              initial={{ scale: 0, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0, opacity: 0 }}
-              className="absolute inset-0 flex items-center justify-center z-50 bg-background/80 backdrop-blur-sm rounded-xl"
-            >
-              <motion.div
-                initial={{ y: 20 }}
-                animate={{ y: 0 }}
-                className={`p-8 rounded-lg border ${
-                  lastAction.type === 'relevant' 
-                    ? 'bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800' 
-                    : 'bg-red-50 border-red-200 dark:bg-red-950 dark:border-red-800'
-                }`}
-              >
-                <div className="text-center">
-                  <div className={`w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center ${
-                    lastAction.type === 'relevant' 
-                      ? 'bg-green-100 dark:bg-green-900' 
-                      : 'bg-red-100 dark:bg-red-900'
-                  }`}>
-                    {lastAction.type === 'relevant' ? (
-                      <ThumbsUp className="w-8 h-8 text-green-600 dark:text-green-400" />
-                    ) : (
-                      <ThumbsDown className="w-8 h-8 text-red-600 dark:text-red-400" />
-                    )}
+    <div className="max-w-7xl mx-auto p-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Left Card - Memory Review */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          <Card className="bg-card/50 backdrop-blur-sm border-border/50 h-[700px] flex flex-col">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+                    <Brain className="h-4 w-4 text-white" />
                   </div>
-                  <h3 className="text-xl font-semibold mb-2">
-                    {lastAction.type === 'relevant' ? 'Marked as Relevant' : 'Marked as Irrelevant'}
-                  </h3>
-                  <p className="text-muted-foreground">
-                    {lastAction.type === 'relevant' 
-                      ? 'This memory will be prioritized by Echo'
-                      : 'This memory will be deprioritized by Echo'
-                    }
-                  </p>
+                  <div className="min-w-0">
+                    <CardTitle className="text-lg text-white">Memory Review</CardTitle>
+                    <p className="text-gray-400 text-sm">
+                      Rate memories to help Echo learn
+                    </p>
+                  </div>
                 </div>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Card Stack */}
-        <div className="relative w-full max-w-lg h-96">
-          {memories.slice(currentIndex, currentIndex + 3).map((memory, index) => {
-            const isTopCard = index === 0
-            const zIndex = 3 - index
-            const scale = 1 - index * 0.08  // More pronounced scaling
-            const yOffset = index * 16      // More visible vertical offset
-            const xOffset = index * 8       // Add horizontal offset for stack effect
-
-            return (
-              <motion.div
-                key={memory.id}
-                className="absolute inset-0"
-                style={{
-                  zIndex,
-                  scale: isTopCard ? undefined : scale,
-                  y: isTopCard ? y : yOffset,
-                  x: isTopCard ? x : xOffset,
-                  rotate: isTopCard ? rotate : 0,
-                  opacity: isTopCard ? opacity : Math.max(0.7, 1 - index * 0.25)
-                }}
-                drag={isTopCard ? "x" : false}
-                dragConstraints={{ left: 0, right: 0 }}
-                onDragEnd={isTopCard ? handleDragEnd : undefined}
-                animate={isTopCard ? undefined : { scale, y: yOffset, x: xOffset }}
-                transition={{ duration: 0.2 }}
-              >
-                <Card className={`w-full h-full cursor-pointer transition-all duration-300 overflow-hidden group relative ${
-                  isTopCard 
-                    ? 'bg-card border-border shadow-xl hover:shadow-2xl z-10' 
-                    : 'bg-card/80 border-border/70 shadow-lg'
-                }`}>
-                  {/* Shimmer effect only on top card */}
-                  {isTopCard && (
-                    <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/10 to-transparent group-hover:translate-x-full transition-transform duration-700" />
-                  )}
-                  <CardHeader className="pb-4 relative">
-                    <div className="flex items-start justify-between">
-                      <Badge 
-                        variant="secondary" 
-                        className={`flex items-center gap-1 ${getMemoryTypeColor(memory.memory_type)}`}
-                      >
-                        {getMemoryTypeIcon(memory.memory_type)}
-                        {formatMemoryType(memory.memory_type)}
-                      </Badge>
-                      <div className="text-right">
-                        <div className="text-sm text-muted-foreground">Score</div>
-                        <div className="text-lg font-semibold">
-                          {memory.final_importance_score.toFixed(1)}/10
-                        </div>
-                      </div>
+                
+                {/* Progress indicator */}
+                {stats && (
+                  <div className="text-right">
+                    <div className="text-sm text-gray-400">
+                      {stats.unrated_memories} remaining
                     </div>
-                  </CardHeader>
-                  
-                  <CardContent className="flex-1 flex flex-col justify-between relative">
-                    <div>
-                      <p className="text-base leading-relaxed mb-4">
-                        {memory.content}
-                      </p>
+                    <div className="text-xs text-green-400">
+                      {stats.rated_memories} reviewed
                     </div>
-                    
-                    <div className="space-y-3">
-                      {/* Score details */}
-                      <div className="text-xs text-muted-foreground">
-                        <div className="flex justify-between">
-                          <span>Source:</span>
-                          <span className="capitalize">{memory.score_source}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Accessed:</span>
-                          <span>{memory.access_count} times</span>
-                        </div>
-                      </div>
-                      
-                      {/* Instructions (only show on top card) */}
-                      {isTopCard && (
-                        <div className="text-center text-sm text-muted-foreground border-t pt-3">
-                          <p className="mb-2">Swipe or click to rate</p>
-                          <div className="flex justify-center gap-4">
-                            <span className="text-red-600">← Irrelevant</span>
-                            <span className="text-green-600">Relevant →</span>
-                          </div>
-                        </div>
+                  </div>
+                )}
+              </div>
+            </CardHeader>
+            
+            <CardContent className="flex-1 flex flex-col items-center justify-center relative p-6">
+              {/* Confirmation feedback */}
+              <AnimatePresence>
+                {showConfirmation && lastAction && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -50, scale: 0.8 }}
+                    animate={{ opacity: 1, y: -100, scale: 1 }}
+                    exit={{ opacity: 0, y: -150, scale: 0.8 }}
+                    className="absolute top-4 z-20 bg-card border border-border rounded-lg px-4 py-2 shadow-lg"
+                  >
+                    <div className="flex items-center gap-2">
+                      {lastAction.type === 'relevant' ? (
+                        <>
+                          <ThumbsUp className="w-4 h-4 text-green-500" />
+                          <span className="text-green-500 font-medium">Marked as Relevant</span>
+                        </>
+                      ) : (
+                        <>
+                          <ThumbsDown className="w-4 h-4 text-red-500" />
+                          <span className="text-red-500 font-medium">Marked as Irrelevant</span>
+                        </>
                       )}
                     </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            )
-          })}
-        </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
-        {/* Action Buttons */}
-        <div className="absolute bottom-[-80px] left-1/2 transform -translate-x-1/2 flex gap-4">
-          <Button
-            variant="outline"
-            size="lg"
-            onClick={() => handleButtonRate(false)}
-            disabled={isRating}
-            className="bg-red-50 border-red-200 hover:bg-red-100 text-red-700 dark:bg-red-950 dark:border-red-800 dark:hover:bg-red-900 dark:text-red-300"
-          >
-            {isRating ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
-            ) : (
-              <ThumbsDown className="w-5 h-5" />
-            )}
-            <span className="ml-2">Irrelevant</span>
-          </Button>
-          
-          <Button
-            variant="outline"
-            size="lg"
-            onClick={() => handleButtonRate(true)}
-            disabled={isRating}
-            className="bg-green-50 border-green-200 hover:bg-green-100 text-green-700 dark:bg-green-950 dark:border-green-800 dark:hover:bg-green-900 dark:text-green-300"
-          >
-            {isRating ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
-            ) : (
-              <ThumbsUp className="w-5 h-5" />
-            )}
-            <span className="ml-2">Relevant</span>
-          </Button>
-        </div>
+              {/* Single Card Display */}
+              {memories[currentIndex] && (
+                <motion.div
+                  className="relative w-full max-w-md h-80 mb-6"
+                  initial={{ y: 20, opacity: 0, scale: 0.9 }}
+                  animate={{ y: 0, opacity: 1, scale: 1 }}
+                  whileHover={{ y: -8, scale: 1.02 }}
+                  transition={{
+                    type: "spring",
+                    stiffness: 300,
+                    damping: 24
+                  }}
+                >
+                  <motion.div
+                    key={memories[currentIndex].id}
+                    className="absolute inset-0"
+                    style={{
+                      x,
+                      y,
+                      rotate,
+                      opacity: 1
+                    }}
+                    drag="x"
+                    dragConstraints={{ left: 0, right: 0 }}
+                    onDragEnd={handleDragEnd}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <Card className="w-full h-full cursor-pointer bg-card/50 backdrop-blur-sm border-border/50 hover:border-primary/30 shadow-xl hover:shadow-2xl transition-all duration-300 overflow-hidden group relative flex flex-col">
+                      {/* Gradient overlay */}
+                      <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-5 transition-opacity duration-300" />
+                      
+                      {/* Shimmer effect */}
+                      <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/10 to-transparent group-hover:translate-x-full transition-transform duration-700" />
+                      <CardHeader className="pb-3 relative flex-shrink-0">
+                        <div className="flex items-start justify-between">
+                          <Badge 
+                            variant="secondary" 
+                            className={`flex items-center gap-1 ${getMemoryTypeColor(memories[currentIndex].memory_type)}`}
+                          >
+                            {getMemoryTypeIcon(memories[currentIndex].memory_type)}
+                            {formatMemoryType(memories[currentIndex].memory_type)}
+                          </Badge>
+                          <Badge 
+                            variant="outline"
+                            className="bg-primary/10 text-primary border-primary/20"
+                          >
+                            {memories[currentIndex].final_importance_score.toFixed(1)}/10
+                          </Badge>
+                        </div>
+                      </CardHeader>
+                      
+                      <CardContent className="flex-1 flex flex-col p-6">
+                        {/* Centered Memory Text */}
+                        <div className="flex-1 flex items-center justify-center px-2">
+                          <div className="text-base leading-relaxed text-white text-center max-w-full">
+                            {memories[currentIndex].content.length > 150 
+                              ? memories[currentIndex].content.substring(0, 150) + "..."
+                              : memories[currentIndex].content
+                            }
+                          </div>
+                        </div>
+                        
+                        {/* Instructions at bottom */}
+                        <div className="text-center text-xs text-gray-400 border-t border-border/30 pt-3 mt-auto">
+                          <p className="mb-2">Swipe or click to rate</p>
+                          <div className="flex justify-center gap-6">
+                            <span className="text-red-400">← Irrelevant</span>
+                            <span className="text-green-400">Relevant →</span>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                </motion.div>
+              )}
+
+              {/* Action Buttons - Positioned to align with card edges */}
+              <div className="relative w-full max-w-md">
+                <div className="flex justify-between gap-4">
+                  <Button
+                    onClick={() => handleButtonRate(false)}
+                    disabled={isRating}
+                    className="flex-1 relative overflow-hidden group px-6 py-4 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 hover:text-red-300"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-r from-red-500/10 to-red-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                    <span className="relative z-10 flex items-center">
+                      {isRating ? (
+                        <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                      ) : (
+                        <ThumbsDown className="w-5 h-5 mr-2" />
+                      )}
+                      Irrelevant
+                    </span>
+                  </Button>
+                  
+                  <Button
+                    onClick={() => handleButtonRate(true)}
+                    disabled={isRating}
+                    className="flex-1 relative overflow-hidden group px-6 py-4 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-green-500/10 border border-green-500/20 text-green-400 hover:bg-green-500/20 hover:text-green-300"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-r from-green-500/10 to-green-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                    <span className="relative z-10 flex items-center">
+                      {isRating ? (
+                        <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                      ) : (
+                        <ThumbsUp className="w-5 h-5 mr-2" />
+                      )}
+                      Relevant
+                    </span>
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* Right Card - Memory List */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.1 }}
+        >
+          <Card className="bg-card/50 backdrop-blur-sm border-border/50 h-[700px] flex flex-col">
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-green-500 to-teal-600 flex items-center justify-center flex-shrink-0">
+                  <Target className="h-4 w-4 text-white" />
+                </div>
+                <div className="min-w-0">
+                  <CardTitle className="text-lg text-white">Memory Collection</CardTitle>
+                  <p className="text-gray-400 text-sm">
+                    Your stored memories & ratings
+                  </p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="flex-1 overflow-hidden p-4 flex flex-col">
+              {/* Stats */}
+              {stats && (
+                <div className="flex gap-2 mb-4 flex-wrap">
+                  <Badge variant="secondary" className="bg-blue-500/10 text-blue-400 border-blue-500/20 text-xs">
+                    {stats.total_memories} Total
+                  </Badge>
+                  <Badge variant="secondary" className="bg-yellow-500/10 text-yellow-400 border-yellow-500/20 text-xs">
+                    {stats.unrated_memories} Pending
+                  </Badge>
+                  <Badge variant="secondary" className="bg-green-500/10 text-green-400 border-green-500/20 text-xs">
+                    {stats.rated_memories} Rated
+                  </Badge>
+                </div>
+              )}
+
+              {/* Memory List */}
+              <div className="flex-1 overflow-y-auto pr-2 space-y-3 pl-1 pt-1">
+                <AnimatePresence mode="wait">
+                  {getPaginatedMemoriesForCollection().map((memory, index) => {
+                    const actualIndex = memories.findIndex(m => m.id === memory.id)
+                    return (
+                      <motion.div
+                        key={memory.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ delay: index * 0.05 }}
+                      >
+                        <Card
+                          className={`cursor-pointer transition-all duration-200 hover:shadow-lg hover:bg-muted/30 group relative overflow-hidden ${
+                            currentIndex === actualIndex ? 'border-primary/50 bg-primary/5' : ''
+                          }`}
+                          onClick={() => setCurrentIndex(actualIndex)}
+                        >
+                          {/* Shimmer effect */}
+                          <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/10 to-transparent group-hover:translate-x-full transition-transform duration-700" />
+                          
+                          <CardContent className="p-3 relative">
+                          <div className="flex items-start justify-between mb-2">
+                            <Badge 
+                              variant="secondary" 
+                              className={`text-xs ${getMemoryTypeColor(memory.memory_type)}`}
+                            >
+                              {getMemoryTypeIcon(memory.memory_type)}
+                              <span className="ml-1">{formatMemoryType(memory.memory_type)}</span>
+                            </Badge>
+                            <div className="flex items-center gap-2">
+                              {memory.user_rated === 1 && (
+                                <Badge className="bg-green-500/10 text-green-400 border-green-500/20 text-xs px-1 py-0">
+                                  ✓
+                                </Badge>
+                              )}
+                              <Badge 
+                                variant="outline"
+                                className="bg-primary/10 text-primary border-primary/20 text-xs"
+                              >
+                                {memory.final_importance_score.toFixed(1)}
+                              </Badge>
+                            </div>
+                          </div>
+                          <p className="text-sm text-gray-300 line-clamp-2 leading-relaxed">
+                            {memory.content}
+                          </p>
+                          <div className="flex justify-between items-center mt-2 text-xs text-gray-400">
+                            <span className="capitalize">{memory.score_source}</span>
+                            <span>{memory.access_count} access{memory.access_count !== 1 ? 'es' : ''}</span>
+                          </div>
+                          </CardContent>
+                        </Card>
+                      </motion.div>
+                    )
+                  })}
+                </AnimatePresence>
+              </div>
+
+              {/* Pagination */}
+              {memoryTotalPages > 1 && (
+                <div className="flex items-center justify-between pt-4 border-t border-border flex-shrink-0">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setMemoryPage(prev => Math.max(1, prev - 1))}
+                    disabled={memoryPage === 1}
+                    className="flex items-center gap-2 bg-card border border-border text-yellow-400 hover:bg-card/80 hover:text-yellow-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Previous
+                  </Button>
+                  
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <span>Page {memoryPage} of {memoryTotalPages}</span>
+                    <span className="text-xs">({memories.length} total)</span>
+                  </div>
+                  
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setMemoryPage(prev => Math.min(memoryTotalPages, prev + 1))}
+                    disabled={memoryPage === memoryTotalPages}
+                    className="flex items-center gap-2 bg-card border border-border text-yellow-400 hover:bg-card/80 hover:text-yellow-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
       </div>
 
-      {/* First-time tutorial modal */}
+      {/* First swipe confirmation modal */}
       <AnimatePresence>
-        {showFirstTimeModal && (
+        {showSwipeConfirmation && pendingSwipeAction && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+            onClick={() => setShowSwipeConfirmation(false)}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-card border border-border rounded-lg p-6 max-w-md w-full shadow-xl"
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              className="w-full max-w-md bg-card border border-border rounded-lg shadow-2xl p-6"
+              onClick={(e) => e.stopPropagation()}
             >
-              <div className="text-center">
-                <div className="mb-4">
-                  <Brain className="w-12 h-12 mx-auto text-primary mb-2" />
-                  <h3 className="text-xl font-semibold text-white">Memory Review Tutorial</h3>
+              <div className="flex items-center gap-3 mb-4">
+                <div className={`flex items-center justify-center w-12 h-12 rounded-full ${
+                  pendingSwipeAction.isRelevant 
+                    ? "bg-green-500/20" 
+                    : "bg-red-500/20"
+                }`}>
+                  <AlertCircle className={`h-6 w-6 ${
+                    pendingSwipeAction.isRelevant 
+                      ? "text-green-400" 
+                      : "text-red-400"
+                  }`} />
                 </div>
-                
-                <div className="text-gray-300 space-y-3 mb-6 text-left">
-                  <p className="flex items-center gap-2">
-                    <span className="text-green-400">👉</span>
-                    <strong>Swipe Right</strong> or click <strong>Relevant</strong> for memories that helped you
-                  </p>
-                  <p className="flex items-center gap-2">
-                    <span className="text-red-400">👈</span>
-                    <strong>Swipe Left</strong> or click <strong>Not Relevant</strong> for memories that didn't
-                  </p>
-                  <p className="text-sm text-gray-400 mt-4 text-center">
-                    Your ratings help Echo learn what's important to you!
-                  </p>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Confirm Your Rating</h3>
+                  <p className="text-sm text-muted-foreground">This helps Echo learn your preferences</p>
                 </div>
-
-                <Button 
-                  onClick={handleTutorialComplete}
-                  className="w-full"
+              </div>
+              
+              <p className="text-white mb-6">
+                Are you sure you want to mark this memory as{" "}
+                <span className={`font-medium ${
+                  pendingSwipeAction.isRelevant ? "text-green-400" : "text-red-400"
+                }`}>
+                  {pendingSwipeAction.isRelevant ? "Relevant" : "Irrelevant"}
+                </span>?
+              </p>
+              
+              <div className="flex gap-3">
+                <Button
+                  onClick={handleCancelSwipe}
+                  className="flex-1 relative overflow-hidden group px-6 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-gray-500/10 border border-gray-500/20 text-gray-400 hover:bg-gray-500/20 hover:text-gray-300"
                 >
-                  <Sparkles className="w-4 h-4 mr-2" />
-                  Got it! Let's start
+                  <div className="absolute inset-0 bg-gradient-to-r from-gray-500/10 to-gray-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  <span className="relative z-10">Cancel</span>
+                </Button>
+                <Button
+                  onClick={handleConfirmSwipe}
+                  className={`flex-1 relative overflow-hidden group px-6 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer inline-flex items-center justify-center ${
+                    pendingSwipeAction.isRelevant 
+                      ? "bg-green-500/10 border border-green-500/20 text-green-400 hover:bg-green-500/20 hover:text-green-300"
+                      : "bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 hover:text-red-300"
+                  }`}
+                >
+                  <div className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 ${
+                    pendingSwipeAction.isRelevant 
+                      ? "bg-gradient-to-r from-green-500/10 to-green-500/20"
+                      : "bg-gradient-to-r from-red-500/10 to-red-500/20"
+                  }`} />
+                  <span className="relative z-10">
+                    {pendingSwipeAction.isRelevant ? "Mark Relevant" : "Mark Irrelevant"}
+                  </span>
                 </Button>
               </div>
             </motion.div>
