@@ -75,10 +75,23 @@ class EntryRepository:
     
     @staticmethod
     async def delete(entry_id: int) -> bool:
-        """Delete an entry"""
-        await db.execute("DELETE FROM entries WHERE id = ?", (entry_id,))
-        await db.commit()
-        return True
+        """Delete an entry and related memories"""
+        try:
+            # First delete related agent_memories to avoid foreign key constraint violation
+            await db.execute(
+                "DELETE FROM agent_memories WHERE related_entry_id = ?", 
+                (entry_id,)
+            )
+            
+            # Then delete the entry
+            cursor = await db.execute(
+                "DELETE FROM entries WHERE id = ?", (entry_id,)
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            await db.rollback()
+            raise e
     
     @staticmethod
     async def count() -> int:

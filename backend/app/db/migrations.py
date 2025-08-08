@@ -43,6 +43,41 @@ CREATE INDEX IF NOT EXISTS idx_entries_smart_tags ON entries(smart_tags);""",
         """DROP INDEX IF EXISTS idx_entries_smart_tags;
 ALTER TABLE entries DROP COLUMN smart_tags;"""
     ),
+    (
+        5,
+        "Add advanced memory scoring fields",
+        """-- Add new scoring fields to agent_memories
+ALTER TABLE agent_memories ADD COLUMN base_importance_score REAL DEFAULT 5.0;
+ALTER TABLE agent_memories ADD COLUMN llm_importance_score REAL;
+ALTER TABLE agent_memories ADD COLUMN user_score_adjustment REAL DEFAULT 0;
+ALTER TABLE agent_memories ADD COLUMN final_importance_score REAL DEFAULT 5.0;
+ALTER TABLE agent_memories ADD COLUMN user_rated INTEGER DEFAULT 0;
+ALTER TABLE agent_memories ADD COLUMN score_source TEXT DEFAULT 'rule';
+ALTER TABLE agent_memories ADD COLUMN llm_processed INTEGER DEFAULT 0;
+ALTER TABLE agent_memories ADD COLUMN llm_processed_at DATETIME;
+ALTER TABLE agent_memories ADD COLUMN user_rated_at DATETIME;
+ALTER TABLE agent_memories ADD COLUMN decay_last_calculated DATETIME;
+ALTER TABLE agent_memories ADD COLUMN effective_score_cache REAL;
+ALTER TABLE agent_memories ADD COLUMN score_breakdown TEXT;
+ALTER TABLE agent_memories ADD COLUMN marked_for_deletion INTEGER DEFAULT 0;
+ALTER TABLE agent_memories ADD COLUMN marked_for_deletion_at DATETIME;
+ALTER TABLE agent_memories ADD COLUMN deletion_reason TEXT;
+ALTER TABLE agent_memories ADD COLUMN archived INTEGER DEFAULT 0;
+ALTER TABLE agent_memories ADD COLUMN archived_at DATETIME;
+
+-- Create indexes for new fields
+CREATE INDEX IF NOT EXISTS idx_memory_user_rated ON agent_memories(user_rated);
+CREATE INDEX IF NOT EXISTS idx_memory_llm_processed ON agent_memories(llm_processed);
+CREATE INDEX IF NOT EXISTS idx_memory_final_score ON agent_memories(final_importance_score DESC);
+CREATE INDEX IF NOT EXISTS idx_memory_marked_deletion ON agent_memories(marked_for_deletion);
+CREATE INDEX IF NOT EXISTS idx_memory_archived ON agent_memories(archived);""",
+        """-- Rollback: Drop indexes and columns
+DROP INDEX IF EXISTS idx_memory_user_rated;
+DROP INDEX IF EXISTS idx_memory_llm_processed;
+DROP INDEX IF EXISTS idx_memory_final_score;
+DROP INDEX IF EXISTS idx_memory_marked_deletion;
+DROP INDEX IF EXISTS idx_memory_archived;"""
+    ),
 ]
 
 

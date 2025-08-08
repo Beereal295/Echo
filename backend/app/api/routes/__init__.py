@@ -12,6 +12,7 @@ from .tts import router as tts_router
 from .conversations import router as conversations_router
 from .diary_chat import router as diary_chat_router
 from .audio import router as audio_router
+from .memories import router as memories_router
 
 __all__ = [
     "entries_router",
@@ -27,5 +28,6 @@ __all__ = [
     "tts_router",
     "conversations_router",
     "diary_chat_router",
-    "audio_router"
+    "audio_router",
+    "memories_router"
 ]

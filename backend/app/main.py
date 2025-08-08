@@ -13,6 +13,7 @@ from app.api.errors import (
 )
 from app.services.processing_queue import get_processing_queue, cleanup_processing_queue
 from app.services.service_coordinator import get_service_coordinator
+from app.services.background_tasks import background_manager
 
 
 @asynccontextmanager
@@ -27,9 +28,13 @@ async def lifespan(app: FastAPI):
     service_coordinator = await get_service_coordinator()
     await service_coordinator.initialize()
     
+    # Start background tasks for memory processing
+    await background_manager.start()
+    
     yield
     
     # Shutdown
+    await background_manager.stop()
     await cleanup_processing_queue()
 
 

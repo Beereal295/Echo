@@ -569,12 +569,18 @@ function VoiceUploadPage() {
 
     try {
       // Save entry to database with all three texts and processing metadata
+      // Use selected date/time if available, otherwise backend will use current time
+      const selectedDateTime = backfillDate && backfillHour && backfillMinute && backfillAmPm
+        ? `${backfillDate}T${getFormattedTime()}`
+        : undefined
+
       const response = await api.createEntryWithAllTexts(
         createdEntries.raw.raw_text,
         createdEntries.enhanced?.enhanced_text,
         createdEntries.structured?.structured_summary,
         'raw',
-        processingMetadata
+        processingMetadata,
+        selectedDateTime
       )
 
       if (response.success && response.data) {

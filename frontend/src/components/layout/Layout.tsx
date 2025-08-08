@@ -20,7 +20,8 @@ import {
   Sparkles,
   ChevronLeft,
   ChevronRight,
-  FileAudio2
+  FileAudio2,
+  Brain
 } from 'lucide-react'
 import { api } from '@/lib/api'
 
@@ -37,6 +38,7 @@ function Layout({ children }: LayoutProps) {
   const [dailyStreak, setDailyStreak] = useState(0)
   const [streakLoading, setStreakLoading] = useState(true)
   const [showPlusMenu, setShowPlusMenu] = useState(false)
+  const [unratedMemoriesCount, setUnratedMemoriesCount] = useState(0)
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -62,13 +64,27 @@ function Layout({ children }: LayoutProps) {
     }
   }
 
+  // Load unrated memories count
+  const loadUnratedMemoriesCount = async () => {
+    try {
+      const response = await api.getMemoryStats()
+      if (response.success && response.data) {
+        setUnratedMemoriesCount(response.data.unrated_memories)
+      }
+    } catch (error) {
+      console.error('Failed to load unrated memories count:', error)
+    }
+  }
+
   useEffect(() => {
     // Initial checks
     calculateDailyStreak()
+    loadUnratedMemoriesCount()
     
     // Listen for settings updates
     const handleSettingsUpdate = () => {
       calculateDailyStreak()
+      loadUnratedMemoriesCount()
     }
     
     window.addEventListener('settingsUpdated', handleSettingsUpdate)
@@ -76,6 +92,7 @@ function Layout({ children }: LayoutProps) {
     // Check periodically to update when new entries are added
     const interval = setInterval(() => {
       calculateDailyStreak()
+      loadUnratedMemoriesCount()
     }, 60000) // Check every minute
     
     return () => {
@@ -125,6 +142,12 @@ function Layout({ children }: LayoutProps) {
       label: 'Pattern Insights',
       alwaysShow: true,
       special: true
+    },
+    {
+      path: '/memories',
+      icon: Brain,
+      label: 'Memory Review',
+      alwaysShow: true
     },
     {
       path: '/settings',
@@ -238,6 +261,28 @@ function Layout({ children }: LayoutProps) {
                         <item.icon className={`${sidebarCollapsed ? '' : 'mr-3'} h-5 w-5 transition-colors duration-200 ${
                           isActive ? 'text-primary group-hover:text-primary' : 'text-white group-hover:text-white'
                         } ${item.special ? 'text-primary' : ''}`} />
+                        
+                        {/* Memory badge - only show when collapsed (absolute position) */}
+                        <AnimatePresence mode="wait">
+                          {item.path === '/memories' && unratedMemoriesCount > 0 && sidebarCollapsed && (
+                            <motion.div
+                              key="memory-badge-collapsed"
+                              initial={{ opacity: 0, scale: 0.8 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              exit={{ opacity: 0, scale: 0.8 }}
+                              transition={{ duration: 0.2, ease: "easeOut" }}
+                              className="absolute -top-2 -right-2"
+                            >
+                              <Badge 
+                                variant="secondary" 
+                                className="h-5 px-2 flex items-center justify-center text-xs bg-red-500 text-white border-0 rounded-full min-w-[20px]"
+                              >
+                                {unratedMemoriesCount > 99 ? '99+' : unratedMemoriesCount}
+                              </Badge>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                        
                         <AnimatePresence mode="wait">
                           {!sidebarCollapsed && (
                             <motion.span 
@@ -251,6 +296,23 @@ function Layout({ children }: LayoutProps) {
                               }`}
                             >
                               {item.label}
+                              {item.path === '/memories' && unratedMemoriesCount > 0 && (
+                                <motion.div
+                                  key={`memory-badge-inline-${unratedMemoriesCount}`}
+                                  initial={{ opacity: 0, x: -10, scale: 0.8 }}
+                                  animate={{ opacity: 1, x: 0, scale: 1 }}
+                                  exit={{ opacity: 0, x: -10, scale: 0.8 }}
+                                  transition={{ duration: 0.2, ease: "easeOut" }}
+                                  className="inline-block ml-2"
+                                >
+                                  <Badge 
+                                    variant="secondary" 
+                                    className="h-5 px-2 text-xs bg-red-500 text-white border-0 rounded-full"
+                                  >
+                                    {unratedMemoriesCount > 99 ? '99+' : unratedMemoriesCount}
+                                  </Badge>
+                                </motion.div>
+                              )}
                             </motion.span>
                           )}
                         </AnimatePresence>

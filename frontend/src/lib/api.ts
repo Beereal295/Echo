@@ -112,7 +112,8 @@ class ApiClient {
     enhancedText?: string,
     structuredSummary?: string,
     mode: string = 'raw',
-    processingMetadata?: any
+    processingMetadata?: any,
+    customTimestamp?: string
   ): Promise<ApiResponse<Entry>> {
     return this.request<Entry>('/entries/', {
       method: 'POST',
@@ -121,7 +122,8 @@ class ApiClient {
         enhanced_text: enhancedText,
         structured_summary: structuredSummary,
         mode,
-        processing_metadata: processingMetadata
+        processing_metadata: processingMetadata,
+        custom_timestamp: customTimestamp
       })
     })
   }
@@ -593,6 +595,96 @@ class ApiClient {
       body: formData,
       headers: {} // Let browser set Content-Type for FormData
     })
+  }
+
+  // Memory management endpoints
+  async getUnratedMemories(limit: number = 10): Promise<ApiResponse<Array<{
+    id: number
+    content: string
+    memory_type: string
+    base_importance_score: number
+    llm_importance_score?: number
+    user_score_adjustment: number
+    final_importance_score: number
+    user_rated: number
+    score_source: string
+    effective_score_data?: any
+    created_at: string
+    last_accessed_at?: string
+    access_count: number
+  }>>> {
+    return this.request(`/memories/unrated?limit=${limit}`)
+  }
+
+  async rateMemory(memoryId: number, adjustment: number): Promise<ApiResponse<{
+    success: boolean
+    message: string
+  }>> {
+    return this.request('/memories/rate', {
+      method: 'POST',
+      body: JSON.stringify({
+        memory_id: memoryId,
+        adjustment: adjustment
+      })
+    })
+  }
+
+  async getMemoryStats(): Promise<ApiResponse<{
+    total_memories: number
+    rated_memories: number
+    unrated_memories: number
+    llm_processed: number
+    pending_deletion: number
+    archived: number
+    average_score: number
+  }>> {
+    return this.request('/memories/stats')
+  }
+
+  async searchMemories(query: string, memoryType?: string, limit: number = 10): Promise<ApiResponse<Array<{
+    id: number
+    content: string
+    memory_type: string
+    final_importance_score: number
+    effective_score: any
+    created_at: string
+    access_count: number
+  }>>> {
+    const params = new URLSearchParams({ query, limit: limit.toString() })
+    if (memoryType) {
+      params.set('memory_type', memoryType)
+    }
+    return this.request(`/memories/search?${params}`)
+  }
+
+  async triggerLLMProcessing(batchSize: number = 5): Promise<ApiResponse<{
+    success: boolean
+    processed_count: number
+    message: string
+  }>> {
+    return this.request('/memories/process-llm-batch', {
+      method: 'POST',
+      body: JSON.stringify({ batch_size: batchSize })
+    })
+  }
+
+  async rescueMemory(memoryId: number): Promise<ApiResponse<{
+    success: boolean
+    message: string
+  }>> {
+    return this.request(`/memories/rescue/${memoryId}`, {
+      method: 'POST'
+    })
+  }
+
+  async getPendingDeletionMemories(): Promise<ApiResponse<Array<{
+    id: number
+    content: string
+    deletion_reason: string
+    marked_for_deletion_at: string
+    scheduled_deletion_date: string
+  }>>> {
+    return this.request('/memories/pending-deletion')
   }
 }
 
