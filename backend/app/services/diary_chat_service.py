@@ -6,18 +6,15 @@ This service handles:
 - Date-aware diary search tool execution  
 - Conversation context management
 - System date awareness for the LLM
-- Optimized search with caching
+- Direct database queries for real-time accuracy
 """
 
 import asyncio
 import json
 import logging
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta, date
 import re
-from functools import lru_cache
-import hashlib
-import time
 from contextvars import ContextVar
 
 from langchain_ollama import ChatOllama
@@ -36,12 +33,6 @@ logger = logging.getLogger(__name__)
 # Context variable for passing FastAPI BackgroundTasks to tools
 _background_tasks_ctx: ContextVar = ContextVar('background_tasks', default=None)
 
-# Global caches for performance optimization
-_ENTRY_EMBEDDINGS_CACHE: Dict[str, Tuple[List[Any], float]] = {}  # key: "all_entries", value: (entries, timestamp)
-_QUERY_EMBEDDING_CACHE: Dict[str, Tuple[List[float], float]] = {}  # key: query_hash, value: (embedding, timestamp)
-_SEARCH_RESULTS_CACHE: Dict[str, Tuple[List[Dict], float]] = {}  # key: search_key, value: (results, timestamp)
-CACHE_TTL = 300  # 5 minutes cache TTL
-
 
 def strip_thinking_block(response_text: str) -> str:
     """Strip thinking blocks from LLM response to get clean text."""
@@ -59,67 +50,6 @@ def strip_thinking_block(response_text: str) -> str:
     return response_text
 
 
-def _get_query_hash(query: str) -> str:
-    """Generate a hash for caching query embeddings."""
-    return hashlib.md5(query.encode()).hexdigest()
-
-
-def _is_cache_valid(timestamp: float) -> bool:
-    """Check if cached data is still valid based on TTL."""
-    return (time.time() - timestamp) < CACHE_TTL
-
-
-async def _get_cached_query_embedding(query: str, is_query: bool = True) -> Optional[List[float]]:
-    """Get cached query embedding if available and valid."""
-    cache_key = f"{_get_query_hash(query)}_{is_query}"
-    if cache_key in _QUERY_EMBEDDING_CACHE:
-        embedding, timestamp = _QUERY_EMBEDDING_CACHE[cache_key]
-        if _is_cache_valid(timestamp):
-            logger.debug(f"Using cached embedding for query: '{query[:50]}...'")
-            return embedding
-    return None
-
-
-async def _cache_query_embedding(query: str, embedding: List[float], is_query: bool = True):
-    """Cache query embedding with timestamp."""
-    cache_key = f"{_get_query_hash(query)}_{is_query}"
-    _QUERY_EMBEDDING_CACHE[cache_key] = (embedding, time.time())
-    # Limit cache size to prevent memory issues
-    if len(_QUERY_EMBEDDING_CACHE) > 100:
-        # Remove oldest entries
-        oldest_keys = sorted(_QUERY_EMBEDDING_CACHE.keys(), 
-                           key=lambda k: _QUERY_EMBEDDING_CACHE[k][1])[:20]
-        for key in oldest_keys:
-            del _QUERY_EMBEDDING_CACHE[key]
-
-
-async def _get_all_entries_with_embeddings_cached() -> List[Any]:
-    """Get all entries with embeddings, using cache when available."""
-    cache_key = "all_entries"
-    
-    # Check cache
-    if cache_key in _ENTRY_EMBEDDINGS_CACHE:
-        entries, timestamp = _ENTRY_EMBEDDINGS_CACHE[cache_key]
-        if _is_cache_valid(timestamp):
-            logger.info(f"Using cached entries: {len(entries)} entries")
-            return entries
-    
-    # Fetch from database
-    logger.info("Fetching all entries with embeddings from database...")
-    entries = await EntryRepository.get_entries_with_embeddings(limit=None)
-    
-    # Cache the results
-    _ENTRY_EMBEDDINGS_CACHE[cache_key] = (entries, time.time())
-    logger.info(f"Cached {len(entries)} entries with embeddings")
-    
-    return entries
-
-
-def _invalidate_entry_cache():
-    """Invalidate entry cache when entries are modified."""
-    global _ENTRY_EMBEDDINGS_CACHE
-    _ENTRY_EMBEDDINGS_CACHE.clear()
-    logger.info("Entry embeddings cache invalidated")
 
 @tool
 async def search_diary_entries(query: str, limit: int = 50) -> Dict[str, Any]:
@@ -153,30 +83,17 @@ async def search_diary_entries(query: str, limit: int = 50) -> Dict[str, Any]:
             
         query = query.strip()[:1000]  # Limit query length
         
-        # Check search results cache first
-        search_cache_key = f"{_get_query_hash(query)}_{limit}"
-        if search_cache_key in _SEARCH_RESULTS_CACHE:
-            cached_results, timestamp = _SEARCH_RESULTS_CACHE[search_cache_key]
-            if _is_cache_valid(timestamp):
-                logger.info(f"Using cached search results for query: '{query[:50]}...'")
-                return cached_results
+        # Generate query embedding
+        embedding_service = get_embedding_service()
+        query_embedding = await embedding_service.generate_embedding(
+            text=query,
+            normalize=True,
+            is_query=True  # Mark as query for BGE formatting
+        )
         
-        # Check for cached query embedding
-        query_embedding = await _get_cached_query_embedding(query, is_query=True)
-        
-        if query_embedding is None:
-            # Generate new embedding
-            embedding_service = get_embedding_service()
-            query_embedding = await embedding_service.generate_embedding(
-                text=query,
-                normalize=True,
-                is_query=True  # Mark as query for BGE formatting
-            )
-            # Cache the embedding
-            await _cache_query_embedding(query, query_embedding, is_query=True)
-        
-        # Get all entries with embeddings using cache
-        entries_with_embeddings = await _get_all_entries_with_embeddings_cached()
+        # Get all entries with embeddings directly from database
+        logger.info("Fetching entries with embeddings from database...")
+        entries_with_embeddings = await EntryRepository.get_entries_with_embeddings(limit=None)
         
         if not entries_with_embeddings:
             return {
@@ -272,15 +189,6 @@ async def search_diary_entries(query: str, limit: int = 50) -> Dict[str, Any]:
             "total_searchable_entries": len(candidate_embeddings)
         }
         
-        # Cache the search results
-        _SEARCH_RESULTS_CACHE[search_cache_key] = (response, time.time())
-        # Limit cache size
-        if len(_SEARCH_RESULTS_CACHE) > 50:
-            oldest_keys = sorted(_SEARCH_RESULTS_CACHE.keys(),
-                               key=lambda k: _SEARCH_RESULTS_CACHE[k][1])[:10]
-            for key in oldest_keys:
-                del _SEARCH_RESULTS_CACHE[key]
-        
         return response
         
     except Exception as e:
@@ -352,9 +260,6 @@ async def add_entry_to_diary(content: str, entry_type: str = "note") -> Dict[str
         # Save to database
         created_entry = await EntryRepository.create(entry)
         
-        # DON'T invalidate cache immediately - wait for embedding generation
-        # invalidate_diary_cache()  # Moved to after embedding generation
-        
         # Generate embedding asynchronously (same as regular pipeline)
         async def _generate_embedding_background():
             try:
@@ -365,7 +270,6 @@ async def add_entry_to_diary(content: str, entry_type: str = "note") -> Dict[str
                     is_query=False
                 )
                 await EntryRepository.update_embedding(created_entry.id, embedding)
-                invalidate_diary_cache()  # Invalidate again after embedding
                 logger.info(f"Generated embedding for chat entry {created_entry.id}")
             except Exception as e:
                 logger.error(f"Failed to generate embedding for chat entry {created_entry.id}: {e}")
@@ -478,9 +382,6 @@ async def _generate_embedding_for_entry_chat(entry_id: int, text: str):
         
         # Update entry with embedding
         await EntryRepository.update_embedding(entry_id, embedding)
-        
-        # Invalidate cache since we have new embeddings
-        invalidate_diary_cache()
         
         logger.info(f"Successfully generated embedding for chat entry {entry_id}")
         
@@ -960,8 +861,8 @@ async def extract_ideas_and_concepts(topic: Optional[str] = None, time_period: O
         
         # Get entries from specified time period
         if time_period == "all_time":
-            # Use cached entries for performance
-            entries = await _get_all_entries_with_embeddings_cached()
+            # Fetch entries directly from database
+            entries = await EntryRepository.get_entries_with_embeddings(limit=limit)
             if len(entries) > limit:
                 entries = entries[:limit]  # Take most recent
         else:
@@ -1241,7 +1142,7 @@ async def extract_action_items(status: Optional[str] = None, time_period: Option
         
         # Get entries from specified time period
         if time_period == "all_time":
-            entries = await _get_all_entries_with_embeddings_cached()
+            entries = await EntryRepository.get_entries_with_embeddings(limit=limit)
             if len(entries) > limit:
                 entries = entries[:limit]
         else:
@@ -1464,6 +1365,12 @@ async def get_entries_by_date(date_filter: str, limit: int = 100) -> Dict[str, A
                     end_date = target_date
                     break
         
+        # Handle "latest", "last entry", "most recent" queries
+        elif any(keyword in date_filter_lower for keyword in ["latest", "last entry", "most recent", "last saved"]):
+            logger.info(f"Handling latest entry query: '{date_filter}'")
+            start_date = today - timedelta(days=7)  # Last 7 days for latest queries
+            end_date = today
+        
         # If we couldn't parse the date filter, return last 7 days as fallback
         if start_date is None:
             logger.warning(f"Could not parse date filter '{date_filter}', using last 7 days")
@@ -1476,29 +1383,13 @@ async def get_entries_by_date(date_filter: str, limit: int = 100) -> Dict[str, A
         
         logger.info(f"Date range: {start_datetime} to {end_datetime}")
         
-        # For date queries, we can leverage the cached entries if available
-        # and filter them in memory to avoid database hits
-        all_entries = await _get_all_entries_with_embeddings_cached()
-        
-        # Filter entries by date range in memory
-        filtered_entries = []
-        for entry in all_entries:
-            if entry.timestamp >= start_datetime and entry.timestamp <= end_datetime:
-                filtered_entries.append(entry)
-                if len(filtered_entries) >= limit:
-                    break
-        
-        # If cache miss or not enough entries, fall back to database
-        if not filtered_entries or len(filtered_entries) < min(limit, 10):
-            logger.info("Cache miss or insufficient entries, fetching from database")
-            entries = await EntryRepository.get_entries_with_embeddings(
-                limit=limit,
-                start_date=start_datetime.isoformat(),
-                end_date=end_datetime.isoformat()
-            )
-        else:
-            logger.info(f"Using {len(filtered_entries)} cached entries for date range")
-            entries = filtered_entries[:limit]
+        # Fetch entries directly from database with date filtering
+        logger.info("Fetching entries from database for date range")
+        entries = await EntryRepository.get_entries_with_embeddings(
+            limit=limit,
+            start_date=start_datetime.isoformat(),
+            end_date=end_datetime.isoformat()
+        )
         
         # Format results with full content and mood_tags
         results = []
@@ -1530,6 +1421,7 @@ async def get_entries_by_date(date_filter: str, limit: int = 100) -> Dict[str, A
     except Exception as e:
         logger.error(f"Error in get_entries_by_date: {e}")
         return {"success": False, "error": str(e)}
+
 
 
 class DiaryChatService:
@@ -1957,12 +1849,7 @@ def get_diary_chat_service() -> DiaryChatService:
 
 
 def invalidate_diary_cache():
-    """Public function to invalidate diary caches when entries are modified."""
-    logger.info("INVALIDATE_DIARY_CACHE CALLED - STARTING CACHE CLEAR")
-    _invalidate_entry_cache()
-    # Also clear search results cache since they may be stale
-    global _SEARCH_RESULTS_CACHE
-    search_cache_count = len(_SEARCH_RESULTS_CACHE)
-    _SEARCH_RESULTS_CACHE.clear()
-    logger.info(f"CACHE INVALIDATION COMPLETE - Cleared {search_cache_count} search results from cache")
-    logger.info("All diary caches invalidated")
+    """No-op function kept for compatibility with other code that calls it."""
+    # Caching has been completely removed for real-time accuracy
+    # This function is kept to avoid breaking other code that might call it
+    pass

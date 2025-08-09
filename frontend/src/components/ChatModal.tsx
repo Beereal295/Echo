@@ -814,7 +814,6 @@ function ChatModal({ isOpen, onClose, onEndChat }: ChatModalProps) {
         content: msg.content
       }))
 
-      console.log('About to send diary chat message:', userMessage.content)
       const response = await api.sendDiaryChatMessage(
         userMessage.content,
         conversationHistory,
@@ -822,10 +821,7 @@ function ChatModal({ isOpen, onClose, onEndChat }: ChatModalProps) {
         memoryEnabled
       )
       
-      console.log('Raw API response received:', response)
-
       if (response.success && response.data) {
-        console.log('Response is successful, processing...')
         // Extract chat data from nested response structure
         const chatData = response.data.data || response.data
         
@@ -850,12 +846,6 @@ function ChatModal({ isOpen, onClose, onEndChat }: ChatModalProps) {
         if (chatData.search_queries_used?.length > 0) {
           setSearchQueries(prev => [...prev, ...chatData.search_queries_used])
         }
-
-        // Debug: log the response data
-        console.log('Full response:', response)
-        console.log('Response data:', response.data)
-        console.log('Nested response data:', response.data.data)
-        console.log('Response text field:', chatData.response)
         
         // Extract the actual response text from the nested structure
         const responseText = typeof chatData.response === 'string' ? chatData.response : 
