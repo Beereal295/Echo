@@ -39,6 +39,7 @@ function Layout({ children }: LayoutProps) {
   const [streakLoading, setStreakLoading] = useState(true)
   const [showPlusMenu, setShowPlusMenu] = useState(false)
   const [unratedMemoriesCount, setUnratedMemoriesCount] = useState(0)
+  const [memoryEnabled, setMemoryEnabled] = useState(true) // Memory system toggle
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -76,15 +77,32 @@ function Layout({ children }: LayoutProps) {
     }
   }
 
+  // Load memory system preference
+  const loadMemoryPreference = async () => {
+    try {
+      const response = await api.getPreferences()
+      if (response.success && response.data) {
+        const memoryPref = response.data.preferences.find((pref: any) => pref.key === 'memory_enabled')
+        if (memoryPref !== undefined) {
+          setMemoryEnabled(memoryPref.typed_value !== false)
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load memory preference:', error)
+    }
+  }
+
   useEffect(() => {
     // Initial checks
     calculateDailyStreak()
     loadUnratedMemoriesCount()
+    loadMemoryPreference()
     
     // Listen for settings updates
     const handleSettingsUpdate = () => {
       calculateDailyStreak()
       loadUnratedMemoriesCount()
+      loadMemoryPreference()
     }
     
     window.addEventListener('settingsUpdated', handleSettingsUpdate)
@@ -143,12 +161,12 @@ function Layout({ children }: LayoutProps) {
       alwaysShow: true,
       special: true
     },
-    {
+    ...(memoryEnabled ? [{
       path: '/memories',
       icon: Brain,
       label: 'Memory Review',
       alwaysShow: true
-    },
+    }] : []),
     {
       path: '/settings',
       icon: Settings,

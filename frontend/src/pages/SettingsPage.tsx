@@ -9,7 +9,7 @@ import { Switch } from '@/components/ui/switch'
 import { Slider } from '@/components/ui/slider'
 import { useToast } from '@/components/ui/use-toast'
 import { api } from '@/lib/api'
-import { Keyboard, Globe, Mic, Settings2, Loader2, CheckCircle2, XCircle, FileText, MessageSquare } from 'lucide-react'
+import { Keyboard, Globe, Mic, Settings2, Loader2, CheckCircle2, XCircle, FileText, MessageSquare, Brain, AlertTriangle, Palette } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 
 function SettingsPage() {
@@ -49,6 +49,9 @@ function SettingsPage() {
   
   // Voice settings (master toggle)
   const [voiceEnabled, setVoiceEnabled] = useState(false) // Default to OFF
+  
+  // Memory settings
+  const [memoryEnabled, setMemoryEnabled] = useState(true) // Default to ON
   
   // General settings
   const [autoSave, setAutoSave] = useState(true)
@@ -121,6 +124,9 @@ function SettingsPage() {
               break
             case 'voice_enabled':
               setVoiceEnabled(pref.typed_value === true || pref.typed_value === 'true')
+              break
+            case 'memory_enabled':
+              setMemoryEnabled(pref.typed_value !== false)
               break
             case 'auto_save':
               setAutoSave(pref.typed_value !== false)
@@ -280,6 +286,16 @@ function SettingsPage() {
     }))
   }
 
+  const handleSaveMemory = async () => {
+    const preferences = [
+      { key: 'memory_enabled', value: memoryEnabled, value_type: 'bool' }
+    ]
+    await savePreferences(preferences)
+    
+    // Dispatch event to notify other components that settings were updated
+    window.dispatchEvent(new CustomEvent('settingsUpdated'))
+  }
+
   const handleSaveGeneral = async () => {
     const preferences = [
       { key: 'auto_save', value: autoSave, value_type: 'bool' },
@@ -386,7 +402,7 @@ function SettingsPage() {
         </div>
 
         <Tabs value={currentTab} onValueChange={handleTabChange} className="flex-1 flex flex-col">
-          <TabsList className="grid w-full max-w-lg grid-cols-4 mb-4 bg-card/50 backdrop-blur-sm border border-border/50 flex-shrink-0">
+          <TabsList className="grid w-full max-w-2xl grid-cols-5 mb-4 bg-card/50 backdrop-blur-sm border border-border/50 flex-shrink-0">
             <TabsTrigger value="general" className="flex items-center gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
               <Settings2 className="h-4 w-4" />
               <span className="hidden sm:inline">General</span>
@@ -402,6 +418,10 @@ function SettingsPage() {
             <TabsTrigger value="tts" className="flex items-center gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
               <Mic className="h-4 w-4" />
               <span className="hidden sm:inline">Voice</span>
+            </TabsTrigger>
+            <TabsTrigger value="memory" className="flex items-center gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
+              <Brain className="h-4 w-4" />
+              <span className="hidden sm:inline">Memory</span>
             </TabsTrigger>
           </TabsList>
 
@@ -466,9 +486,12 @@ function SettingsPage() {
                 <div className="bg-muted/10 rounded-lg p-3 border border-border/50">
                   <Label htmlFor="theme" className="text-white font-medium mb-2 block">Theme</Label>
                   <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-500/20 rounded-lg p-4">
-                    <p className="text-sm text-purple-300">
-                      Coming Soon - We're working on beautiful theme options for Echo
-                    </p>
+                    <div className="flex items-start gap-3">
+                      <Palette className="h-4 w-4 text-purple-400 mt-0.5 flex-shrink-0" />
+                      <p className="text-sm text-purple-300">
+                        Coming Soon - We're working on beautiful theme options for Echo
+                      </p>
+                    </div>
                   </div>
                 </div>
 
@@ -996,6 +1019,83 @@ function SettingsPage() {
                 </div>
               </CardContent>
             </Card>
+            </motion.div>
+          </TabsContent>
+
+          <TabsContent value="memory" className="flex-1">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <Card className="bg-card/50 backdrop-blur-sm border-border/50">
+                <CardHeader className="pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                      <Brain className="h-5 w-5 text-white" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-xl text-white">Memory System</CardTitle>
+                      <CardDescription className="text-gray-400 text-sm">
+                        Configure Echo's memory system settings
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {/* Beta Disclaimer Banner */}
+                  <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-500/20 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle className="h-4 w-4 text-purple-400 mt-0.5 flex-shrink-0" />
+                      <p className="text-sm text-purple-300">
+                        Beta Feature - The memory system is currently in beta. We're actively working to improve 
+                        how Echo remembers and uses information from your journal entries and conversations.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Memory Toggle */}
+                  <div className="bg-muted/10 rounded-lg p-4 border border-border/50">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label htmlFor="memory-enabled" className="text-white font-medium">
+                          Enable Memory System
+                        </Label>
+                        <p className="text-sm text-gray-400 mt-1">
+                          Allow Echo to remember and use information from your past entries and conversations
+                        </p>
+                      </div>
+                      <Switch
+                        id="memory-enabled"
+                        checked={memoryEnabled}
+                        onCheckedChange={setMemoryEnabled}
+                        className="data-[state=checked]:bg-primary"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Save Button */}
+                  <div className="flex justify-end pt-2">
+                    <button 
+                      onClick={handleSaveMemory} 
+                      disabled={saving}
+                      className="relative overflow-hidden group px-5 py-2 rounded-lg font-medium shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                      <span className="relative z-10 flex items-center font-medium">
+                        {saving ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          'Save Settings'
+                        )}
+                      </span>
+                    </button>
+                  </div>
+                </CardContent>
+              </Card>
             </motion.div>
           </TabsContent>
         </Tabs>

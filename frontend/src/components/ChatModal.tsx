@@ -88,6 +88,7 @@ function ChatModal({ isOpen, onClose, onEndChat }: ChatModalProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [inputText, setInputText] = useState('')
   const [isProcessing, setIsProcessing] = useState(false)
+  const [memoryEnabled, setMemoryEnabled] = useState(true) // Session-level memory setting
   const [processingMessage, setProcessingMessage] = useState('')
   const [isToolCall, setIsToolCall] = useState(false)
   const [searchQueries, setSearchQueries] = useState<string[]>([])
@@ -207,6 +208,12 @@ function ChatModal({ isOpen, onClose, onEndChat }: ChatModalProps) {
         const hotkey = response.data.preferences.find((pref: any) => pref.key === 'hotkey')
         if (hotkey && hotkey.typed_value) {
           setCurrentHotkey(hotkey.typed_value)
+        }
+        
+        // Load memory setting for this session
+        const memoryEnabledPref = response.data.preferences.find((pref: any) => pref.key === 'memory_enabled')
+        if (memoryEnabledPref !== undefined) {
+          setMemoryEnabled(memoryEnabledPref.typed_value !== false)
         }
       }
     } catch (error) {
@@ -810,7 +817,9 @@ function ChatModal({ isOpen, onClose, onEndChat }: ChatModalProps) {
       console.log('About to send diary chat message:', userMessage.content)
       const response = await api.sendDiaryChatMessage(
         userMessage.content,
-        conversationHistory
+        conversationHistory,
+        undefined, // conversationId
+        memoryEnabled
       )
       
       console.log('Raw API response received:', response)

@@ -123,7 +123,7 @@ function VoiceUploadPage() {
   const [showBackfillModal, setShowBackfillModal] = useState(false)
   const [backfillDate, setBackfillDate] = useState(() => {
     const today = new Date()
-    return today.toISOString().split('T')[0] // YYYY-MM-DD format
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
   })
   const [backfillHour, setBackfillHour] = useState(() => {
     const now = new Date()
@@ -141,7 +141,7 @@ function VoiceUploadPage() {
   // Temporary state for calendar popup (before Apply)
   const [tempDate, setTempDate] = useState(() => {
     const today = new Date()
-    return today.toISOString().split('T')[0] // YYYY-MM-DD format
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
   })
   const [tempHour, setTempHour] = useState(() => {
     const now = new Date()
@@ -273,6 +273,23 @@ function VoiceUploadPage() {
       }
     }
   }, [audioUrl])
+
+  // Reset date/time picker to current values on component mount
+  useEffect(() => {
+    const now = new Date()
+    const todayDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    const currentHour = now.getHours()
+    const currentMinute = now.getMinutes()
+    
+    setBackfillDate(todayDate)
+    setTempDate(todayDate)
+    setBackfillHour(currentHour > 12 ? currentHour - 12 : currentHour === 0 ? 12 : currentHour)
+    setBackfillMinute(currentMinute)
+    setBackfillAmPm(currentHour >= 12 ? 'PM' : 'AM')
+    setTempHour(currentHour > 12 ? currentHour - 12 : currentHour === 0 ? 12 : currentHour)
+    setTempMinute(currentMinute)
+    setTempAmPm(currentHour >= 12 ? 'PM' : 'AM')
+  }, []) // Empty dependency array = run once on mount
 
   // Loading message cycling effect for processing (same as NewEntryPage)
   useEffect(() => {
@@ -622,6 +639,21 @@ function VoiceUploadPage() {
         setShowResults(false)
         setShowTranscriptionCard(false)
         setShowUploadCard(true)
+        
+        // Reset backfill date/time to current values
+        const now = new Date()
+        const todayDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+        const currentHour = now.getHours()
+        const currentMinute = now.getMinutes()
+        
+        setBackfillDate(todayDate)
+        setTempDate(todayDate)
+        setBackfillHour(currentHour > 12 ? currentHour - 12 : currentHour === 0 ? 12 : currentHour)
+        setBackfillMinute(currentMinute)
+        setBackfillAmPm(currentHour >= 12 ? 'PM' : 'AM')
+        setTempHour(currentHour > 12 ? currentHour - 12 : currentHour === 0 ? 12 : currentHour)
+        setTempMinute(currentMinute)
+        setTempAmPm(currentHour >= 12 ? 'PM' : 'AM')
         if (audioUrl) {
           URL.revokeObjectURL(audioUrl)
           setAudioUrl(null)
@@ -1358,6 +1390,22 @@ function VoiceUploadPage() {
                 {/* Backfill Entry Button */}
                 <motion.button
                   onClick={() => {
+                    // Reset to current date/time when opening modal
+                    const now = new Date()
+                    const todayDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+                    const currentHour = now.getHours()
+                    const currentMinute = now.getMinutes()
+                    
+                    setBackfillDate(todayDate)
+                    setBackfillHour(currentHour > 12 ? currentHour - 12 : currentHour === 0 ? 12 : currentHour)
+                    setBackfillMinute(currentMinute)
+                    setBackfillAmPm(currentHour >= 12 ? 'PM' : 'AM')
+                    
+                    setTempDate(todayDate)
+                    setTempHour(currentHour > 12 ? currentHour - 12 : currentHour === 0 ? 12 : currentHour)
+                    setTempMinute(currentMinute)
+                    setTempAmPm(currentHour >= 12 ? 'PM' : 'AM')
+                    
                     setShowBackfillModal(true)
                   }}
                   initial={{ opacity: 0, y: 20 }}
@@ -1532,11 +1580,22 @@ function VoiceUploadPage() {
                         <button
                           type="button"
                           onClick={() => {
-                            // Reset temp values to current main values when opening
-                            setTempDate(backfillDate)
-                            setTempHour(backfillHour)
-                            setTempMinute(backfillMinute)
-                            setTempAmPm(backfillAmPm)
+                            // Always reset to current date/time when opening calendar
+                            const now = new Date()
+                            const todayDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+                            const currentHour = now.getHours()
+                            const currentMinute = now.getMinutes()
+                            
+                            // Set BOTH backfill and temp values to current time
+                            setBackfillDate(todayDate)
+                            setBackfillHour(currentHour > 12 ? currentHour - 12 : currentHour === 0 ? 12 : currentHour)
+                            setBackfillMinute(currentMinute)
+                            setBackfillAmPm(currentHour >= 12 ? 'PM' : 'AM')
+                            
+                            setTempDate(todayDate)
+                            setTempHour(currentHour > 12 ? currentHour - 12 : currentHour === 0 ? 12 : currentHour)
+                            setTempMinute(currentMinute)
+                            setTempAmPm(currentHour >= 12 ? 'PM' : 'AM')
                             setShowBackfillCalendar(!showBackfillCalendar)
                           }}
                           className="w-full bg-background/50 border border-border rounded-lg px-3 py-2 text-white text-sm text-left hover:bg-background/70 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200"

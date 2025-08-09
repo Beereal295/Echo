@@ -33,6 +33,7 @@ router = APIRouter(prefix="/entries", tags=["entries"])
 async def _generate_embedding_for_entry(entry_id: int, text: str = None):
     """Background task to generate embedding for an entry"""
     try:
+        logger.info(f"BACKGROUND TASK STARTED: Generating embedding for entry {entry_id}")
         logger.info(f"Generating embedding for entry {entry_id}")
         embedding_service = get_embedding_service()
         
@@ -54,21 +55,22 @@ async def _generate_embedding_for_entry(entry_id: int, text: str = None):
         # Update entry with embedding
         await EntryRepository.update_embedding(entry_id, embedding)
         
-        # Invalidate cache since we have new embeddings
-        invalidate_diary_cache()
-        
         logger.info(f"Successfully generated embedding for entry {entry_id} using text: '{text[:50]}...'")
+        
+        # CRITICAL: Invalidate cache AFTER embedding is stored in database
+        invalidate_diary_cache()
+        logger.info(f"CACHE INVALIDATED for entry {entry_id} AFTER embedding stored")
         
     except Exception as e:
         logger.error(f"Failed to generate embedding for entry {entry_id}: {e}")
 
 
 async def _extract_entry_memories(entry_id: int):
-    """Background task to extract memories from an entry"""
+    """Background task to extract memories from an entry using LLM"""
     try:
         from app.services.memory_service import MemoryService
         
-        logger.info(f"Extracting memories from entry {entry_id}")
+        logger.info(f"Starting LLM memory extraction for entry {entry_id}")
         
         # Get the entry
         entry = await EntryRepository.get_by_id(entry_id)
@@ -77,19 +79,65 @@ async def _extract_entry_memories(entry_id: int):
             return
         
         # Use enhanced text for memory extraction (better quality than raw)
-        enhanced_text = entry.enhanced_text or entry.raw_text
-        if not enhanced_text or not enhanced_text.strip():
+        text = entry.enhanced_text or entry.raw_text
+        if not text or not text.strip():
             logger.warning(f"No suitable text found for memory extraction for entry {entry_id}")
             return
         
-        # Extract memories
+        # Initialize memory service
         memory_service = MemoryService()
-        memory_count = await memory_service.process_entry_for_memories(entry_id, enhanced_text)
         
-        logger.info(f"Extracted {memory_count} memories from entry {entry_id}")
+        # Extract memories using LLM
+        memories = await memory_service.extract_memories_with_llm(
+            text=text,
+            source_id=entry_id,
+            source_type='entry'
+            # model, temperature, num_ctx will be loaded from preferences
+        )
+        
+        # Store each memory
+        stored_count = 0
+        for memory in memories:
+            try:
+                await memory_service.store_memory(memory)
+                stored_count += 1
+            except Exception as e:
+                logger.error(f"Failed to store memory: {e}")
+        
+        logger.info(f"LLM extracted and stored {stored_count} memories from entry {entry_id}")
+        
+        # Mark entry as processed for memory extraction
+        from app.db.database import db
+        await db.execute("""
+            UPDATE entries 
+            SET memory_extracted = 1,
+                memory_extracted_llm = 1,
+                memory_extracted_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (entry_id,))
+        await db.commit()
+        logger.info(f"Marked entry {entry_id} as memory_extracted")
+        
+        # Fallback to rule-based if no memories extracted
+        if stored_count == 0:
+            logger.info("No memories from LLM, trying rule-based extraction as fallback")
+            fallback_count = await memory_service.process_entry_for_memories(entry_id, text)
+            logger.info(f"Rule-based fallback extracted {fallback_count} memories")
         
     except Exception as e:
-        logger.error(f"Failed to extract memories from entry {entry_id}: {e}")
+        logger.error(f"LLM memory extraction failed for entry {entry_id}: {e}")
+        # Try rule-based as final fallback
+        try:
+            from app.services.memory_service import MemoryService
+            memory_service = MemoryService()
+            entry = await EntryRepository.get_by_id(entry_id)
+            if entry:
+                text = entry.enhanced_text or entry.raw_text
+                if text:
+                    fallback_count = await memory_service.process_entry_for_memories(entry_id, text)
+                    logger.info(f"Rule-based fallback after error extracted {fallback_count} memories")
+        except Exception as fallback_error:
+            logger.error(f"Even rule-based fallback failed: {fallback_error}")
 
 
 def _select_best_text_for_embedding(entry) -> str:
@@ -135,9 +183,6 @@ async def create_entry(entry_data: EntryCreate, background_tasks: BackgroundTask
         
         # Save to database first
         created_entry = await EntryRepository.create(entry)
-        
-        # Invalidate diary cache since we have a new entry
-        invalidate_diary_cache()
         
         # Generate embedding in background - will use best available text
         background_tasks.add_task(
@@ -291,18 +336,20 @@ async def update_entry(
         # Save updates
         updated_entry = await EntryRepository.update(entry)
         
-        # Invalidate diary cache since entry was updated
-        invalidate_diary_cache()
-        
         # Regenerate embedding if any text was updated and we have background tasks
         if (text_updated or 
             entry_data.enhanced_text is not None or 
             entry_data.structured_summary is not None) and background_tasks:
+            # DON'T invalidate cache immediately - wait for embedding regeneration
+            # invalidate_diary_cache()  # Moved to after embedding generation
             background_tasks.add_task(
                 _generate_embedding_for_entry,
                 updated_entry.id
             )
             logger.info(f"Queued embedding regeneration for updated entry {updated_entry.id}")
+        else:
+            # Only invalidate cache immediately if no embedding work is needed
+            invalidate_diary_cache()
         
         return EntryResponse(
             id=updated_entry.id,
@@ -438,9 +485,6 @@ async def create_and_process_entry(
         )
         
         created_entry = await EntryRepository.create(entry)
-        
-        # Invalidate diary cache since we have a new entry
-        invalidate_diary_cache()
         
         # Generate embedding in background - will use best available text
         background_tasks.add_task(
@@ -738,3 +782,42 @@ async def _analyze_and_update_entry_mood(entry_id: int, text: str):
         
     except Exception as e:
         logger.error(f"Failed to analyze and update mood for entry {entry_id}: {str(e)}")
+
+
+@router.post("/debug/clear-cache", response_model=dict)
+async def debug_clear_cache():
+    """Debug endpoint to manually clear diary caches"""
+    try:
+        invalidate_diary_cache()
+        return {
+            "success": True,
+            "message": "Diary caches manually cleared",
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Failed to clear cache: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to clear cache: {str(e)}")
+
+@router.get("/debug/recent-timestamps", response_model=dict)
+async def debug_recent_timestamps():
+    """Debug endpoint to check recent entry timestamps"""
+    try:
+        entries = await EntryRepository.get_entries_with_embeddings(limit=10)
+        
+        timestamp_info = []
+        for entry in entries:
+            timestamp_info.append({
+                "id": entry.id,
+                "timestamp": entry.timestamp.isoformat(),
+                "has_embeddings": bool(entry.embeddings and len(entry.embeddings) > 0),
+                "raw_text_preview": entry.raw_text[:50] + "..." if entry.raw_text else "No text"
+            })
+        
+        return {
+            "success": True,
+            "entries": timestamp_info,
+            "count": len(timestamp_info)
+        }
+    except Exception as e:
+        logger.error(f"Failed to get timestamp info: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get timestamp info: {str(e)}")

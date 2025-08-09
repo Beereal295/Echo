@@ -199,42 +199,36 @@ class MemoryService:
             return self._calculate_importance(content)
     
     async def store_memory(self, memory: Dict[str, Any]) -> int:
-        """Store a memory in the database."""
-        # Generate embedding if we have the model
-        embedding = None
-        if self.embedding_model and memory.get('content'):
-            try:
-                embedding_vector = self.embedding_model.encode(memory['content'])
-                embedding = json.dumps(embedding_vector.tolist())
-            except Exception as e:
-                logger.error(f"Failed to generate embedding: {e}")
+        """Store a memory in the database and trigger async scoring and embedding pipeline."""
         
-        # Check if similar memory already exists
-        if embedding:
-            # For now, just check exact duplicates
-            existing = await db.fetch_one("""
-                SELECT id FROM agent_memories 
-                WHERE content = ? AND is_active = 1
-            """, (memory['content'],))
-            
-            if existing:
-                # Update access count and timestamp instead of creating duplicate
-                await db.execute("""
-                    UPDATE agent_memories 
-                    SET access_count = access_count + 1,
-                        last_accessed_at = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                """, (existing['id'],))
-                await db.commit()
-                return existing['id']
+        # Check for exact duplicates first (without embedding)
+        existing = await db.fetch_one("""
+            SELECT id FROM agent_memories 
+            WHERE content = ? AND is_active = 1
+        """, (memory['content'],))
         
-        # Insert new memory with new scoring fields
+        if existing:
+            # Update access count and timestamp instead of creating duplicate
+            await db.execute("""
+                UPDATE agent_memories 
+                SET access_count = access_count + 1,
+                    last_accessed_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (existing['id'],))
+            await db.commit()
+            return existing['id']
+        
+        # Insert new memory with all relevant fields
         cursor = await db.execute("""
             INSERT INTO agent_memories (
                 memory_type, content, key_entities, 
                 importance_score, base_importance_score, final_importance_score,
-                score_source, embedding, source_conversation_id, related_entry_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                score_source, embedding, source_conversation_id, related_entry_id,
+                llm_processed, llm_processed_at, llm_importance_score,
+                user_rated, user_score_adjustment, user_rated_at,
+                is_active, created_at, last_accessed_at, access_count,
+                marked_for_deletion, archived
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             memory['memory_type'],
             memory['content'],
@@ -243,13 +237,95 @@ class MemoryService:
             memory.get('base_importance_score', 5.0),
             memory.get('final_importance_score', 5.0),
             memory.get('score_source', 'rule'),
-            embedding,
+            None,  # No embedding initially
             memory.get('source_conversation_id'),
-            memory.get('related_entry_id')
+            memory.get('related_entry_id'),
+            memory.get('llm_processed', 0),
+            memory.get('llm_processed_at'),
+            memory.get('llm_importance_score'),
+            memory.get('user_rated', 0),
+            memory.get('user_score_adjustment', 0),
+            memory.get('user_rated_at'),
+            memory.get('is_active', 1),
+            datetime.now().isoformat(),
+            None,  # last_accessed_at
+            0,  # access_count
+            memory.get('marked_for_deletion', 0),
+            memory.get('archived', 0)
         ))
         
         await db.commit()
-        return cursor.lastrowid
+        memory_id = cursor.lastrowid
+        
+        # Trigger async pipeline: Score → Embed (only for LLM-extracted memories)
+        if memory.get('score_source') == 'llm_extraction':
+            asyncio.create_task(self._score_and_embed_async(memory_id, memory))
+        else:
+            # For non-LLM memories (rule-based, user-modified), just generate embedding
+            asyncio.create_task(self._generate_embedding_async(memory_id, memory['content']))
+        
+        return memory_id
+    
+    async def _score_and_embed_async(self, memory_id: int, memory: Dict[str, Any]):
+        """Async pipeline: LLM score memory then generate embedding."""
+        try:
+            logger.info(f"Starting async scoring and embedding for memory {memory_id}")
+            
+            # Step 1: Calculate LLM importance score
+            llm_score = await self.calculate_importance_with_llm(
+                content=memory['content'],
+                memory_type=memory['memory_type'],
+                key_entities=memory.get('key_entities', [])
+            )
+            
+            # Step 2: Update memory with LLM score
+            await db.execute("""
+                UPDATE agent_memories 
+                SET llm_importance_score = ?,
+                    final_importance_score = ?,
+                    llm_processed = 1,
+                    llm_processed_at = CURRENT_TIMESTAMP,
+                    score_source = 'llm'
+                WHERE id = ?
+            """, (llm_score, llm_score, memory_id))
+            await db.commit()
+            
+            logger.info(f"Updated memory {memory_id} with LLM score: {llm_score}")
+            
+            # Step 3: Generate embedding with final scored memory
+            await self._generate_embedding_async(memory_id, memory['content'])
+            
+        except Exception as e:
+            logger.error(f"Failed async scoring and embedding for memory {memory_id}: {e}")
+            # Fallback: Just generate embedding without LLM scoring
+            try:
+                await self._generate_embedding_async(memory_id, memory['content'])
+            except Exception as embed_error:
+                logger.error(f"Fallback embedding generation also failed for memory {memory_id}: {embed_error}")
+    
+    async def _generate_embedding_async(self, memory_id: int, content: str):
+        """Generate embedding for a memory asynchronously after it's stored."""
+        try:
+            if not self.embedding_model:
+                logger.warning(f"No embedding model available for memory {memory_id}")
+                return
+            
+            # Generate embedding
+            embedding_vector = self.embedding_model.encode(content)
+            embedding_json = json.dumps(embedding_vector.tolist())
+            
+            # Update memory with embedding
+            await db.execute("""
+                UPDATE agent_memories 
+                SET embedding = ?
+                WHERE id = ?
+            """, (embedding_json, memory_id))
+            await db.commit()
+            
+            logger.info(f"Generated embedding for memory {memory_id}")
+            
+        except Exception as e:
+            logger.error(f"Failed to generate embedding for memory {memory_id}: {e}")
     
     async def retrieve_relevant_memories(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
         """
@@ -427,6 +503,202 @@ class MemoryService:
         logger.info(f"Extracted and stored {stored_count} memories from entry {entry_id}")
         return stored_count
     
+    async def extract_memories_with_llm(
+        self, 
+        text: str, 
+        source_id: int,
+        source_type: str = 'conversation',
+        model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        num_ctx: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Extract memories using LLM with preferences.
+        
+        Args:
+            text: The text to extract memories from
+            source_id: ID of the source (conversation or entry)
+            source_type: 'conversation' or 'entry'
+            model: Optional model override (uses preferences if None)
+            temperature: Optional temperature override (uses preferences if None)
+            num_ctx: Optional context window override (uses preferences if None)
+        
+        Returns:
+            List of memory dictionaries ready for storage
+        """
+        try:
+            # Get preferences if not provided
+            if model is None:
+                model = await PreferencesRepository.get_value('memory_extraction_model') or \
+                        await PreferencesRepository.get_value('ollama_model', settings.OLLAMA_DEFAULT_MODEL)
+            if temperature is None:
+                temperature = await PreferencesRepository.get_value('memory_extraction_temperature', 0.3)
+            if num_ctx is None:
+                num_ctx = await PreferencesRepository.get_value('memory_extraction_num_ctx', 4096)
+            
+            # Get recent memories for deduplication context (last 50 memories)
+            recent_memories = await db.fetch_all("""
+                SELECT content, memory_type FROM agent_memories 
+                WHERE is_active = 1
+                ORDER BY created_at DESC
+                LIMIT 50
+            """)
+            
+            # Format existing memories for context
+            existing_memories_text = ""
+            if recent_memories:
+                existing_facts = [m['content'] for m in recent_memories if m['memory_type'] == 'factual'][:5]
+                existing_prefs = [m['content'] for m in recent_memories if m['memory_type'] == 'preference'][:5]
+                existing_habits = [m['content'] for m in recent_memories if m['memory_type'] == 'behavioral'][:5]
+                
+                if existing_facts:
+                    existing_memories_text += f"Known facts: {'; '.join(existing_facts[:3])}\n"
+                if existing_prefs:
+                    existing_memories_text += f"Known preferences: {'; '.join(existing_prefs[:3])}\n"
+                if existing_habits:
+                    existing_memories_text += f"Known habits: {'; '.join(existing_habits[:3])}\n"
+            
+            if not existing_memories_text:
+                existing_memories_text = "No existing memories yet."
+            
+            # Create the extraction prompt
+            system_prompt = """You are a memory extraction specialist for a personal journaling app. Extract ONLY important, permanent facts about the user from their text.
+
+IMPORTANT: Each extracted memory must be within 1 line only.
+
+Categories to extract:
+- factual: Name, age, occupation, location, possessions
+- relational: Family, friends, colleagues (with names)
+- preference: Strong likes/dislikes, choices, communication style
+- behavioral: Daily routines, recurring habits, patterns
+
+Rules:
+1. ONLY extract explicitly stated facts by the user
+2. Ignore temporary states (feeling tired, currently eating)
+3. Ignore opinions about external things unless they reveal personal preference
+4. Each memory should be complete and standalone
+5. **CRITICAL: Maximum 3 memories per text - NO EXCEPTIONS!** Extract only the 3 most important facts.
+6. Assign confidence score (0.0-1.0) based on clarity and importance
+7. Skip facts that are already known (see existing memories below)
+
+Output format: JSON array with objects containing:
+- "content": the actual memory text
+- "memory_type": one of factual/relational/preference/behavioral
+- "confidence": score from 0.0 to 1.0
+
+Example: [{"content": "My name is John", "memory_type": "factual", "confidence": 0.9}]
+
+Output ONLY valid JSON array, no other text. Remember: MAXIMUM 3 memories only!"""
+
+            user_prompt = f"""Existing memories to avoid duplicating:
+{existing_memories_text}
+
+Text to analyze:
+{text}
+
+Extract memories as JSON array:"""
+            
+            # Call Ollama service with correct options structure
+            async with OllamaService() as ollama:
+                response = await ollama.generate(
+                    prompt=user_prompt,
+                    system=system_prompt,
+                    model=model,
+                    options={
+                        'temperature': float(temperature),
+                        'num_ctx': int(num_ctx),
+                        'num_predict': 500
+                    }
+                )
+            
+            # Parse JSON response
+            try:
+                # Clean the response - remove any markdown formatting
+                response_text = response.response.strip()
+                if response_text.startswith("```json"):
+                    response_text = response_text[7:]
+                if response_text.startswith("```"):
+                    response_text = response_text[3:]
+                if response_text.endswith("```"):
+                    response_text = response_text[:-3]
+                response_text = response_text.strip()
+                
+                # Parse JSON
+                memories_data = json.loads(response_text)
+                
+                # Ensure it's a list
+                if not isinstance(memories_data, list):
+                    logger.warning(f"LLM returned non-list: {type(memories_data)}")
+                    memories_data = []
+                
+                # Format memories for storage
+                memories = []
+                for mem in memories_data:
+                    # Validate required fields
+                    if not isinstance(mem, dict) or 'content' not in mem:
+                        logger.warning(f"Skipping invalid memory: {mem}")
+                        continue
+                    
+                    # Get confidence score
+                    confidence = mem.get('confidence', 0.7)
+                    if confidence < 0.4:  # Skip low confidence memories
+                        logger.info(f"Skipping low confidence memory: {mem['content']} (confidence: {confidence})")
+                        continue
+                    
+                    # Normalize memory type to valid values
+                    raw_memory_type = mem.get('memory_type', mem.get('type', 'contextual'))
+                    valid_types = ['factual', 'preference', 'behavioral', 'relational', 'contextual']
+                    
+                    # Validate and normalize memory type
+                    if raw_memory_type not in valid_types:
+                        # Try to map common variations
+                        if 'factual' in raw_memory_type.lower():
+                            memory_type = 'factual'
+                        elif 'preference' in raw_memory_type.lower():
+                            memory_type = 'preference'
+                        elif 'behavioral' in raw_memory_type.lower() or 'behaviour' in raw_memory_type.lower():
+                            memory_type = 'behavioral'
+                        elif 'relational' in raw_memory_type.lower() or 'relationship' in raw_memory_type.lower():
+                            memory_type = 'relational'
+                        else:
+                            memory_type = 'contextual'
+                        logger.warning(f"Normalized invalid memory type '{raw_memory_type}' to '{memory_type}'")
+                    else:
+                        memory_type = raw_memory_type
+                    
+                    # Create memory object
+                    memory = {
+                        'content': mem['content'][:500],  # Limit length
+                        'memory_type': memory_type,
+                        'key_entities': mem.get('key_entities', []),
+                        'source_conversation_id': source_id if source_type == 'conversation' else None,
+                        'related_entry_id': source_id if source_type == 'entry' else None,
+                        'base_importance_score': confidence * 10,  # Convert to 1-10 scale
+                        'final_importance_score': confidence * 10,
+                        'score_source': 'llm_extraction',
+                        'llm_processed': 1,
+                        'llm_processed_at': datetime.now().isoformat()
+                    }
+                    memories.append(memory)
+                
+                logger.info(f"LLM extracted {len(memories)} high-confidence memories from {source_type} {source_id}")
+                return memories
+                
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse LLM response as JSON: {e}")
+                logger.error(f"Response was: {response.response[:500]}")
+                return []
+                
+        except Exception as e:
+            logger.error(f"LLM memory extraction failed: {e}")
+            # Fall back to rule-based extraction
+            logger.info("Falling back to rule-based extraction")
+            if source_type == 'conversation':
+                return self.extract_memories_from_conversation(text, source_id)
+            else:
+                # For entries, return empty list as the rule-based is already called separately
+                return []
+    
     def format_memories_for_context(self, memories: List[Dict[str, Any]]) -> str:
         """
         Format memories into a string for LLM context injection.
@@ -446,6 +718,20 @@ class MemoryService:
         
         for memory in memories:
             memory_type = memory.get('memory_type', 'contextual')
+            # Normalize memory type to one of our valid types
+            if memory_type not in grouped:
+                # Handle invalid or variant memory types
+                if 'factual' in memory_type.lower():
+                    memory_type = 'factual'
+                elif 'preference' in memory_type.lower():
+                    memory_type = 'preference'
+                elif 'behavioral' in memory_type.lower() or 'behaviour' in memory_type.lower():
+                    memory_type = 'behavioral'
+                elif 'relational' in memory_type.lower() or 'relationship' in memory_type.lower():
+                    memory_type = 'relational'
+                else:
+                    memory_type = 'contextual'  # Default fallback
+                    
             grouped[memory_type].append(memory['content'])
         
         # Format into readable context

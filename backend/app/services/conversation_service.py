@@ -318,21 +318,82 @@ class ConversationService:
             except Exception as e:
                 logger.error(f"Failed to generate embedding and summary for conversation: {e}")
             
-            # Extract and store memories from conversation
-            try:
-                memory_count = self.memory_service.process_conversation_for_memories(
+            # Extract and store memories from conversation using async LLM
+            # Fire and forget - user doesn't wait for this
+            asyncio.create_task(
+                self._extract_memories_with_llm_async(
                     saved_conversation.id,
                     conversation.transcription
                 )
-                logger.info(f"Extracted {memory_count} memories from conversation {saved_conversation.id}")
-            except Exception as e:
-                logger.error(f"Failed to extract memories from conversation: {e}")
+            )
+            logger.info(f"Queued async LLM memory extraction for conversation {saved_conversation.id}")
             
             logger.info(f"Saved conversation {session_id} to database with ID {saved_conversation.id}")
             return saved_conversation.id
         
         logger.error(f"Failed to save conversation {session_id} to database")
         return None
+    
+    async def _extract_memories_with_llm_async(self, conversation_id: int, text: str):
+        """
+        Background task to extract memories from conversation using LLM.
+        This runs asynchronously after conversation is saved.
+        """
+        try:
+            logger.info(f"Starting async LLM memory extraction for conversation {conversation_id}")
+            
+            # Extract memories using LLM
+            memories = await self.memory_service.extract_memories_with_llm(
+                text=text,
+                source_id=conversation_id,
+                source_type='conversation'
+                # model, temperature, num_ctx will be loaded from preferences
+            )
+            
+            # Store each memory
+            stored_count = 0
+            for memory in memories:
+                try:
+                    await self.memory_service.store_memory(memory)
+                    stored_count += 1
+                except Exception as e:
+                    logger.error(f"Failed to store memory: {e}")
+            
+            logger.info(f"LLM extracted and stored {stored_count} memories from conversation {conversation_id}")
+            
+            # Mark conversation as processed for memory extraction
+            from app.db.database import db
+            await db.execute("""
+                UPDATE conversations 
+                SET memory_extracted = 1,
+                    memory_extracted_llm = 1,
+                    memory_extracted_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (conversation_id,))
+            await db.commit()
+            logger.info(f"Marked conversation {conversation_id} as memory_extracted")
+            
+            # Optionally, also run rule-based extraction as fallback/comparison
+            # This can be removed once LLM extraction is proven reliable
+            if stored_count == 0:
+                logger.info("No memories from LLM, trying rule-based extraction as fallback")
+                fallback_count = await self.memory_service.process_conversation_for_memories(
+                    conversation_id,
+                    text
+                )
+                logger.info(f"Rule-based fallback extracted {fallback_count} memories")
+                
+        except Exception as e:
+            logger.error(f"Async LLM memory extraction failed for conversation {conversation_id}: {e}")
+            # Try rule-based as final fallback
+            try:
+                fallback_count = await self.memory_service.process_conversation_for_memories(
+                    conversation_id,
+                    text
+                )
+                logger.info(f"Rule-based fallback after error extracted {fallback_count} memories")
+            except Exception as fallback_error:
+                logger.error(f"Even rule-based fallback failed: {fallback_error}")
     
     async def abandon_conversation(self, session_id: str) -> bool:
         """

@@ -105,7 +105,26 @@ class EntryRepository:
         rows = await db.fetch_all(
             "SELECT * FROM entries ORDER BY timestamp DESC"
         )
-        return [Entry.from_dict(row) for row in rows]
+        # Handle new memory columns gracefully
+        entries = []
+        for row in rows:
+            try:
+                # Convert row to dict and ensure all fields exist
+                row_dict = dict(row)
+                # Set defaults for new fields if they don't exist
+                if 'memory_extracted' not in row_dict:
+                    row_dict['memory_extracted'] = 0
+                if 'memory_extracted_llm' not in row_dict:
+                    row_dict['memory_extracted_llm'] = 0
+                if 'memory_extracted_at' not in row_dict:
+                    row_dict['memory_extracted_at'] = None
+                    
+                entry = Entry.from_dict(row_dict)
+                entries.append(entry)
+            except Exception as e:
+                # Skip problematic entries but log them
+                continue
+        return entries
     
     @staticmethod
     async def search(

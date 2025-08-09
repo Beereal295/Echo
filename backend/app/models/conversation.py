@@ -20,6 +20,9 @@ class Conversation:
     embedding: Optional[str] = None
     summary: Optional[str] = None
     key_topics: Optional[List[str]] = None
+    memory_extracted: int = 0
+    memory_extracted_llm: int = 0
+    memory_extracted_at: Optional[datetime] = None
     
     def __post_init__(self):
         if self.timestamp is None:
@@ -43,7 +46,10 @@ class Conversation:
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "embedding": self.embedding,
             "summary": self.summary,
-            "key_topics": json.dumps(self.key_topics) if self.key_topics else None
+            "key_topics": json.dumps(self.key_topics) if self.key_topics else None,
+            "memory_extracted": self.memory_extracted,
+            "memory_extracted_llm": self.memory_extracted_llm,
+            "memory_extracted_at": self.memory_extracted_at.isoformat() if self.memory_extracted_at else None
         }
     
     def add_search_query(self, query: str):
@@ -103,6 +109,12 @@ class Conversation:
                     data["updated_at"] = datetime.fromisoformat(data["updated_at"])
                 except (ValueError, TypeError):
                     data["updated_at"] = None
+                    
+            if data.get("memory_extracted_at"):
+                try:
+                    data["memory_extracted_at"] = datetime.fromisoformat(data["memory_extracted_at"])
+                except (ValueError, TypeError):
+                    data["memory_extracted_at"] = None
             
             return cls(**data)
         except Exception:
@@ -115,5 +127,8 @@ class Conversation:
                 message_count=data.get("message_count", 0),
                 embedding=data.get("embedding"),
                 summary=data.get("summary"),
-                key_topics=data.get("key_topics")
+                key_topics=data.get("key_topics"),
+                memory_extracted=data.get("memory_extracted", 0),
+                memory_extracted_llm=data.get("memory_extracted_llm", 0),
+                memory_extracted_at=None
             )

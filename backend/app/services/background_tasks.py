@@ -58,27 +58,28 @@ class BackgroundTaskManager:
         logger.info("Background tasks stopped")
     
     async def _llm_processing_loop(self):
-        """Background loop for LLM processing of memories"""
-        logger.info("Started LLM processing loop")
+        """Background loop for LLM processing cleanup (fallback only)"""
+        logger.info("Started LLM processing cleanup loop")
         
         while self.is_running:
             try:
-                # Process memories with LLM every 5 minutes
-                processed_count = await self.memory_service.process_memories_with_llm_batch(batch_size=5)
+                # Fallback processing for any missed memories (run much less frequently)
+                # Main scoring now happens in real-time via store_memory()
+                processed_count = await self.memory_service.process_memories_with_llm_batch(batch_size=10)
                 
                 if processed_count > 0:
-                    logger.info(f"Processed {processed_count} memories with LLM")
+                    logger.info(f"Fallback processed {processed_count} missed memories with LLM")
                 
-                # Wait 5 minutes before next batch
-                await asyncio.sleep(300)  # 5 minutes
+                # Wait 1 hour (much less frequent than before)
+                await asyncio.sleep(3600)  # 1 hour
                 
             except asyncio.CancelledError:
-                logger.info("LLM processing loop cancelled")
+                logger.info("LLM processing cleanup loop cancelled")
                 break
             except Exception as e:
-                logger.error(f"Error in LLM processing loop: {e}")
-                # Wait 1 minute before retrying on error
-                await asyncio.sleep(60)
+                logger.error(f"Error in LLM processing cleanup loop: {e}")
+                # Wait 10 minutes before retrying on error
+                await asyncio.sleep(600)
     
     async def _cleanup_scheduler_loop(self):
         """Background loop for scheduling memory cleanup tasks"""

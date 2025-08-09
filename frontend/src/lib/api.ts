@@ -437,7 +437,7 @@ class ApiClient {
     return this.request('/diary/search-feedback')
   }
 
-  async sendDiaryChatMessage(message: string, conversationHistory?: Array<{ role: string; content: string }>, conversationId?: number): Promise<ApiResponse<{
+  async sendDiaryChatMessage(message: string, conversationHistory?: Array<{ role: string; content: string }>, conversationId?: number, memoryEnabled: boolean = true, debugMode: boolean = false): Promise<ApiResponse<{
     response: string
     tool_calls_made: Array<{ tool: string; arguments: any; result: any }>
     search_queries_used: string[]
@@ -445,13 +445,16 @@ class ApiClient {
     tool_feedback?: string
     processing_phases: Array<{ phase: string; message: string; tools?: string[] }>
     conversation_id?: number
+    debug_info?: any
   }>> {
     return this.request('/diary/chat', {
       method: 'POST',
       body: JSON.stringify({
         message,
         conversation_history: conversationHistory,
-        conversation_id: conversationId
+        conversation_id: conversationId,
+        memory_enabled: memoryEnabled,
+        debug_mode: debugMode
       })
     })
   }

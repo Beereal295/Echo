@@ -26,6 +26,8 @@ class DiaryChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=2000, description="User's message to the diary")
     conversation_history: Optional[List[Dict[str, str]]] = Field(None, description="Previous conversation messages")
     conversation_id: Optional[int] = Field(None, description="Optional conversation ID to continue existing conversation")
+    memory_enabled: bool = Field(True, description="Whether memory system is enabled for this session")
+    debug_mode: bool = Field(False, description="Return additional debug information for testing")
 
 
 class DiaryChatResponse(BaseModel):
@@ -37,6 +39,8 @@ class DiaryChatResponse(BaseModel):
     tool_feedback: Optional[str] = Field(None, description="Tool-specific feedback message")
     processing_phases: List[Dict[str, Any]] = Field(default_factory=list, description="Processing phases for frontend status")
     conversation_id: Optional[int] = Field(None, description="ID of the conversation if saved")
+    # Debug fields (only populated when debug_mode=True)
+    debug_info: Optional[Dict[str, Any]] = Field(None, description="Debug information for testing")
 
 
 class SearchFeedbackRequest(BaseModel):
@@ -72,7 +76,9 @@ async def chat_with_diary(
         chat_response = await chat_service.process_message(
             message=request.message,
             conversation_history=request.conversation_history,
-            background_tasks=background_tasks
+            background_tasks=background_tasks,
+            memory_enabled=request.memory_enabled,
+            debug_mode=request.debug_mode
         )
         
         # Prepare response data
@@ -83,7 +89,8 @@ async def chat_with_diary(
             search_feedback=None,  # Will be set by frontend via separate endpoint
             tool_feedback=chat_response.get("tool_feedback"),
             processing_phases=chat_response.get("processing_phases", []),
-            conversation_id=request.conversation_id
+            conversation_id=request.conversation_id,
+            debug_info=chat_response.get("debug_info") if request.debug_mode else None
         )
         
         # Save conversation in background if conversation_id is provided

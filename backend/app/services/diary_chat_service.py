@@ -352,8 +352,8 @@ async def add_entry_to_diary(content: str, entry_type: str = "note") -> Dict[str
         # Save to database
         created_entry = await EntryRepository.create(entry)
         
-        # Invalidate cache since we have a new entry
-        invalidate_diary_cache()
+        # DON'T invalidate cache immediately - wait for embedding generation
+        # invalidate_diary_cache()  # Moved to after embedding generation
         
         # Generate embedding asynchronously (same as regular pipeline)
         async def _generate_embedding_background():
@@ -1644,7 +1644,9 @@ class DiaryChatService:
         self, 
         message: str, 
         conversation_history: Optional[List[Dict[str, str]]] = None,
-        background_tasks = None
+        background_tasks = None,
+        memory_enabled: bool = True,
+        debug_mode: bool = False
     ) -> Dict[str, Any]:
         """
         Process a user message with LangChain tool calling.
@@ -1690,12 +1692,12 @@ REQUIRED TOOLS:
 
 CRITICAL: Never use add_entry_to_diary unless user explicitly requests saving content with clear save commands.
 
-The user has journal entries - you must search them using tools to give meaningful responses.""")
+The user has journal entries and past conversations - you must search them using tools to give meaningful responses.""")
             ]
             
             # Add conversation history
             if conversation_history:
-                for turn in conversation_history[-5:]:  # Last 5 turns for context
+                for turn in conversation_history[-10:]:  # Last 10 turns for context
                     role = turn.get("role", "user")
                     content = turn.get("content", "")
                     if role == "user":
@@ -1801,17 +1803,21 @@ This requires searching their journal entries. You MUST use the search_diary_ent
                 # Retrieve relevant memories for context injection
                 relevant_memories = []
                 memory_context = ""
-                try:
-                    # Get memories relevant to the user's question
-                    relevant_memories = await self.memory_service.retrieve_relevant_memories(message, limit=20)
-                    if relevant_memories:
-                        memory_context = self.memory_service.format_memories_for_context(relevant_memories)
-                        logger.info(f"Injecting {len(relevant_memories)} memories into response generation")
-                except Exception as e:
-                    logger.error(f"Failed to retrieve memories: {e}")
+                if memory_enabled:
+                    try:
+                        # Get memories relevant to the user's question
+                        relevant_memories = await self.memory_service.retrieve_relevant_memories(message, limit=20)
+                        if relevant_memories:
+                            memory_context = self.memory_service.format_memories_for_context(relevant_memories)
+                            logger.info(f"Injecting {len(relevant_memories)} memories into response generation")
+                    except Exception as e:
+                        logger.error(f"Failed to retrieve memories: {e}")
                 
-                # Build system prompt with memory context
-                system_prompt = "You are Echo. Look for tool results containing user's journal entry data. Analyze those journal entries and analyze the user's question. Then thoughtfully reply as if you are talking to the user naturally using 'you' and 'your'. Keep the answers short (3-4 sentences) UNLESS the user asks otherwise or asks to show the whole entry."
+                # Build system prompt with minimal variation based on memory setting
+                if memory_enabled:
+                    system_prompt = "You are Echo. Look for tool results containing user's journal entries and conversations. Also check the 'What you remember about the user' section below for relevant memories. Analyze all this information and the user's question. Then thoughtfully reply as if you are talking to the user naturally using 'you' and 'your'. Keep the answers short (3-4 sentences) UNLESS the user asks otherwise or asks to show the whole entry."
+                else:
+                    system_prompt = "You are Echo. Look for tool results containing user's journal entries and conversations. Analyze this information and the user's question. Then thoughtfully reply as if you are talking to the user naturally using 'you' and 'your'. Keep the answers short (3-4 sentences) UNLESS the user asks otherwise or asks to show the whole entry."
                 
                 if memory_context:
                     system_prompt += f"\n\n## What you remember about the user:\n{memory_context}"
@@ -1825,6 +1831,22 @@ This requires searching their journal entries. You MUST use the search_diary_ent
                 # Get final response using base LLM (no tools needed)
                 final_response_msg = await self.llm.ainvoke(response_messages)
                 final_response = strip_thinking_block(final_response_msg.content)
+                
+                # Collect debug information here while variables are in scope
+                if debug_mode:
+                    debug_info_here = {
+                        "memory_enabled": memory_enabled,
+                        "system_prompt_used": system_prompt,
+                        "memory_context_injected": bool(memory_context),
+                        "memory_count": len(relevant_memories) if relevant_memories else 0,
+                        "memory_context": memory_context,
+                        "memory_retrieval_attempted": memory_enabled,
+                        "tool_calls_count": len(tool_calls_made),
+                        "has_tool_calls": bool(tool_calls_made),
+                        "timestamp": str(datetime.now())
+                    }
+                    # Store for later use
+                    globals()['_current_debug_info'] = debug_info_here
             else:
                 # If no tools were used, provide a response that encourages the user to ask specific questions
                 logger.warning(f"LLM responded without using tools for message: '{message[:50]}...'")
@@ -1867,12 +1889,37 @@ This requires searching their journal entries. You MUST use the search_diary_ent
                     {"phase": "direct_response", "message": "Processing your message..."}
                 ]
             
+            # Collect debug information if requested
+            debug_info = None
+            if debug_mode:
+                # Try to get debug info collected during processing
+                debug_info = globals().get('_current_debug_info')
+                if not debug_info:
+                    # Fallback debug info (for cases where tools weren't used)
+                    debug_info = {
+                        "memory_enabled": memory_enabled,
+                        "system_prompt_used": "No tools used - direct response",
+                        "memory_context_injected": False,
+                        "memory_count": 0,
+                        "memory_context": None,
+                        "memory_retrieval_attempted": memory_enabled,
+                        "tool_calls_count": len(tool_calls_made),
+                        "has_tool_calls": bool(tool_calls_made),
+                        "timestamp": str(datetime.now())
+                    }
+                
+                logger.info(f"Debug info collected: {debug_info}")
+                
+                # Clear the global debug info
+                globals().pop('_current_debug_info', None)
+
             return {
                 "response": final_response,
                 "tool_calls_made": tool_calls_made,
                 "search_queries_used": search_queries_used,
                 "tool_feedback": tool_feedback,
-                "processing_phases": processing_phases
+                "processing_phases": processing_phases,
+                "debug_info": debug_info
             }
             
         except Exception as e:
@@ -1911,8 +1958,11 @@ def get_diary_chat_service() -> DiaryChatService:
 
 def invalidate_diary_cache():
     """Public function to invalidate diary caches when entries are modified."""
+    logger.info("INVALIDATE_DIARY_CACHE CALLED - STARTING CACHE CLEAR")
     _invalidate_entry_cache()
     # Also clear search results cache since they may be stale
     global _SEARCH_RESULTS_CACHE
+    search_cache_count = len(_SEARCH_RESULTS_CACHE)
     _SEARCH_RESULTS_CACHE.clear()
+    logger.info(f"CACHE INVALIDATION COMPLETE - Cleared {search_cache_count} search results from cache")
     logger.info("All diary caches invalidated")

@@ -18,6 +18,9 @@ class Entry:
     word_count: int = 0
     processing_metadata: Optional[dict] = None
     smart_tags: Optional[List[str]] = None
+    memory_extracted: int = 0
+    memory_extracted_llm: int = 0
+    memory_extracted_at: Optional[datetime] = None
     
     def __post_init__(self):
         if self.timestamp is None:
@@ -43,7 +46,10 @@ class Entry:
             "mood_tags": json.dumps(self.mood_tags) if self.mood_tags else None,
             "word_count": self.word_count,
             "processing_metadata": json.dumps(self.processing_metadata) if self.processing_metadata else None,
-            "smart_tags": json.dumps(self.smart_tags) if self.smart_tags else None
+            "smart_tags": json.dumps(self.smart_tags) if self.smart_tags else None,
+            "memory_extracted": self.memory_extracted,
+            "memory_extracted_llm": self.memory_extracted_llm,
+            "memory_extracted_at": self.memory_extracted_at.isoformat() if self.memory_extracted_at else None
         }
     
     def update_processing_metadata(self, new_metadata: dict):
@@ -67,5 +73,7 @@ class Entry:
             data["smart_tags"] = json.loads(data["smart_tags"])
         if data.get("timestamp"):
             data["timestamp"] = datetime.fromisoformat(data["timestamp"])
+        if data.get("memory_extracted_at"):
+            data["memory_extracted_at"] = datetime.fromisoformat(data["memory_extracted_at"])
         
         return cls(**data)
