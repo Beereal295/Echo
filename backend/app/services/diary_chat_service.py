@@ -1679,7 +1679,7 @@ This requires searching their journal entries. You MUST use the search_diary_ent
                         if date_filter:
                             search_queries_used.append(f"Date: {date_filter}")
             
-            # If tools were executed, get final response with tool results (like test script)
+            # Always add tool results to messages if tools were executed
             if tool_calls_made:
                 # Add the tool call message to conversation
                 messages.append(response)
@@ -1691,67 +1691,67 @@ This requires searching their journal entries. You MUST use the search_diary_ent
                         content=str(tool_call["result"]),
                         tool_call_id=tool_call_id
                     ))
-                
-                # Retrieve relevant memories for context injection
-                relevant_memories = []
-                memory_context = ""
-                if memory_enabled:
-                    try:
-                        # Get memories relevant to the user's question
-                        relevant_memories = await self.memory_service.retrieve_relevant_memories(message, limit=20)
-                        if relevant_memories:
-                            memory_context = self.memory_service.format_memories_for_context(relevant_memories)
-                            logger.info(f"Injecting {len(relevant_memories)} memories into response generation")
-                    except Exception as e:
-                        logger.error(f"Failed to retrieve memories: {e}")
-                
-                # Build system prompt with minimal variation based on memory setting
+            
+            # Retrieve relevant memories for context injection (always done)
+            relevant_memories = []
+            memory_context = ""
+            if memory_enabled:
+                try:
+                    # Get memories relevant to the user's question
+                    relevant_memories = await self.memory_service.retrieve_relevant_memories(message, limit=20)
+                    if relevant_memories:
+                        memory_context = self.memory_service.format_memories_for_context(relevant_memories)
+                        logger.info(f"Injecting {len(relevant_memories)} memories into response generation")
+                except Exception as e:
+                    logger.error(f"Failed to retrieve memories: {e}")
+            
+            # Check if ToolMessages are present to determine system prompt
+            has_tool_results = any(isinstance(msg, ToolMessage) for msg in messages[1:])
+            
+            # Build dynamic system prompt based on ToolMessage presence
+            if has_tool_results:
+                # Tools were used - focus on tool results
                 if memory_enabled:
                     system_prompt = "You are Echo. Look for tool results containing user's journal entries and conversations. Also check the 'What you remember about the user' section below for relevant memories. Analyze all this information and the user's question. Then thoughtfully reply as if you are talking to the user naturally using 'you' and 'your'. Keep the answers short (3-4 sentences) UNLESS the user asks otherwise or asks to show the whole entry."
                 else:
                     system_prompt = "You are Echo. Look for tool results containing user's journal entries and conversations. Analyze this information and the user's question. Then thoughtfully reply as if you are talking to the user naturally using 'you' and 'your'. Keep the answers short (3-4 sentences) UNLESS the user asks otherwise or asks to show the whole entry."
-                
-                if memory_context:
-                    system_prompt += f"\n\n## What you remember about the user:\n{memory_context}"
-                
-                # Add focused system prompt for response generation with memory
-                response_messages = [
-                    SystemMessage(content=system_prompt),
-                    *messages[1:]  # Skip original system message, keep user message, AI response, and tool results
-                ]
-                
-                # Get final response using base LLM (no tools needed)
-                final_response_msg = await self.llm.ainvoke(response_messages)
-                final_response = strip_thinking_block(final_response_msg.content)
-                
-                # Collect debug information here while variables are in scope
-                if debug_mode:
-                    debug_info_here = {
-                        "memory_enabled": memory_enabled,
-                        "system_prompt_used": system_prompt,
-                        "memory_context_injected": bool(memory_context),
-                        "memory_count": len(relevant_memories) if relevant_memories else 0,
-                        "memory_context": memory_context,
-                        "memory_retrieval_attempted": memory_enabled,
-                        "tool_calls_count": len(tool_calls_made),
-                        "has_tool_calls": bool(tool_calls_made),
-                        "timestamp": str(datetime.now())
-                    }
-                    # Store for later use
-                    globals()['_current_debug_info'] = debug_info_here
             else:
-                # If no tools were used, provide a response that encourages the user to ask specific questions
-                logger.warning(f"LLM responded without using tools for message: '{message[:50]}...'")
-                final_response = strip_thinking_block(response.content)
-                
-                # If response is too generic or doesn't mention searching entries, encourage more specific questions
-                if final_response and (
-                    "I'd be happy to help" in final_response or 
-                    "I can help" in final_response or
-                    "feel free to ask" in final_response or
-                    len(final_response.split()) < 10  # Very short responses
-                ):
-                    final_response += " Could you ask me something specific about your journal entries? For example, 'What did I write yesterday?' or 'Show me entries about work'."
+                # No tools used - natural conversation
+                if memory_enabled:
+                    system_prompt = "You are Echo, the user's journaling companion. Respond naturally and warmly. Carefully analyze the user's query and share your response. Also check the 'What you remember about the user' section below for relevant context."
+                else:
+                    system_prompt = "You are Echo, the user's journaling companion. Respond naturally and warmly. Carefully analyze the user's query and share your response."
+            
+            if memory_context:
+                system_prompt += f"\n\n## What you remember about the user:\n{memory_context}"
+            
+            # Create response messages with dynamic system prompt
+            response_messages = [
+                SystemMessage(content=system_prompt),
+                *messages[1:]  # All messages: user, AI response (if tools used), ToolMessages (if any)
+            ]
+            
+            # Get final response using base LLM (no tools needed)
+            final_response_msg = await self.llm.ainvoke(response_messages)
+            final_response = strip_thinking_block(final_response_msg.content)
+            
+            # Collect debug information
+            if debug_mode:
+                debug_info_here = {
+                    "memory_enabled": memory_enabled,
+                    "system_prompt_used": system_prompt,
+                    "memory_context_injected": bool(memory_context),
+                    "memory_count": len(relevant_memories) if relevant_memories else 0,
+                    "memory_context": memory_context,
+                    "memory_retrieval_attempted": memory_enabled,
+                    "tool_calls_count": len(tool_calls_made),
+                    "has_tool_calls": bool(tool_calls_made),
+                    "has_tool_results": has_tool_results,
+                    "conversation_type": "tool_assisted" if has_tool_results else "natural_conversation",
+                    "timestamp": str(datetime.now())
+                }
+                # Store for later use
+                globals()['_current_debug_info'] = debug_info_here
             
             # Fallback if response is empty
             if not final_response or final_response.strip() == "":
