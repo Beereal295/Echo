@@ -51,6 +51,67 @@ class MemoryStatsResponse(BaseModel):
     average_score: float
 
 
+@router.get("/", response_model=dict)
+async def get_paginated_memories(
+    page: int = Query(1, ge=1, description="Page number (1-based)"),
+    limit: int = Query(6, ge=1, le=50, description="Number of memories per page"),
+    filter: str = Query("all", description="Filter type: all, rated, unrated")
+):
+    """
+    Get paginated memories with filtering support.
+    Returns memories with pagination metadata.
+    """
+    try:
+        # Build query based on filter
+        base_query = "FROM agent_memories WHERE (is_active = 1 OR archived = 1)"
+        
+        if filter == "rated":
+            base_query += " AND user_rated = 1"
+        elif filter == "unrated":
+            base_query += " AND user_rated = 0"
+        
+        # Get total count
+        count_query = f"SELECT COUNT(*) as total {base_query}"
+        count_result = await db.fetch_one(count_query)
+        total = count_result['total'] if count_result else 0
+        
+        # Calculate pagination
+        total_pages = max(1, (total + limit - 1) // limit)  # Ceiling division
+        page = min(page, total_pages)  # Ensure page doesn't exceed total
+        offset = (page - 1) * limit
+        
+        # Get paginated memories
+        data_query = f"""
+            SELECT * {base_query}
+            ORDER BY 
+                CASE WHEN user_rated = 0 AND llm_processed = 1 THEN 0 ELSE 1 END,
+                created_at DESC
+            LIMIT ? OFFSET ?
+        """
+        
+        memories = await db.fetch_all(data_query, (limit, offset))
+        
+        # Calculate effective scores for each memory
+        result_memories = []
+        for memory in memories:
+            memory_dict = dict(memory)
+            memory_dict['effective_score'] = memory_service.calculate_effective_score(memory_dict)
+            result_memories.append(memory_dict)
+        
+        return {
+            "memories": result_memories,
+            "total": total,
+            "page": page,
+            "totalPages": total_pages,
+            "hasNext": page < total_pages,
+            "hasPrev": page > 1,
+            "filter": filter
+        }
+    except Exception as e:
+        logger.error(f"Failed to get paginated memories: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/unrated", response_model=List[dict])
 async def get_unrated_memories(
     limit: int = Query(10, ge=1, le=50, description="Number of memories to retrieve")

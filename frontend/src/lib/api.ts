@@ -601,6 +601,41 @@ class ApiClient {
   }
 
   // Memory management endpoints
+  async getPaginatedMemories(
+    page: number = 1,
+    limit: number = 6,
+    filter: 'all' | 'rated' | 'unrated' = 'all'
+  ): Promise<ApiResponse<{
+    memories: Array<{
+      id: number
+      content: string
+      memory_type: string
+      base_importance_score: number
+      llm_importance_score?: number
+      user_score_adjustment: number
+      final_importance_score: number
+      user_rated: number
+      score_source: string
+      effective_score?: any
+      created_at: string
+      last_accessed_at?: string
+      access_count: number
+    }>
+    total: number
+    page: number
+    totalPages: number
+    hasNext: boolean
+    hasPrev: boolean
+    filter: string
+  }>> {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      limit: limit.toString(),
+      filter
+    })
+    return this.request(`/memories/?${params}`)
+  }
+
   async getUnratedMemories(limit: number = 10): Promise<ApiResponse<Array<{
     id: number
     content: string

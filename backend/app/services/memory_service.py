@@ -565,6 +565,7 @@ class MemoryService:
             system_prompt = """You are a memory extraction specialist for a personal journaling app. Extract ONLY important, permanent facts about the user from their text.
 
 IMPORTANT: Each extracted memory must be within 1 line only.
+If there are NO significant personal facts worth remembering, return an empty array [].
 
 Categories to extract:
 - factual: Name, age, occupation, location, possessions

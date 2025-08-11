@@ -24,8 +24,23 @@ interface Memory {
 }
 
 function MemoriesPage() {
-  const [memories, setMemories] = useState<Memory[]>([])
+  // Separate state for swipe functionality (left card)
+  const [unratedMemories, setUnratedMemories] = useState<Memory[]>([])
   const [currentIndex, setCurrentIndex] = useState(0)
+  
+  // Separate state for collection browsing (right card)
+  const [allMemories, setAllMemories] = useState<Memory[]>([])
+  const [memoryPage, setMemoryPage] = useState(1)
+  const [memoryTotalPages, setMemoryTotalPages] = useState(1)
+  const [memoryTotal, setMemoryTotal] = useState(0)
+  const [memoryFilter, setMemoryFilter] = useState<'all' | 'rated' | 'unrated'>('all')
+  const memoryPageSize = 6 // Show 6 memories per page in collection
+  
+  // Currently selected memory (can be from either source)
+  const [currentMemory, setCurrentMemory] = useState<Memory | null>(null)
+  const [currentMemorySource, setCurrentMemorySource] = useState<'swipe' | 'collection'>('swipe')
+  
+  // UI state
   const [loading, setLoading] = useState(true)
   const [isRating, setIsRating] = useState(false)
   const [showConfirmation, setShowConfirmation] = useState(false)
@@ -33,11 +48,6 @@ function MemoriesPage() {
   const [pendingSwipeAction, setPendingSwipeAction] = useState<{ memoryId: number, isRelevant: boolean } | null>(null)
   const [lastAction, setLastAction] = useState<{ type: 'relevant' | 'irrelevant', memoryId: number } | null>(null)
   const [stats, setStats] = useState<any>(null)
-  
-  // Pagination state for memory collection
-  const [memoryPage, setMemoryPage] = useState(1)
-  const [memoryTotalPages, setMemoryTotalPages] = useState(1)
-  const memoryPageSize = 6 // Show 6 memories per page in collection
   
   const { toast } = useToast()
 
@@ -75,19 +85,28 @@ function MemoriesPage() {
   const SWIPE_THRESHOLD = 120
 
   useEffect(() => {
-    loadMemories()
+    // Load based on initial filter (default is 'all')
+    if (memoryFilter === 'all' || memoryFilter === 'unrated') {
+      loadUnratedMemories()
+    } else {
+      loadRatedMemories()
+    }
+    loadPaginatedMemories(1, memoryFilter)
     loadStats()
   }, [])
 
-  const loadMemories = async () => {
+  const loadUnratedMemories = async () => {
     try {
       setLoading(true)
-      const response = await api.getUnratedMemories(20) // Load more for stack
+      const response = await api.getUnratedMemories(20) // For swipe functionality
       if (response.success && response.data) {
-        setMemories(response.data)
+        setUnratedMemories(response.data)
         setCurrentIndex(0)
-        // Calculate total pages for memory collection pagination
-        setMemoryTotalPages(Math.ceil(response.data.length / memoryPageSize))
+        // Set initial current memory from swipe queue
+        if (response.data.length > 0 && !currentMemory) {
+          setCurrentMemory(response.data[0])
+          setCurrentMemorySource('swipe')
+        }
       } else {
         safeToast({
           title: "Failed to load memories",
@@ -105,6 +124,47 @@ function MemoriesPage() {
     }
   }
 
+  const loadPaginatedMemories = async (page: number = 1, filter: 'all' | 'rated' | 'unrated' = 'all') => {
+    try {
+      const response = await api.getPaginatedMemories(page, memoryPageSize, filter)
+      if (response.success && response.data) {
+        setAllMemories(response.data.memories)
+        setMemoryTotalPages(response.data.totalPages)
+        setMemoryTotal(response.data.total)
+        setMemoryPage(response.data.page)
+        setMemoryFilter(filter)
+      }
+    } catch (error) {
+      console.error('Failed to load paginated memories:', error)
+      safeToast({
+        title: "Failed to load memory collection",
+        description: "Please try again"
+      })
+    }
+  }
+
+  const loadRatedMemories = async () => {
+    try {
+      // Load rated memories for display in the swipe card (read-only)
+      const response = await api.getPaginatedMemories(1, 20, 'rated')
+      if (response.success && response.data) {
+        setUnratedMemories(response.data.memories) // Use same state but these are rated
+        setCurrentIndex(0)
+        // Set initial current memory from rated memories
+        if (response.data.memories.length > 0) {
+          setCurrentMemory(response.data.memories[0])
+          setCurrentMemorySource('swipe')
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load rated memories:', error)
+      safeToast({
+        title: "Failed to load rated memories",
+        description: "Please try again"
+      })
+    }
+  }
+
   const loadStats = async () => {
     try {
       const response = await api.getMemoryStats()
@@ -114,6 +174,33 @@ function MemoriesPage() {
     } catch (error) {
       console.error('Failed to load stats:', error)
     }
+  }
+
+  // Helper functions to get current display memory
+  const getDisplayMemory = () => {
+    if (currentMemorySource === 'collection' && currentMemory) {
+      return currentMemory
+    }
+    return unratedMemories[currentIndex]
+  }
+
+  const canRate = () => {
+    const memory = getDisplayMemory()
+    return memory && memory.user_rated === 0
+  }
+
+  const getPreviousRating = () => {
+    const memory = getDisplayMemory()
+    if (memory && memory.user_rated === 1) {
+      return memory.user_score_adjustment > 0 ? 'relevant' : 'irrelevant'
+    }
+    return null
+  }
+
+  // Handle memory selection from collection
+  const handleMemorySelection = (memory: Memory) => {
+    setCurrentMemory(memory)
+    setCurrentMemorySource('collection')
   }
 
   const rateMemory = async (memoryId: number, isRelevant: boolean) => {
@@ -131,11 +218,24 @@ function MemoriesPage() {
         })
         setShowConfirmation(true)
         
-        // Move to next memory after short delay
-        setTimeout(() => {
-          setCurrentIndex(prev => prev + 1)
-          setShowConfirmation(false)
-        }, 1500)
+        if (currentMemorySource === 'swipe') {
+          // Move to next memory in swipe queue after short delay
+          setTimeout(() => {
+            setCurrentIndex(prev => prev + 1)
+            setShowConfirmation(false)
+            // Update current memory to next in queue
+            if (currentIndex + 1 < unratedMemories.length) {
+              setCurrentMemory(unratedMemories[currentIndex + 1])
+            }
+          }, 1500)
+        } else {
+          // For collection selection, update the memory's status
+          setTimeout(() => {
+            setShowConfirmation(false)
+            // Reload the current page to show updated status
+            loadPaginatedMemories(memoryPage, memoryFilter)
+          }, 1500)
+        }
 
         // Reload stats
         loadStats()
@@ -163,8 +263,8 @@ function MemoriesPage() {
     const swipeVelocityThreshold = 500
 
     if (Math.abs(offset.x) > SWIPE_THRESHOLD || Math.abs(velocity.x) > swipeVelocityThreshold) {
-      const currentMemory = memories[currentIndex]
-      if (currentMemory) {
+      const currentMemory = getDisplayMemory()
+      if (currentMemory && canRate()) {
         const isRelevant = offset.x > 0
         
         // Show confirmation dialog on first swipe of each direction
@@ -221,8 +321,8 @@ function MemoriesPage() {
   }
 
   const handleButtonRate = (isRelevant: boolean) => {
-    const currentMemory = memories[currentIndex]
-    if (currentMemory) {
+    const currentMemory = getDisplayMemory()
+    if (currentMemory && canRate()) {
       // Buttons don't require confirmation - direct action
       rateMemory(currentMemory.id, isRelevant)
     }
@@ -262,11 +362,30 @@ function MemoriesPage() {
     return type.charAt(0).toUpperCase() + type.slice(1)
   }
 
-  // Get paginated memories for the collection display
-  const getPaginatedMemoriesForCollection = () => {
-    const startIndex = (memoryPage - 1) * memoryPageSize
-    const endIndex = startIndex + memoryPageSize
-    return memories.slice(startIndex, endIndex)
+  // Handle pagination navigation
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= memoryTotalPages) {
+      loadPaginatedMemories(newPage, memoryFilter)
+    }
+  }
+
+  // Handle filter change
+  const handleFilterChange = (filter: 'all' | 'rated' | 'unrated') => {
+    setMemoryFilter(filter)
+    setMemoryPage(1) // Reset to first page
+    loadPaginatedMemories(1, filter)
+    
+    // Also update the swipe cards based on filter
+    if (filter === 'unrated') {
+      // Load only unrated for swipe
+      loadUnratedMemories()
+    } else if (filter === 'rated') {
+      // Load rated memories for review (read-only)
+      loadRatedMemories()
+    } else {
+      // Load all unrated for swipe when 'all' is selected
+      loadUnratedMemories()
+    }
   }
 
   if (loading) {
@@ -280,25 +399,45 @@ function MemoriesPage() {
     )
   }
 
-  if (memories.length === 0) {
+  if (unratedMemories.length === 0 && allMemories.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center p-6">
         <div className="text-center max-w-md">
           <Sparkles className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-          <h2 className="text-2xl font-semibold mb-2">No Memories to Review</h2>
+          <h2 className="text-2xl font-semibold mb-2">
+            {memoryFilter === 'rated' ? 'No Rated Memories' : 
+             memoryFilter === 'unrated' ? 'No Unrated Memories' : 
+             'No Memories to Review'}
+          </h2>
           <p className="text-muted-foreground mb-4">
-            All your memories have been rated! Come back later as Echo learns more about you through your journal entries and conversations.
+            {memoryFilter === 'rated' ? 
+              "You haven't rated any memories yet. Try switching to 'All' or 'Pending' to see available memories." :
+             memoryFilter === 'unrated' ? 
+              "All memories have been rated! Great job helping Echo understand what's important to you." :
+              "All your memories have been rated! Come back later as Echo learns more about you through your journal entries and conversations."}
           </p>
-          <Button onClick={loadMemories} variant="outline">
-            Check Again
-          </Button>
+          <div className="flex gap-2 justify-center">
+            <Button onClick={() => handleFilterChange('all')} variant="outline">
+              Show All Memories
+            </Button>
+            <Button onClick={() => {
+              if (memoryFilter === 'all' || memoryFilter === 'unrated') {
+                loadUnratedMemories()
+              } else {
+                loadRatedMemories()
+              }
+              loadPaginatedMemories(1, memoryFilter)
+            }} variant="outline">
+              Check Again
+            </Button>
+          </div>
         </div>
       </div>
     )
   }
 
-  const currentMemory = memories[currentIndex]
-  const isComplete = currentIndex >= memories.length
+  const displayMemory = getDisplayMemory()
+  const isComplete = currentMemorySource === 'swipe' && currentIndex >= unratedMemories.length
 
   if (isComplete) {
     return (
@@ -315,7 +454,7 @@ function MemoriesPage() {
           <p className="text-muted-foreground mb-4">
             You've reviewed all available memories. Thank you for helping Echo understand what's important to you!
           </p>
-          <Button onClick={loadMemories} variant="outline">
+          <Button onClick={loadUnratedMemories} variant="outline">
             <RotateCcw className="w-4 h-4 mr-2" />
             Check for New Memories
           </Button>
@@ -390,7 +529,7 @@ function MemoriesPage() {
               </AnimatePresence>
 
               {/* Single Card Display */}
-              {memories[currentIndex] && (
+              {displayMemory && (
                 <motion.div
                   className="relative w-full max-w-md h-80 mb-6"
                   initial={{ y: 20, opacity: 0, scale: 0.9 }}
@@ -403,7 +542,7 @@ function MemoriesPage() {
                   }}
                 >
                   <motion.div
-                    key={memories[currentIndex].id}
+                    key={displayMemory.id}
                     className="absolute inset-0"
                     style={{
                       x,
@@ -411,9 +550,9 @@ function MemoriesPage() {
                       rotate,
                       opacity: 1
                     }}
-                    drag="x"
+                    drag={canRate() ? "x" : undefined}
                     dragConstraints={{ left: 0, right: 0 }}
-                    onDragEnd={handleDragEnd}
+                    onDragEnd={canRate() ? handleDragEnd : undefined}
                     transition={{ duration: 0.2 }}
                   >
                     <Card className="w-full h-full cursor-pointer bg-card/50 backdrop-blur-sm border-border/50 hover:border-primary/30 shadow-xl hover:shadow-2xl transition-all duration-300 overflow-hidden group relative flex flex-col">
@@ -426,16 +565,16 @@ function MemoriesPage() {
                         <div className="flex items-start justify-between">
                           <Badge 
                             variant="secondary" 
-                            className={`flex items-center gap-1 ${getMemoryTypeColor(memories[currentIndex].memory_type)}`}
+                            className={`flex items-center gap-1 ${getMemoryTypeColor(displayMemory.memory_type)}`}
                           >
-                            {getMemoryTypeIcon(memories[currentIndex].memory_type)}
-                            {formatMemoryType(memories[currentIndex].memory_type)}
+                            {getMemoryTypeIcon(displayMemory.memory_type)}
+                            {formatMemoryType(displayMemory.memory_type)}
                           </Badge>
                           <Badge 
                             variant="outline"
                             className="bg-primary/10 text-primary border-primary/20"
                           >
-                            {memories[currentIndex].final_importance_score.toFixed(1)}/10
+                            {displayMemory.final_importance_score.toFixed(1)}/10
                           </Badge>
                         </div>
                       </CardHeader>
@@ -444,20 +583,26 @@ function MemoriesPage() {
                         {/* Centered Memory Text */}
                         <div className="flex-1 flex items-center justify-center px-2">
                           <div className="text-base leading-relaxed text-white text-center max-w-full">
-                            {memories[currentIndex].content.length > 150 
-                              ? memories[currentIndex].content.substring(0, 150) + "..."
-                              : memories[currentIndex].content
+                            {displayMemory.content.length > 150 
+                              ? displayMemory.content.substring(0, 150) + "..."
+                              : displayMemory.content
                             }
                           </div>
                         </div>
                         
                         {/* Instructions at bottom */}
                         <div className="text-center text-xs text-gray-400 border-t border-border/30 pt-3 mt-auto">
-                          <p className="mb-2">Swipe or click to rate</p>
-                          <div className="flex justify-center gap-6">
-                            <span className="text-red-400">← Irrelevant</span>
-                            <span className="text-green-400">Relevant →</span>
-                          </div>
+                          {canRate() ? (
+                            <>
+                              <p className="mb-2">Swipe or click to rate</p>
+                              <div className="flex justify-center gap-6">
+                                <span className="text-red-400">← Irrelevant</span>
+                                <span className="text-green-400">Relevant →</span>
+                              </div>
+                            </>
+                          ) : (
+                            <p>This memory has already been rated</p>
+                          )}
                         </div>
                       </CardContent>
                     </Card>
@@ -465,41 +610,60 @@ function MemoriesPage() {
                 </motion.div>
               )}
 
-              {/* Action Buttons - Positioned to align with card edges */}
+              {/* Action Buttons or Rating Status */}
               <div className="relative w-full max-w-md">
-                <div className="flex justify-between gap-4">
-                  <Button
-                    onClick={() => handleButtonRate(false)}
-                    disabled={isRating}
-                    className="flex-1 relative overflow-hidden group px-6 py-4 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 hover:text-red-300"
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-r from-red-500/10 to-red-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                    <span className="relative z-10 flex items-center">
-                      {isRating ? (
-                        <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                {canRate() ? (
+                  <div className="flex justify-between gap-4">
+                    <Button
+                      onClick={() => handleButtonRate(false)}
+                      disabled={isRating}
+                      className="flex-1 relative overflow-hidden group px-6 py-4 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 hover:text-red-300"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-red-500/10 to-red-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                      <span className="relative z-10 flex items-center">
+                        {isRating ? (
+                          <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                        ) : (
+                          <ThumbsDown className="w-5 h-5 mr-2" />
+                        )}
+                        Irrelevant
+                      </span>
+                    </Button>
+                    
+                    <Button
+                      onClick={() => handleButtonRate(true)}
+                      disabled={isRating}
+                      className="flex-1 relative overflow-hidden group px-6 py-4 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-green-500/10 border border-green-500/20 text-green-400 hover:bg-green-500/20 hover:text-green-300"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-green-500/10 to-green-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                      <span className="relative z-10 flex items-center">
+                        {isRating ? (
+                          <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                        ) : (
+                          <ThumbsUp className="w-5 h-5 mr-2" />
+                        )}
+                        Relevant
+                      </span>
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex justify-center">
+                    <Badge
+                      variant="outline"
+                      className={`px-6 py-3 text-base ${
+                        getPreviousRating() === 'relevant'
+                          ? 'bg-green-500/10 text-green-400 border-green-500/20'
+                          : 'bg-red-500/10 text-red-400 border-red-500/20'
+                      }`}
+                    >
+                      {getPreviousRating() === 'relevant' ? (
+                        <><ThumbsUp className="w-5 h-5 mr-2" /> Previously marked as Relevant</>
                       ) : (
-                        <ThumbsDown className="w-5 h-5 mr-2" />
+                        <><ThumbsDown className="w-5 h-5 mr-2" /> Previously marked as Irrelevant</>
                       )}
-                      Irrelevant
-                    </span>
-                  </Button>
-                  
-                  <Button
-                    onClick={() => handleButtonRate(true)}
-                    disabled={isRating}
-                    className="flex-1 relative overflow-hidden group px-6 py-4 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-green-500/10 border border-green-500/20 text-green-400 hover:bg-green-500/20 hover:text-green-300"
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-r from-green-500/10 to-green-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                    <span className="relative z-10 flex items-center">
-                      {isRating ? (
-                        <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                      ) : (
-                        <ThumbsUp className="w-5 h-5 mr-2" />
-                      )}
-                      Relevant
-                    </span>
-                  </Button>
-                </div>
+                    </Badge>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -526,16 +690,40 @@ function MemoriesPage() {
               </div>
             </CardHeader>
             <CardContent className="flex-1 overflow-hidden p-4 flex flex-col">
-              {/* Stats */}
+              {/* Stats - Clickable Filters */}
               {stats && (
                 <div className="flex gap-2 mb-4 flex-wrap">
-                  <Badge variant="secondary" className="bg-blue-500/10 text-blue-400 border-blue-500/20 text-xs">
+                  <Badge 
+                    variant="secondary" 
+                    className={`cursor-pointer transition-all text-xs ${
+                      memoryFilter === 'all' 
+                        ? 'bg-blue-500/20 text-blue-300 border-blue-500/40 ring-1 ring-blue-500/50' 
+                        : 'bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/15'
+                    }`}
+                    onClick={() => handleFilterChange('all')}
+                  >
                     {stats.total_memories} Total
                   </Badge>
-                  <Badge variant="secondary" className="bg-yellow-500/10 text-yellow-400 border-yellow-500/20 text-xs">
+                  <Badge 
+                    variant="secondary" 
+                    className={`cursor-pointer transition-all text-xs ${
+                      memoryFilter === 'unrated' 
+                        ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40 ring-1 ring-yellow-500/50' 
+                        : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20 hover:bg-yellow-500/15'
+                    }`}
+                    onClick={() => handleFilterChange('unrated')}
+                  >
                     {stats.unrated_memories} Pending
                   </Badge>
-                  <Badge variant="secondary" className="bg-green-500/10 text-green-400 border-green-500/20 text-xs">
+                  <Badge 
+                    variant="secondary" 
+                    className={`cursor-pointer transition-all text-xs ${
+                      memoryFilter === 'rated' 
+                        ? 'bg-green-500/20 text-green-300 border-green-500/40 ring-1 ring-green-500/50' 
+                        : 'bg-green-500/10 text-green-400 border-green-500/20 hover:bg-green-500/15'
+                    }`}
+                    onClick={() => handleFilterChange('rated')}
+                  >
                     {stats.rated_memories} Rated
                   </Badge>
                 </div>
@@ -544,8 +732,8 @@ function MemoriesPage() {
               {/* Memory List */}
               <div className="flex-1 overflow-y-auto pr-2 space-y-3 pl-1 pt-1">
                 <AnimatePresence mode="wait">
-                  {getPaginatedMemoriesForCollection().map((memory, index) => {
-                    const actualIndex = memories.findIndex(m => m.id === memory.id)
+                  {allMemories.map((memory, index) => {
+                    const isSelected = currentMemory?.id === memory.id && currentMemorySource === 'collection'
                     return (
                       <motion.div
                         key={memory.id}
@@ -556,9 +744,9 @@ function MemoriesPage() {
                       >
                         <Card
                           className={`cursor-pointer transition-all duration-200 hover:shadow-lg hover:bg-muted/30 group relative overflow-hidden ${
-                            currentIndex === actualIndex ? 'border-primary/50 bg-primary/5' : ''
+                            isSelected ? 'border-primary/50 bg-primary/5' : ''
                           }`}
-                          onClick={() => setCurrentIndex(actualIndex)}
+                          onClick={() => handleMemorySelection(memory)}
                         >
                           {/* Shimmer effect */}
                           <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/10 to-transparent group-hover:translate-x-full transition-transform duration-700" />
@@ -607,7 +795,7 @@ function MemoriesPage() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => setMemoryPage(prev => Math.max(1, prev - 1))}
+                    onClick={() => handlePageChange(memoryPage - 1)}
                     disabled={memoryPage === 1}
                     className="flex items-center gap-2 bg-card border border-border text-yellow-400 hover:bg-card/80 hover:text-yellow-300 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
@@ -617,13 +805,13 @@ function MemoriesPage() {
                   
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <span>Page {memoryPage} of {memoryTotalPages}</span>
-                    <span className="text-xs">({memories.length} total)</span>
+                    <span className="text-xs">({memoryTotal.toLocaleString()} total)</span>
                   </div>
                   
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => setMemoryPage(prev => Math.min(memoryTotalPages, prev + 1))}
+                    onClick={() => handlePageChange(memoryPage + 1)}
                     disabled={memoryPage === memoryTotalPages}
                     className="flex items-center gap-2 bg-card border border-border text-yellow-400 hover:bg-card/80 hover:text-yellow-300 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
