@@ -25,6 +25,7 @@ from app.services.mood_analysis import get_mood_analysis_service
 from app.services.diary_chat_service import invalidate_diary_cache
 from app.services.smart_tagging_service import get_smart_tagging_service
 from app.auth.dependencies import get_current_user
+from app.db.database import get_db
 
 logger = logging.getLogger(__name__)
 

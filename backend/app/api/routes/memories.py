@@ -122,6 +122,7 @@ async def get_unrated_memories(
     Shows LLM-processed memories first, then newest.
     """
     try:
+        db = get_db()
         memories = await memory_service.get_unrated_memories(limit)
         return memories
     except Exception as e:
@@ -136,6 +137,7 @@ async def rate_memory(request: MemoryRatingRequest):
     Adjustment range: -3 (irrelevant) to +3 (very important)
     """
     try:
+        db = get_db()
         success = await memory_service.rate_memory(
             memory_id=request.memory_id,
             adjustment=request.adjustment
@@ -235,6 +237,7 @@ async def trigger_llm_processing(
     This should typically be called by a background scheduler.
     """
     try:
+        db = get_db()
         processed_count = await memory_service.process_memories_with_llm_batch(batch_size)
         return {
             "success": True,
@@ -252,6 +255,7 @@ async def rescue_memory(memory_id: int):
     Rescue a memory from deletion queue.
     """
     try:
+        db = get_db()
         success = await memory_service.rescue_memory(memory_id)
         
         if not success:
@@ -292,6 +296,7 @@ async def mark_memories_for_deletion():
     Should be run monthly (1st of month).
     """
     try:
+        db = get_db()
         marked_ids = await memory_service.mark_memories_for_deletion()
         return {
             "success": True,
@@ -311,6 +316,7 @@ async def archive_marked_memories():
     Should be run 2 weeks after marking.
     """
     try:
+        db = get_db()
         archived_count = await memory_service.archive_marked_memories()
         return {
             "success": True,
@@ -329,6 +335,7 @@ async def cleanup_archived_memories():
     Should be run monthly.
     """
     try:
+        db = get_db()
         deleted_count = await memory_service.permanently_delete_archived()
         return {
             "success": True,
@@ -346,6 +353,7 @@ async def get_background_tasks_status():
     Get status of background processing tasks.
     """
     try:
+        db = get_db()
         status = await get_background_task_status()
         return status
     except Exception as e:
@@ -361,6 +369,7 @@ async def trigger_background_llm_processing(
     Manually trigger LLM processing of memories.
     """
     try:
+        db = get_db()
         processed_count = await background_manager.trigger_llm_processing(batch_size)
         return {
             "success": True,

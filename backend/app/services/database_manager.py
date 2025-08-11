@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .user_registry_service import get_user_registry_service
 from ..db.schema import create_tables
-from ..db.database import db, initialize_preferences_for_db
+from ..db.database import db, initialize_preferences_for_db, get_db
 from ..db.migrations import run_migrations
 
 

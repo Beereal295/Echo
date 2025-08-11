@@ -18,6 +18,7 @@ from app.api.schemas import SuccessResponse, ErrorResponse
 from app.services.embedding_service import get_embedding_service, EmbeddingService
 from app.services.hybrid_search import HybridSearchService
 from app.db.repositories.entry_repository import EntryRepository
+from app.db.database import get_db
 
 logger = logging.getLogger(__name__)
 

@@ -74,6 +74,7 @@ class ConversationRepository:
         search_queries_used: Optional[List[str]] = None
     ) -> Optional[Conversation]:
         """Update conversation fields"""
+        db = get_db()
         updates = []
         params = []
         
@@ -116,6 +117,7 @@ class ConversationRepository:
         key_topics: List[str] = None
     ) -> bool:
         """Update conversation metadata for memory system - only updates non-None values"""
+        db = get_db()
         import json
         
         # Build dynamic query to only update provided fields
@@ -153,6 +155,7 @@ class ConversationRepository:
     @staticmethod
     async def delete(conversation_id: int) -> bool:
         """Delete a conversation and related memories"""
+        db = get_db()
         try:
             # First delete related agent_memories to avoid foreign key constraint violation
             await db.execute(
@@ -175,12 +178,14 @@ class ConversationRepository:
     @staticmethod
     async def count() -> int:
         """Count total conversations"""
+        db = get_db()
         result = await db.fetch_one("SELECT COUNT(*) as count FROM conversations")
         return result["count"] if result else 0
     
     @staticmethod
     async def count_by_type(conversation_type: str) -> int:
         """Count conversations by type"""
+        db = get_db()
         result = await db.fetch_one(
             "SELECT COUNT(*) as count FROM conversations WHERE conversation_type = ?",
             (conversation_type,)
@@ -190,6 +195,7 @@ class ConversationRepository:
     @staticmethod
     async def get_statistics() -> Dict[str, Any]:
         """Get comprehensive conversation statistics"""
+        db = get_db()
         # Basic counts
         total_conversations = await ConversationRepository.count()
         call_conversations = await ConversationRepository.count_by_type("call")

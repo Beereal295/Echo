@@ -7,6 +7,7 @@ from typing import Optional, List, Dict, Any
 from pathlib import Path
 
 from ..db.user_registry_schema import USER_REGISTRY_SCHEMA
+from ..db.database import get_db
 
 
 class UserRegistryService:

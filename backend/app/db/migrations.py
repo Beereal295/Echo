@@ -106,8 +106,11 @@ DROP INDEX IF EXISTS idx_memory_archived;"""
 ]
 
 
-async def get_current_version(db) -> int:
+async def get_current_version(db=None) -> int:
     """Get current schema version"""
+    if db is None:
+        from app.db.database import get_db
+        db = get_db()
     try:
         result = await db.fetch_one(
             "SELECT MAX(version) as version FROM schema_version"
@@ -120,6 +123,9 @@ async def get_current_version(db) -> int:
 
 async def apply_migration(db, version: int, description: str, up_sql: str):
     """Apply a single migration"""
+    if db is None:
+        from app.db.database import get_db
+        db = get_db()
     if up_sql.strip() and not up_sql.strip().startswith("--"):
         # Split multiple statements by semicolon and execute each one
         statements = [stmt.strip() for stmt in up_sql.split(';') if stmt.strip()]
@@ -150,8 +156,11 @@ async def apply_migration(db, version: int, description: str, up_sql: str):
     print(f"Applied migration {version}: {description}")
 
 
-async def run_migrations(db):
+async def run_migrations(db=None):
     """Run all pending migrations"""
+    if db is None:
+        from app.db.database import get_db
+        db = get_db()
     current_version = await get_current_version(db)
     print(f"Current database version: {current_version}")
     

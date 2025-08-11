@@ -476,6 +476,7 @@ class MemoryService:
         if not enhanced_text:
             return 0
             
+        db = get_db()
         # Extract memories from enhanced entry text
         memories = []
         

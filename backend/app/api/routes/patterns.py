@@ -4,6 +4,7 @@ from typing import List, Optional
 from app.api.schemas import SuccessResponse
 from app.services.patterns import PatternDetector, PatternType
 from app.db.repositories import get_preferences_repository
+from app.db.database import get_db
 
 router = APIRouter(prefix="/patterns", tags=["patterns"])
 

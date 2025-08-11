@@ -11,6 +11,7 @@ class DraftRepository:
     @staticmethod
     async def create(draft: Draft) -> Draft:
         """Create a new draft"""
+        db = get_db()
         data = draft.to_dict()
         del data["id"]
         
@@ -30,6 +31,7 @@ class DraftRepository:
     @staticmethod
     async def get_latest() -> Optional[Draft]:
         """Get the most recent draft"""
+        db = get_db()
         row = await db.fetch_one(
             """SELECT * FROM drafts 
                ORDER BY updated_at DESC, created_at DESC 
@@ -40,6 +42,7 @@ class DraftRepository:
     @staticmethod
     async def get_by_id(draft_id: int) -> Optional[Draft]:
         """Get draft by ID"""
+        db = get_db()
         row = await db.fetch_one(
             "SELECT * FROM drafts WHERE id = ?", (draft_id,)
         )
@@ -48,6 +51,7 @@ class DraftRepository:
     @staticmethod
     async def update(draft: Draft) -> Draft:
         """Update an existing draft"""
+        db = get_db()
         draft.updated_at = datetime.now()
         data = draft.to_dict()
         draft_id = data.pop("id")
@@ -87,6 +91,7 @@ class DraftRepository:
     @staticmethod
     async def cleanup_old_drafts_keep_one() -> int:
         """Keep only the most recent draft, delete all others"""
+        db = get_db()
         # Get all drafts ordered by most recent first
         rows = await db.fetch_all(
             """SELECT id FROM drafts 
@@ -110,6 +115,7 @@ class DraftRepository:
     @staticmethod
     async def delete(draft_id: int) -> bool:
         """Delete a draft"""
+        db = get_db()
         await db.execute("DELETE FROM drafts WHERE id = ?", (draft_id,))
         await db.commit()
         return True
@@ -117,6 +123,7 @@ class DraftRepository:
     @staticmethod
     async def delete_old_drafts(days: int = 7) -> int:
         """Delete drafts older than specified days"""
+        db = get_db()
         cutoff_date = datetime.now()
         cutoff_date = cutoff_date.replace(
             day=cutoff_date.day - days if cutoff_date.day > days else 1

@@ -31,6 +31,7 @@ class PatternRepository:
     @staticmethod
     async def get_by_id(pattern_id: int) -> Optional[Pattern]:
         """Get pattern by ID"""
+        db = get_db()
         row = await db.fetch_one(
             "SELECT * FROM patterns WHERE id = ?", (pattern_id,)
         )
@@ -42,6 +43,7 @@ class PatternRepository:
         min_confidence: float = 0.0
     ) -> List[Pattern]:
         """Get all patterns with optional filters"""
+        db = get_db()
         query = "SELECT * FROM patterns WHERE confidence >= ?"
         params = [min_confidence]
         
@@ -57,6 +59,7 @@ class PatternRepository:
     @staticmethod
     async def update(pattern: Pattern) -> Pattern:
         """Update an existing pattern"""
+        db = get_db()
         data = pattern.to_dict()
         pattern_id = data.pop("id")
         
@@ -75,6 +78,7 @@ class PatternRepository:
     @staticmethod
     async def delete(pattern_id: int) -> bool:
         """Delete a pattern"""
+        db = get_db()
         await db.execute("DELETE FROM patterns WHERE id = ?", (pattern_id,))
         await db.commit()
         return True
@@ -82,6 +86,7 @@ class PatternRepository:
     @staticmethod
     async def delete_all() -> bool:
         """Delete all patterns (for regeneration)"""
+        db = get_db()
         await db.execute("DELETE FROM patterns")
         await db.commit()
         return True
@@ -89,6 +94,7 @@ class PatternRepository:
     @staticmethod
     async def get_by_type(pattern_type: str) -> List[Pattern]:
         """Get patterns by type"""
+        db = get_db()
         rows = await db.fetch_all(
             """SELECT * FROM patterns 
                WHERE pattern_type = ?
@@ -100,6 +106,7 @@ class PatternRepository:
     @staticmethod
     async def update_last_seen(pattern_id: int, last_seen: date) -> bool:
         """Update the last seen date for a pattern"""
+        db = get_db()
         await db.execute(
             "UPDATE patterns SET last_seen = ? WHERE id = ?",
             (last_seen.isoformat(), pattern_id)
@@ -110,6 +117,7 @@ class PatternRepository:
     @staticmethod
     async def increment_frequency(pattern_id: int) -> bool:
         """Increment the frequency count for a pattern"""
+        db = get_db()
         await db.execute(
             "UPDATE patterns SET frequency = frequency + 1 WHERE id = ?",
             (pattern_id,)

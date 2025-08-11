@@ -817,35 +817,37 @@ function SettingsPage() {
 
                   {/* Password */}
                   <div className="bg-muted/10 rounded-lg p-3 border border-border/50">
-                    <Label htmlFor="password" className="text-white font-medium mb-3 block">Password</Label>
                     {!changingPassword ? (
-                      <div className="flex justify-end">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="password" className="text-white font-medium">Password</Label>
                         <button
                           onClick={() => setChangingPassword(true)}
                           className="relative overflow-hidden group px-3 py-1.5 rounded-md font-medium shadow hover:shadow-lg hover:scale-[1.01] transition-all duration-200 cursor-pointer inline-flex items-center justify-center bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                         >
                           <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                          <span className="relative z-10 font-medium">Change password</span>
+                          <span className="relative z-10 font-medium">Change</span>
                         </button>
                       </div>
                     ) : (
-                      <div className="space-y-2">
-                        <div className="relative">
-                          <Input
+                      <div>
+                        <Label htmlFor="password" className="text-white font-medium mb-3 block">Password</Label>
+                        <div className="space-y-2">
+                          <div className="relative">
+                            <Input
                             type={showCurrentPassword ? "text" : "password"}
                             value={currentPasswordForChange}
                             onChange={(e) => setCurrentPasswordForChange(e.target.value)}
                             placeholder="Current password"
                             className="bg-background/50 border-border text-white text-sm placeholder:text-gray-500 pr-10"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-                          >
-                            {showCurrentPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                          </button>
-                        </div>
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                            >
+                              {showCurrentPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                            </button>
+                          </div>
                         <div className="relative">
                           <Input
                             type={showNewPassword ? "text" : "password"}
@@ -908,41 +910,44 @@ function SettingsPage() {
                             </span>
                           </button>
                         </div>
+                        </div>
                       </div>
                     )}
                   </div>
 
                   {/* Recovery Phrase */}
                   <div className="bg-muted/10 rounded-lg p-3 border border-border/50">
-                    <Label htmlFor="passphrase" className="text-white font-medium mb-3 block">Recovery Phrase</Label>
                     {!changingPhrase ? (
-                      <div className="flex justify-end">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="passphrase" className="text-white font-medium">Recovery Phrase</Label>
                         <button
                           onClick={() => setChangingPhrase(true)}
                           className="relative overflow-hidden group px-3 py-1.5 rounded-md font-medium shadow hover:shadow-lg hover:scale-[1.01] transition-all duration-200 cursor-pointer inline-flex items-center justify-center bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                         >
                           <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                          <span className="relative z-10 font-medium">Change passphrase</span>
+                          <span className="relative z-10 font-medium">Change</span>
                         </button>
                       </div>
                     ) : (
-                      <div className="space-y-2">
-                        <div className="relative">
-                          <Input
-                            type={showPhrasePassword ? "text" : "password"}
-                            value={currentPasswordForPhrase}
-                            onChange={(e) => setCurrentPasswordForPhrase(e.target.value)}
-                            placeholder="Current password"
-                            className="bg-background/50 border-border text-white text-sm placeholder:text-gray-500 pr-10"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setShowPhrasePassword(!showPhrasePassword)}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-                          >
-                            {showPhrasePassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                          </button>
-                        </div>
+                      <div>
+                        <Label htmlFor="passphrase" className="text-white font-medium mb-3 block">Recovery Phrase</Label>
+                        <div className="space-y-2">
+                          <div className="relative">
+                            <Input
+                              type={showPhrasePassword ? "text" : "password"}
+                              value={currentPasswordForPhrase}
+                              onChange={(e) => setCurrentPasswordForPhrase(e.target.value)}
+                              placeholder="Current password"
+                              className="bg-background/50 border-border text-white text-sm placeholder:text-gray-500 pr-10"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowPhrasePassword(!showPhrasePassword)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                            >
+                              {showPhrasePassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                            </button>
+                          </div>
                         <textarea
                           rows={3}
                           value={newRecoveryPhrase}
@@ -978,6 +983,7 @@ function SettingsPage() {
                               )}
                             </span>
                           </button>
+                        </div>
                         </div>
                       </div>
                     )}
@@ -1023,8 +1029,8 @@ function SettingsPage() {
 
                   {/* Session Management */}
                   <div className="bg-muted/10 rounded-lg p-3 border border-border/50">
-                    <Label htmlFor="session" className="text-white font-medium mb-3 block">Session</Label>
-                    <div className="flex justify-end">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="session" className="text-white font-medium">Session</Label>
                       <button
                         onClick={handleLogout}
                         className="relative overflow-hidden group px-3 py-1.5 rounded-md font-medium shadow hover:shadow-lg hover:scale-[1.01] transition-all duration-200 cursor-pointer inline-flex items-center justify-center bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
