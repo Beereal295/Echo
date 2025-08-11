@@ -9,14 +9,31 @@ from app.db.migrations import run_migrations as run_db_migrations
 
 class Database:
     def __init__(self):
+        # Default to config path, but can be overridden by DatabaseManager
         self.db_path = settings.DATABASE_URL.replace("sqlite+aiosqlite:///", "")
         self._connection: Optional[aiosqlite.Connection] = None
+        self._current_path: Optional[str] = None
+    
+    async def set_db_path(self, new_path: str):
+        """Switch to a different database path"""
+        if self.db_path != new_path:
+            self.db_path = new_path
+            # Force immediate disconnection to ensure clean switch
+            if self._connection:
+                await self.disconnect()
+            self._current_path = None
     
     async def connect(self):
         """Create database connection"""
-        self._connection = await aiosqlite.connect(self.db_path)
-        self._connection.row_factory = aiosqlite.Row
-        await self._connection.execute("PRAGMA foreign_keys = ON")
+        # If we have a connection but path changed, close it first
+        if self._connection and self._current_path != self.db_path:
+            await self.disconnect()
+        
+        if not self._connection:
+            self._connection = await aiosqlite.connect(self.db_path)
+            self._connection.row_factory = aiosqlite.Row
+            await self._connection.execute("PRAGMA foreign_keys = ON")
+            self._current_path = self.db_path
     
     async def disconnect(self):
         """Close database connection"""
@@ -62,6 +79,10 @@ class Database:
 # Global database instance
 db = Database()
 
+def get_db():
+    """Get the current database instance - use this for all database operations"""
+    return db
+
 
 async def create_tables():
     """Create all database tables"""
@@ -97,8 +118,11 @@ async def init_db():
     print("Database initialized successfully")
 
 
-async def initialize_default_preferences():
+async def initialize_default_preferences(db_instance=None):
     """Insert default preference values"""
+    if db_instance is None:
+        db_instance = db
+    
     default_prefs = [
         ("hotkey", "F8", "string", "Global hotkey for voice recording"),
         ("ollama_port", "11434", "int", "Ollama server port"),
@@ -118,14 +142,39 @@ async def initialize_default_preferences():
     
     for key, value, value_type, description in default_prefs:
         # Check if preference already exists
-        existing = await db.fetch_one(
+        existing = await db_instance.fetch_one(
             "SELECT id FROM preferences WHERE key = ?", (key,)
         )
         if not existing:
-            await db.execute(
+            await db_instance.execute(
                 """INSERT INTO preferences (key, value, value_type, description) 
                    VALUES (?, ?, ?, ?)""",
                 (key, value, value_type, description)
             )
     
-    await db.commit()
+    await db_instance.commit()
+
+
+async def initialize_preferences_for_db(db_path: str):
+    """Initialize default preferences for a specific database file"""
+    async with aiosqlite.connect(db_path) as temp_db:
+        temp_db.row_factory = aiosqlite.Row
+        
+        # Create a temporary database wrapper
+        class TempDB:
+            def __init__(self, connection):
+                self.connection = connection
+            
+            async def fetch_one(self, query, params=()):
+                cursor = await self.connection.execute(query, params)
+                row = await cursor.fetchone()
+                return dict(row) if row else None
+            
+            async def execute(self, query, params=()):
+                return await self.connection.execute(query, params)
+            
+            async def commit(self):
+                await self.connection.commit()
+        
+        temp_db_instance = TempDB(temp_db)
+        await initialize_default_preferences(temp_db_instance)

@@ -1,7 +1,7 @@
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 
-from app.db.database import db
+from app.db.database import get_db
 from app.models.entry import Entry
 
 
@@ -18,6 +18,7 @@ class EntryRepository:
         placeholders = ", ".join(["?" for _ in data])
         values = list(data.values())
         
+        db = get_db()
         cursor = await db.execute(
             f"INSERT INTO entries ({columns}) VALUES ({placeholders})",
             tuple(values)
@@ -30,6 +31,7 @@ class EntryRepository:
     @staticmethod
     async def get_by_id(entry_id: int) -> Optional[Entry]:
         """Get entry by ID"""
+        db = get_db()
         row = await db.fetch_one(
             "SELECT * FROM entries WHERE id = ?", (entry_id,)
         )
@@ -52,12 +54,14 @@ class EntryRepository:
         query += " ORDER BY timestamp DESC LIMIT ? OFFSET ?"
         params.extend([limit, offset])
         
+        db = get_db()
         rows = await db.fetch_all(query, tuple(params))
         return [Entry.from_dict(row) for row in rows]
     
     @staticmethod
     async def update(entry: Entry) -> Entry:
         """Update an existing entry"""
+        db = get_db()
         data = entry.to_dict()
         entry_id = data.pop("id")
         
@@ -76,6 +80,7 @@ class EntryRepository:
     @staticmethod
     async def delete(entry_id: int) -> bool:
         """Delete an entry and related memories"""
+        db = get_db()
         try:
             # First delete related agent_memories to avoid foreign key constraint violation
             await db.execute(
@@ -96,12 +101,14 @@ class EntryRepository:
     @staticmethod
     async def count() -> int:
         """Get total count of entries"""
+        db = get_db()
         result = await db.fetch_one("SELECT COUNT(*) as count FROM entries")
         return result["count"] if result else 0
     
     @staticmethod
     async def get_all_for_streak() -> List[Entry]:
         """Get all entries for streak calculation (no pagination limit)"""
+        db = get_db()
         rows = await db.fetch_all(
             "SELECT * FROM entries ORDER BY timestamp DESC"
         )
@@ -133,6 +140,7 @@ class EntryRepository:
     ) -> List[Entry]:
         """Search entries by text content"""
         search_query = f"%{query}%"
+        db = get_db()
         rows = await db.fetch_all(
             """SELECT * FROM entries 
                WHERE raw_text LIKE ? 
@@ -150,6 +158,7 @@ class EntryRepository:
         end_date: datetime
     ) -> List[Entry]:
         """Get entries within a date range"""
+        db = get_db()
         rows = await db.fetch_all(
             """SELECT * FROM entries 
                WHERE timestamp BETWEEN ? AND ?
@@ -169,6 +178,7 @@ class EntryRepository:
     @staticmethod
     async def get_entries_without_embeddings(limit: int = 100) -> List[Entry]:
         """Get entries that don't have embeddings yet"""
+        db = get_db()
         rows = await db.fetch_all(
             """SELECT * FROM entries 
                WHERE embeddings IS NULL OR embeddings = '[]' OR embeddings = ''
@@ -220,6 +230,7 @@ class EntryRepository:
             query += " LIMIT ? OFFSET ?"
             params.extend([limit, offset])
         
+        db = get_db()
         rows = await db.fetch_all(query, tuple(params))
         return [Entry.from_dict(row) for row in rows]
     
@@ -229,6 +240,7 @@ class EntryRepository:
         import json
         embeddings_json = json.dumps(embeddings)
         
+        db = get_db()
         await db.execute(
             "UPDATE entries SET embeddings = ? WHERE id = ?",
             (embeddings_json, entry_id)
@@ -239,6 +251,7 @@ class EntryRepository:
     @staticmethod
     async def count_entries_with_embeddings() -> int:
         """Count entries that have embeddings"""
+        db = get_db()
         result = await db.fetch_one(
             """SELECT COUNT(*) as count FROM entries 
                WHERE embeddings IS NOT NULL AND embeddings != '[]' AND embeddings != '' AND LENGTH(embeddings) > 2"""
@@ -248,6 +261,7 @@ class EntryRepository:
     @staticmethod
     async def count_entries_without_embeddings() -> int:
         """Count entries that don't have embeddings"""
+        db = get_db()
         result = await db.fetch_one(
             """SELECT COUNT(*) as count FROM entries 
                WHERE embeddings IS NULL OR embeddings = '[]' OR embeddings = ''"""
@@ -257,6 +271,7 @@ class EntryRepository:
     @staticmethod
     async def get_entries_before_timestamp(timestamp: datetime, limit: int = 5) -> List[Entry]:
         """Get entries before a specific timestamp"""
+        db = get_db()
         rows = await db.fetch_all(
             "SELECT * FROM entries WHERE timestamp < ? ORDER BY timestamp DESC LIMIT ?",
             (timestamp, limit)
@@ -266,6 +281,7 @@ class EntryRepository:
     @staticmethod
     async def get_entries_after_timestamp(timestamp: datetime, limit: int = 5) -> List[Entry]:
         """Get entries after a specific timestamp"""
+        db = get_db()
         rows = await db.fetch_all(
             "SELECT * FROM entries WHERE timestamp > ? ORDER BY timestamp ASC LIMIT ?",
             (timestamp, limit)
@@ -287,6 +303,7 @@ class EntryRepository:
             return 0
         
         # Clear all embeddings - try multiple approaches
+        db = get_db()
         try:
             # Method 1: Update with NULL
             await db.execute(
@@ -315,6 +332,7 @@ class EntryRepository:
     @staticmethod
     async def get_all_entries_for_embedding_generation() -> List[Entry]:
         """Get all entries for embedding generation (no pagination)"""
+        db = get_db()
         rows = await db.fetch_all(
             """SELECT id, raw_text, enhanced_text, structured_summary, mode, 
                       embeddings, timestamp, mood_tags, word_count, processing_metadata

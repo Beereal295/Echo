@@ -1,6 +1,6 @@
 from typing import List, Optional, Any
 
-from app.db.database import db
+from app.db.database import get_db
 from app.models.preferences import Preferences
 
 
@@ -10,6 +10,7 @@ class PreferencesRepository:
     @staticmethod
     async def get_by_key(key: str) -> Optional[Preferences]:
         """Get preference by key"""
+        db = get_db()
         row = await db.fetch_one(
             "SELECT * FROM preferences WHERE key = ?", (key,)
         )
@@ -18,6 +19,7 @@ class PreferencesRepository:
     @staticmethod
     async def get_value(key: str, default: Any = None) -> Any:
         """Get typed preference value by key"""
+        db = get_db()
         pref = await PreferencesRepository.get_by_key(key)
         if pref:
             return pref.get_typed_value()
@@ -31,6 +33,7 @@ class PreferencesRepository:
         description: Optional[str] = None
     ) -> Preferences:
         """Set preference value (create or update)"""
+        db = get_db()
         # Convert value to string for storage
         if value_type == "json":
             import json
@@ -76,12 +79,14 @@ class PreferencesRepository:
     @staticmethod
     async def get_all() -> List[Preferences]:
         """Get all preferences"""
+        db = get_db()
         rows = await db.fetch_all("SELECT * FROM preferences ORDER BY key")
         return [Preferences.from_dict(row) for row in rows]
     
     @staticmethod
     async def delete(key: str) -> bool:
         """Delete a preference"""
+        db = get_db()
         await db.execute("DELETE FROM preferences WHERE key = ?", (key,))
         await db.commit()
         return True
@@ -89,6 +94,7 @@ class PreferencesRepository:
     @staticmethod
     async def get_multiple(keys: List[str]) -> dict:
         """Get multiple preferences as a dictionary"""
+        db = get_db()
         placeholders = ", ".join(["?" for _ in keys])
         rows = await db.fetch_all(
             f"SELECT * FROM preferences WHERE key IN ({placeholders})",

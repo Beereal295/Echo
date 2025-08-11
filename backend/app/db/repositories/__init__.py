@@ -2,7 +2,6 @@ from .entry_repository import EntryRepository
 from .pattern_repository import PatternRepository
 from .preferences_repository import PreferencesRepository
 from .draft_repository import DraftRepository
-from app.db.database import db
 
 # Repository instances
 _preferences_repo = None

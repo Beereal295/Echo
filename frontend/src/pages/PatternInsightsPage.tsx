@@ -980,7 +980,7 @@ function PatternInsightsPage() {
                     size="sm"
                     onClick={() => goToPage(currentPage - 1)}
                     disabled={currentPage === 1}
-                    className="flex items-center gap-2 bg-card border border-border text-yellow-400 hover:bg-card/80 hover:text-yellow-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex items-center gap-2 bg-card border border-border text-primary hover:bg-card/80 hover:text-primary/80 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <ChevronLeft className="h-4 w-4" />
                     Previous
@@ -996,7 +996,7 @@ function PatternInsightsPage() {
                     size="sm"
                     onClick={() => goToPage(currentPage + 1)}
                     disabled={currentPage === totalPages}
-                    className="flex items-center gap-2 bg-card border border-border text-yellow-400 hover:bg-card/80 hover:text-yellow-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex items-center gap-2 bg-card border border-border text-primary hover:bg-card/80 hover:text-primary/80 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Next
                     <ChevronRight className="h-4 w-4" />
@@ -1125,7 +1125,7 @@ function PatternInsightsPage() {
                       size="sm"
                       onClick={() => goToPage(currentPage - 1)}
                       disabled={currentPage === 1}
-                      className="flex items-center gap-2 bg-card border border-border text-yellow-400 hover:bg-card/80 hover:text-yellow-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex items-center gap-2 bg-card border border-border text-primary hover:bg-card/80 hover:text-primary/80 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <ChevronLeft className="h-4 w-4" />
                       Previous
@@ -1141,7 +1141,7 @@ function PatternInsightsPage() {
                       size="sm"
                       onClick={() => goToPage(currentPage + 1)}
                       disabled={currentPage === totalPages}
-                      className="flex items-center gap-2 bg-card border border-border text-yellow-400 hover:bg-card/80 hover:text-yellow-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex items-center gap-2 bg-card border border-border text-primary hover:bg-card/80 hover:text-primary/80 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Next
                       <ChevronRight className="h-4 w-4" />

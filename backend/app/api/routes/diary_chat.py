@@ -5,7 +5,7 @@ This module provides conversational AI endpoints that allow users to interact
 with their diary entries through natural language.
 """
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
 import logging
@@ -14,6 +14,7 @@ from app.api.schemas import SuccessResponse, ErrorResponse
 from app.services.diary_chat_service import get_diary_chat_service
 from app.db.repositories.conversation_repository import ConversationRepository
 from app.models.conversation import Conversation
+from app.auth.dependencies import get_current_user
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -51,7 +52,8 @@ class SearchFeedbackRequest(BaseModel):
 @router.post("/chat", response_model=SuccessResponse[DiaryChatResponse])
 async def chat_with_diary(
     request: DiaryChatRequest,
-    background_tasks: BackgroundTasks
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(get_current_user)
 ) -> SuccessResponse[DiaryChatResponse]:
     """
     Chat with your diary using natural language.
@@ -78,7 +80,8 @@ async def chat_with_diary(
             conversation_history=request.conversation_history,
             background_tasks=background_tasks,
             memory_enabled=request.memory_enabled,
-            debug_mode=request.debug_mode
+            debug_mode=request.debug_mode,
+            user_info=current_user
         )
         
         # Prepare response data

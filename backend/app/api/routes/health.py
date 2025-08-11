@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 from datetime import datetime
 
 from app.api.schemas import HealthResponse, SuccessResponse
-from app.db import db
+from app.db.database import get_db
 from app.core.config import settings
 
 router = APIRouter(prefix="/health", tags=["health"])
@@ -12,6 +12,7 @@ router = APIRouter(prefix="/health", tags=["health"])
 async def health_check():
     """Health check endpoint"""
     try:
+        db = get_db()
         # Test database connection
         await db.fetch_one("SELECT 1")
         database_status = "connected"
@@ -31,6 +32,7 @@ async def health_check():
 async def database_health():
     """Detailed database health check"""
     try:
+        db = get_db()
         # Test basic query
         result = await db.fetch_one("SELECT COUNT(*) as count FROM entries")
         entry_count = result["count"] if result else 0

@@ -12,6 +12,7 @@ router = APIRouter(prefix="/patterns", tags=["patterns"])
 async def check_pattern_threshold():
     """Check if pattern detection threshold is met"""
     try:
+        db = get_db()
         pattern_detector = PatternDetector()
         preferences_repo = await get_preferences_repository()
         
@@ -24,7 +25,6 @@ async def check_pattern_threshold():
         is_met = await pattern_detector.check_threshold_met(threshold)
         
         # Get current entry count
-        from app.db.database import db
         result = await db.fetch_one("SELECT COUNT(*) as count FROM entries")
         entry_count = result["count"] if result else 0
         
@@ -120,7 +120,7 @@ async def get_patterns():
 async def get_pattern_entries(pattern_id: int):
     """Get entries related to a specific pattern"""
     try:
-        from app.db.database import db
+        db = get_db()
         import json
         
         # Get pattern
@@ -182,7 +182,7 @@ async def get_pattern_entries(pattern_id: int):
 async def get_entries_by_keyword(keyword: str):
     """Get entries that contain a specific keyword"""
     try:
-        from app.db.database import db
+        db = get_db()
         import json
         
         # Try multiple search approaches

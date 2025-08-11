@@ -8,7 +8,7 @@ from typing import Any, Dict
 from contextlib import asynccontextmanager
 
 from app.services.memory_service import MemoryService
-from app.db.database import db
+from app.db.database import get_db
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +30,7 @@ class BackgroundTaskManager:
         logger.info("Starting background task manager")
         
         # Connect to database
+        db = get_db()
         await db.connect()
         
         # Start periodic tasks

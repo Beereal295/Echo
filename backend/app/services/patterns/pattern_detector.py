@@ -11,7 +11,7 @@ from sklearn.metrics import silhouette_score
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-from app.db.database import db
+from app.db.database import get_db
 from app.services.embedding_service import EmbeddingService
 from app.services.ollama.ollama_service import OllamaService
 from app.db.repositories.preferences_repository import PreferencesRepository
@@ -61,11 +61,13 @@ class PatternDetector:
     
     async def _get_entry_count(self) -> int:
         """Get total number of entries"""
+        db = get_db()
         result = await db.fetch_one("SELECT COUNT(*) as count FROM entries")
         return result["count"] if result else 0
     
     async def _fetch_entries_with_embeddings(self) -> List[Dict]:
         """Fetch all entries that have embeddings"""
+        db = get_db()
         query = """
             SELECT id, raw_text, enhanced_text, structured_summary, 
                    embeddings, timestamp, mood_tags
@@ -433,6 +435,7 @@ Respond with only the specific topic title (max 8 words). Be precise, not generi
     
     async def _store_patterns(self, patterns: List[Pattern]) -> None:
         """Store patterns in the database"""
+        db = get_db()
         try:
             # Clear existing patterns and insert new ones in a transaction
             await db.execute("DELETE FROM patterns")
@@ -472,6 +475,7 @@ Respond with only the specific topic title (max 8 words). Be precise, not generi
     
     async def get_patterns(self) -> List[Pattern]:
         """Get all stored patterns from database"""
+        db = get_db()
         rows = await db.fetch_all(
             "SELECT * FROM patterns ORDER BY frequency DESC, confidence DESC"
         )

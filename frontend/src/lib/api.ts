@@ -67,6 +67,12 @@ class ApiClient {
       'Content-Type': 'application/json',
     }
 
+    // Add session token if available
+    const sessionToken = localStorage.getItem('session_token')
+    if (sessionToken) {
+      defaultHeaders['Authorization'] = `Bearer ${sessionToken}`
+    }
+
     const config: RequestInit = {
       ...options,
       headers: {
@@ -723,6 +729,151 @@ class ApiClient {
     scheduled_deletion_date: string
   }>>> {
     return this.request('/memories/pending-deletion')
+  }
+
+  // Authentication endpoints
+  async getAuthStatus(): Promise<ApiResponse<{
+    initialized: boolean
+    has_users: boolean
+    user_count: number
+    requires_setup: boolean
+    error?: string
+  }>> {
+    return this.request('/auth/status')
+  }
+
+  async registerUser(data: {
+    name: string
+    password: string
+    recovery_phrase: string
+    emergency_key?: string
+  }): Promise<ApiResponse<{
+    user: {
+      id: number
+      username: string
+      display_name: string
+      created_at: string
+      last_login?: string
+      is_active: boolean
+    }
+    emergency_key_file: string
+    filename: string
+    message: string
+  }>> {
+    return this.request('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    })
+  }
+
+  async loginUser(data: {
+    name: string
+    password?: string
+    recovery_phrase?: string
+    emergency_key_content?: string
+  }): Promise<ApiResponse<{
+    user: {
+      id: number
+      username: string
+      display_name: string
+      created_at: string
+      last_login?: string
+      is_active: boolean
+    }
+    session_token: string
+    message: string
+  }>> {
+    return this.request('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    })
+  }
+
+  async logoutUser(): Promise<ApiResponse<{ message: string }>> {
+    return this.request('/auth/logout', {
+      method: 'POST'
+    })
+  }
+
+  async getSessionInfo(): Promise<ApiResponse<{
+    user: {
+      id: number
+      username: string
+      display_name: string
+      created_at: string
+      last_login?: string
+      is_active: boolean
+    } | null
+    is_authenticated: boolean
+    session_active: boolean
+  }>> {
+    return this.request('/auth/session')
+  }
+
+  async changePassword(data: {
+    current_password: string
+    new_password: string
+  }): Promise<ApiResponse<{
+    success: boolean
+    message: string
+  }>> {
+    return this.request('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    })
+  }
+
+  async changeRecoveryPhrase(data: {
+    current_password: string
+    new_recovery_phrase: string
+  }): Promise<ApiResponse<{
+    success: boolean
+    message: string
+  }>> {
+    return this.request('/auth/change-recovery-phrase', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    })
+  }
+
+  async uploadEmergencyKey(name: string, file: File): Promise<ApiResponse<{
+    user: {
+      id: number
+      username: string
+      display_name: string
+      created_at: string
+      last_login?: string
+      is_active: boolean
+    }
+    session_token: string
+    message: string
+  }>> {
+    const formData = new FormData()
+    formData.append('file', file)
+    
+    return this.request(`/auth/emergency/upload?name=${encodeURIComponent(name)}`, {
+      method: 'POST',
+      body: formData
+    })
+  }
+
+  async listUsers(): Promise<ApiResponse<Array<{
+    id: number
+    username: string
+    display_name: string
+    created_at: string
+    last_login?: string
+  }>>> {
+    return this.request('/auth/users')
+  }
+
+  async getUserCredentials(currentPassword: string): Promise<ApiResponse<{
+    password: string
+    recovery_phrase: string | null
+  }>> {
+    return this.request(`/auth/user/credentials?current_password=${encodeURIComponent(currentPassword)}`, {
+      method: 'GET'
+    })
   }
 }
 

@@ -5,11 +5,12 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { X, Eye, EyeOff, User, Shield, RefreshCw } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { api } from '@/lib/api'
 
 interface SignupModalProps {
   isOpen: boolean
   onClose: () => void
-  onSubmit: (data: SignupData) => void
+  onSuccess: (user: any) => void
 }
 
 export interface SignupData {
@@ -51,7 +52,7 @@ const recoveryPhraseExamples = [
   "Coffee tastes better when shared with friends"
 ]
 
-function SignupModal({ isOpen, onClose, onSubmit }: SignupModalProps) {
+function SignupModal({ isOpen, onClose, onSuccess }: SignupModalProps) {
   const [formData, setFormData] = useState<SignupData>({
     name: '',
     password: '',
@@ -66,6 +67,7 @@ function SignupModal({ isOpen, onClose, onSubmit }: SignupModalProps) {
   const [currentExample, setCurrentExample] = useState(0)
   const [emergencyKey, setEmergencyKey] = useState('')
   const [keyGenerated, setKeyGenerated] = useState(false)
+  const [apiError, setApiError] = useState('')
 
   const handleInputChange = (field: keyof SignupData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }))
@@ -110,17 +112,55 @@ function SignupModal({ isOpen, onClose, onSubmit }: SignupModalProps) {
     return Object.keys(newErrors).length === 0
   }
 
+  // Check if all fields are filled for submit button state
+  const isFormComplete = () => {
+    return (
+      formData.name.trim().length >= 2 &&
+      formData.password.length >= 8 &&
+      passwordStrength.strength !== 'weak' &&
+      formData.recoveryPhrase.trim().length >= 10 &&
+      emergencyKey.length > 0
+    )
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
     if (!validateForm()) return
     
     setIsSubmitting(true)
+    setApiError('')
     
     try {
-      await onSubmit(formData)
+      const response = await api.registerUser({
+        name: formData.name,
+        password: formData.password,
+        recovery_phrase: formData.recoveryPhrase,
+        emergency_key: emergencyKey
+      })
+
+      if (response.success && response.data) {
+        // Download the emergency key file
+        const content = response.data.emergency_key_file
+        const blob = new Blob([content], { type: 'application/json' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = response.data.filename
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+
+        // Call success handler
+        onSuccess(response.data.user)
+        onClose()
+      } else {
+        setApiError(response.error || 'Registration failed')
+      }
     } catch (error) {
       console.error('Signup failed:', error)
+      setApiError('Network error. Please try again.')
     } finally {
       setIsSubmitting(false)
     }
@@ -395,29 +435,32 @@ function SignupModal({ isOpen, onClose, onSubmit }: SignupModalProps) {
               )}
             </div>
 
+            {/* API Error Display */}
+            {apiError && (
+              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                <p className="text-sm text-red-400">{apiError}</p>
+              </div>
+            )}
+
             {/* Submit Button */}
             <Button
               type="submit"
-              disabled={isSubmitting}
-              className="w-full relative overflow-hidden group px-4 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20"
+              disabled={isSubmitting || !isFormComplete()}
+              className="w-full flex items-center gap-2 relative overflow-hidden group transition-all duration-200 bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 hover:text-primary disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-              <span className="relative z-10 text-primary font-semibold group-hover:text-primary transition-colors duration-300">
+              <div className="flex items-center gap-2">
                 {isSubmitting ? (
                   <>
-                    <motion.div
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                      className="mr-2"
-                    >
-                      <RefreshCw className="h-4 w-4" />
-                    </motion.div>
+                    <RefreshCw className="h-4 w-4 animate-spin" />
                     Creating Account...
                   </>
                 ) : (
-                  'Create Account'
+                  <>
+                    <User className="h-4 w-4" />
+                    Create Account
+                  </>
                 )}
-              </span>
+              </div>
             </Button>
           </form>
         </motion.div>

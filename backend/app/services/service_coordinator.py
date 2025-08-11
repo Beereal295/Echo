@@ -76,8 +76,8 @@ class ServiceCoordinator:
             self.pattern_detector = PatternDetector()
             logger.info("Pattern detector initialized")
             
-            # Refresh patterns on startup
-            await self._refresh_patterns()
+            # NOTE: Pattern detection will run automatically AFTER user login
+            # Not at startup since no user database is active yet
             
             self.initialized = True
             logger.info("All services initialized successfully")
@@ -127,6 +127,9 @@ class ServiceCoordinator:
         except Exception as e:
             logger.error(f"Error refreshing patterns: {e}")
     
+    async def refresh_patterns_for_user(self):
+        """Refresh patterns for the currently logged-in user"""
+        await self._refresh_patterns()
     async def cleanup(self):
         """Clean up all services"""
         try:

@@ -1,7 +1,7 @@
 from typing import Optional
 from datetime import datetime
 
-from app.db.database import db
+from app.db.database import get_db
 from app.models.draft import Draft
 
 

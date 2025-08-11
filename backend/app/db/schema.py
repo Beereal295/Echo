@@ -1,5 +1,7 @@
 """Database schema definitions"""
 
+import aiosqlite
+
 # Entries table
 ENTRIES_TABLE = """
 CREATE TABLE IF NOT EXISTS entries (
@@ -68,6 +70,40 @@ CREATE TABLE IF NOT EXISTS conversations (
 )
 """
 
+# Agent memories table for the memory system
+AGENT_MEMORIES_TABLE = """
+CREATE TABLE IF NOT EXISTS agent_memories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    memory_type TEXT NOT NULL,
+    content TEXT NOT NULL,
+    key_entities TEXT,
+    importance_score REAL DEFAULT 5.0,
+    base_importance_score REAL DEFAULT 5.0,
+    final_importance_score REAL DEFAULT 5.0,
+    score_source TEXT DEFAULT 'rule',
+    embedding TEXT,
+    source_conversation_id INTEGER,
+    related_entry_id INTEGER,
+    llm_processed INTEGER DEFAULT 0,
+    llm_processed_at DATETIME,
+    llm_importance_score REAL,
+    user_rated INTEGER DEFAULT 0,
+    user_score_adjustment INTEGER DEFAULT 0,
+    user_rated_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    last_accessed_at DATETIME,
+    access_count INTEGER DEFAULT 0,
+    is_active INTEGER DEFAULT 1,
+    marked_for_deletion INTEGER DEFAULT 0,
+    marked_for_deletion_at DATETIME,
+    deletion_reason TEXT,
+    archived INTEGER DEFAULT 0,
+    archived_at DATETIME,
+    FOREIGN KEY (related_entry_id) REFERENCES entries(id),
+    FOREIGN KEY (source_conversation_id) REFERENCES conversations(id)
+)
+"""
+
 # Schema version table for migrations
 SCHEMA_VERSION_TABLE = """
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -97,5 +133,20 @@ ALL_TABLES = [
     PATTERNS_TABLE,
     PREFERENCES_TABLE,
     DRAFTS_TABLE,
-    CONVERSATIONS_TABLE
+    CONVERSATIONS_TABLE,
+    AGENT_MEMORIES_TABLE
 ]
+
+
+async def create_tables(db_path: str):
+    """Create all tables and indexes for a user database"""
+    async with aiosqlite.connect(db_path) as db:
+        # Create all tables
+        for table_sql in ALL_TABLES:
+            await db.execute(table_sql)
+        
+        # Create all indexes
+        for index_sql in INDEXES:
+            await db.execute(index_sql)
+        
+        await db.commit()

@@ -1,7 +1,7 @@
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
-from app.db.database import db
+from app.db.database import get_db
 from app.models.conversation import Conversation
 
 
@@ -11,6 +11,7 @@ class ConversationRepository:
     @staticmethod
     async def create(conversation: Conversation) -> Conversation:
         """Create a new conversation"""
+        db = get_db()
         data = conversation.to_dict()
         del data["id"]  # Remove id for insert
         
@@ -30,6 +31,7 @@ class ConversationRepository:
     @staticmethod
     async def get_by_id(conversation_id: int) -> Optional[Conversation]:
         """Get conversation by ID"""
+        db = get_db()
         row = await db.fetch_one(
             "SELECT * FROM conversations WHERE id = ?", (conversation_id,)
         )
@@ -42,6 +44,7 @@ class ConversationRepository:
         conversation_type: Optional[str] = None
     ) -> List[Conversation]:
         """Get all conversations with pagination and filtering"""
+        db = get_db()
         query = "SELECT * FROM conversations"
         params = []
         

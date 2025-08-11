@@ -57,6 +57,8 @@ app.add_middleware(
     expose_headers=["*"]
 )
 
+# Authentication middleware removed - switching handled at login time
+
 # Add exception handlers
 app.add_exception_handler(HTTPException, http_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)

@@ -853,6 +853,7 @@ async def regenerate_all_embeddings(background_tasks: BackgroundTasks):
         Status of regeneration process
     """
     try:
+        db = get_db()
         logger.info("Starting complete embedding regeneration with BGE improvements")
         
         # First, synchronously clear all embeddings to ensure it happens
@@ -865,7 +866,6 @@ async def regenerate_all_embeddings(background_tasks: BackgroundTasks):
         if remaining > 0:
             logger.warning(f"Still have {remaining} entries with embeddings after clearing!")
             # Force clear with direct database access
-            from app.db.database import db
             await db.execute("UPDATE entries SET embeddings = NULL")
             await db.commit()
             logger.info("Force cleared all embeddings with direct SQL")
@@ -898,7 +898,7 @@ async def regenerate_all_embeddings(background_tasks: BackgroundTasks):
 async def force_clear_all_embeddings():
     """Force clear ALL embeddings immediately"""
     try:
-        from app.db.database import db
+        db = get_db()
         
         # Force clear with direct SQL
         logger.info("Force clearing ALL embeddings...")
@@ -1169,10 +1169,10 @@ async def regenerate_all_embeddings_with_raw_text():
     This is the definitive fix for semantic search issues.
     """
     try:
+        db = get_db()
         logger.info("Starting complete regeneration with RAW TEXT ONLY")
         
         # Step 1: Force clear ALL embeddings
-        from app.db.database import db
         before = await db.fetch_one("SELECT COUNT(*) as cnt FROM entries WHERE embeddings IS NOT NULL")
         before_count = before["cnt"] if before else 0
         
@@ -1279,7 +1279,7 @@ async def get_regeneration_status():
 async def test_embeddings():
     """Test endpoint to check embeddings directly"""
     try:
-        from app.db.database import db
+        db = get_db()
         
         # Get raw data from database
         rows = await db.fetch_all("SELECT id, embeddings FROM entries LIMIT 5")
@@ -1432,6 +1432,7 @@ async def _regenerate_all_embeddings_task():
     global _regeneration_status
     
     try:
+        db = get_db()
         logger.info("🚀 REGENERATION TASK STARTED")
         _regeneration_status["is_running"] = True
         _regeneration_status["progress"] = 0
@@ -1454,7 +1455,6 @@ async def _regenerate_all_embeddings_task():
             _add_regeneration_log(f"⚠️ WARNING: {remaining} entries still have embeddings!")
             _add_regeneration_log("Attempting to clear again...")
             # Try again with direct SQL
-            from app.db.database import db
             await db.execute("UPDATE entries SET embeddings = NULL")
             await db.commit()
             _add_regeneration_log("Force cleared all embeddings with direct SQL")

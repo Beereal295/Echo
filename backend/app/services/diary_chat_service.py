@@ -18,6 +18,7 @@ import re
 from contextvars import ContextVar
 
 from langchain_ollama import ChatOllama
+from app.db.database import get_db
 from langchain_core.tools import tool
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, ToolMessage
 
@@ -1031,8 +1032,8 @@ async def search_conversations(query: str, limit: int = 10) -> Dict[str, Any]:
             is_query=True  # Mark as query for BGE formatting
         )
         
-        # Import here to avoid circular dependency
-        from app.db.database import db
+        # Get database instance
+        db = get_db()
         import json
         
         # Get conversations with embeddings - same pattern as entries
@@ -1538,7 +1539,8 @@ class DiaryChatService:
         conversation_history: Optional[List[Dict[str, str]]] = None,
         background_tasks = None,
         memory_enabled: bool = True,
-        debug_mode: bool = False
+        debug_mode: bool = False,
+        user_info: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Process a user message with LangChain tool calling.
@@ -1710,20 +1712,22 @@ This requires searching their journal entries. You MUST use the search_diary_ent
             
             # Build dynamic system prompt based on ToolMessage presence
             today = date.today()
+            user_name = user_info.get('display_name', '') if user_info else ''
             date_context = f"Today is {today.strftime('%A, %B %d, %Y')}."
+            user_context = f" The user's name is \"{user_name}\"." if user_name else ""
             
             if has_tool_results:
                 # Tools were used - focus on tool results
                 if memory_enabled:
-                    system_prompt = f"You are Echo. {date_context} Look for tool results containing user's journal entries and conversations. Also check the 'What you remember about the user' section below for relevant memories. Analyze all this information and the user's question. Then thoughtfully reply as if you are talking to the user naturally using 'you' and 'your'. Keep the answers short (3-4 sentences) UNLESS the user asks otherwise or asks to show the whole entry."
+                    system_prompt = f"You are Echo.{date_context}{user_context} Look for tool results containing user's journal entries and conversations. Also check the 'What you remember about the user' section below for relevant memories. Analyze all this information and the user's question. Then thoughtfully reply as if you are talking to the user naturally using 'you' and 'your'. Keep the answers short (3-4 sentences) UNLESS the user asks otherwise or asks to show the whole entry."
                 else:
-                    system_prompt = f"You are Echo. {date_context} Look for tool results containing user's journal entries and conversations. Analyze this information and the user's question. Then thoughtfully reply as if you are talking to the user naturally using 'you' and 'your'. Keep the answers short (3-4 sentences) UNLESS the user asks otherwise or asks to show the whole entry."
+                    system_prompt = f"You are Echo.{date_context}{user_context} Look for tool results containing user's journal entries and conversations. Analyze this information and the user's question. Then thoughtfully reply as if you are talking to the user naturally using 'you' and 'your'. Keep the answers short (3-4 sentences) UNLESS the user asks otherwise or asks to show the whole entry."
             else:
                 # No tools used - natural conversation
                 if memory_enabled:
-                    system_prompt = f"You are Echo, the user's journaling companion. {date_context} Respond naturally and warmly. Carefully analyze the user's query and share your response. Also check the 'What you remember about the user' section below for relevant context."
+                    system_prompt = f"You are Echo, the user's journaling companion.{date_context}{user_context} Respond naturally and warmly. Carefully analyze the user's query and share your response. Also check the 'What you remember about the user' section below for relevant context."
                 else:
-                    system_prompt = f"You are Echo, the user's journaling companion. {date_context} Respond naturally and warmly. Carefully analyze the user's query and share your response."
+                    system_prompt = f"You are Echo, the user's journaling companion.{date_context}{user_context} Respond naturally and warmly. Carefully analyze the user's query and share your response."
             
             if memory_context:
                 system_prompt += f"\n\n## What you remember about the user:\n{memory_context}"

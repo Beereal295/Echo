@@ -37,6 +37,31 @@ CREATE INDEX IF NOT EXISTS idx_conversations_type ON conversations(conversation_
     ),
     (
         4,
+        "Create agent_memories table",
+        """CREATE TABLE IF NOT EXISTS agent_memories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    memory_type TEXT NOT NULL,
+    content TEXT NOT NULL,
+    key_entities TEXT,
+    importance_score REAL DEFAULT 5.0,
+    embedding TEXT,
+    source_conversation_id INTEGER,
+    related_entry_id INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    last_accessed_at DATETIME,
+    access_count INTEGER DEFAULT 0,
+    is_active INTEGER DEFAULT 1,
+    FOREIGN KEY (related_entry_id) REFERENCES entries(id),
+    FOREIGN KEY (source_conversation_id) REFERENCES conversations(id)
+);
+CREATE INDEX IF NOT EXISTS idx_memory_type ON agent_memories(memory_type);
+CREATE INDEX IF NOT EXISTS idx_memory_importance ON agent_memories(importance_score DESC);
+CREATE INDEX IF NOT EXISTS idx_memory_active ON agent_memories(is_active);
+CREATE INDEX IF NOT EXISTS idx_memory_entities ON agent_memories(key_entities);""",
+        """DROP TABLE IF EXISTS agent_memories;"""
+    ),
+    (
+        5,
         "Add smart_tags column to entries table",
         """ALTER TABLE entries ADD COLUMN smart_tags TEXT;
 CREATE INDEX IF NOT EXISTS idx_entries_smart_tags ON entries(smart_tags);""",
@@ -44,7 +69,7 @@ CREATE INDEX IF NOT EXISTS idx_entries_smart_tags ON entries(smart_tags);""",
 ALTER TABLE entries DROP COLUMN smart_tags;"""
     ),
     (
-        5,
+        6,
         "Add advanced memory scoring fields",
         """-- Add new scoring fields to agent_memories
 ALTER TABLE agent_memories ADD COLUMN base_importance_score REAL DEFAULT 5.0;
@@ -99,7 +124,23 @@ async def apply_migration(db, version: int, description: str, up_sql: str):
         # Split multiple statements by semicolon and execute each one
         statements = [stmt.strip() for stmt in up_sql.split(';') if stmt.strip()]
         for statement in statements:
-            await db.execute(statement)
+            try:
+                await db.execute(statement)
+            except Exception as e:
+                # Check if it's a harmless "already exists" error
+                error_msg = str(e).lower()
+                if any(phrase in error_msg for phrase in [
+                    "duplicate column name",
+                    "table already exists", 
+                    "index already exists",
+                    "column already exists"
+                ]):
+                    print(f"Migration {version}: Skipping statement (already exists): {statement}")
+                    continue
+                else:
+                    print(f"Migration {version} failed on statement: {statement}")
+                    print(f"Error: {e}")
+                    raise
     
     await db.execute(
         "INSERT INTO schema_version (version, applied_at, description) VALUES (?, ?, ?)",
@@ -112,10 +153,15 @@ async def apply_migration(db, version: int, description: str, up_sql: str):
 async def run_migrations(db):
     """Run all pending migrations"""
     current_version = await get_current_version(db)
+    print(f"Current database version: {current_version}")
     
     for version, description, up_sql, _ in MIGRATIONS:
+        print(f"Checking migration {version}: {description}")
         if version > current_version:
+            print(f"Applying migration {version}: {description}")
             await apply_migration(db, version, description, up_sql)
+        else:
+            print(f"Skipping migration {version} (already applied)")
     
     final_version = await get_current_version(db)
     if final_version > current_version:

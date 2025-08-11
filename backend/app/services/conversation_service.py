@@ -18,6 +18,7 @@ from enum import Enum
 
 from app.models.conversation import Conversation
 from app.db.repositories.conversation_repository import ConversationRepository
+from app.db.database import get_db
 from app.services.diary_chat_service import get_diary_chat_service
 from app.services.memory_service import MemoryService
 from sentence_transformers import SentenceTransformer
@@ -362,7 +363,7 @@ class ConversationService:
             logger.info(f"LLM extracted and stored {stored_count} memories from conversation {conversation_id}")
             
             # Mark conversation as processed for memory extraction
-            from app.db.database import db
+            db = get_db()
             await db.execute("""
                 UPDATE conversations 
                 SET memory_extracted = 1,

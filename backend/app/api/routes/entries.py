@@ -1,5 +1,5 @@
-from fastapi import APIRouter, HTTPException, Query, Path, BackgroundTasks
-from typing import Optional, List
+from fastapi import APIRouter, HTTPException, Query, Path, BackgroundTasks, Depends
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 import logging
 
@@ -24,6 +24,7 @@ from app.services.embedding_service import get_embedding_service
 from app.services.mood_analysis import get_mood_analysis_service
 from app.services.diary_chat_service import invalidate_diary_cache
 from app.services.smart_tagging_service import get_smart_tagging_service
+from app.auth.dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +69,7 @@ async def _generate_embedding_for_entry(entry_id: int, text: str = None):
 async def _extract_entry_memories(entry_id: int):
     """Background task to extract memories from an entry using LLM"""
     try:
+        db = get_db()
         from app.services.memory_service import MemoryService
         
         logger.info(f"Starting LLM memory extraction for entry {entry_id}")
@@ -107,7 +109,6 @@ async def _extract_entry_memories(entry_id: int):
         logger.info(f"LLM extracted and stored {stored_count} memories from entry {entry_id}")
         
         # Mark entry as processed for memory extraction
-        from app.db.database import db
         await db.execute("""
             UPDATE entries 
             SET memory_extracted = 1,

@@ -3,8 +3,10 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { format } from 'date-fns'
-import SignupModal, { SignupData } from '@/components/SignupModal'
-import LoginModal, { LoginData } from '@/components/LoginModal'
+import { useNavigate } from 'react-router-dom'
+import SignupModal from '@/components/SignupModal'
+import LoginModal from '@/components/LoginModal'
+import SuccessModal from '@/components/SuccessModal'
 
 // Typewriter Text Component (from TalkToYourDiaryPage)
 interface TypewriterTextProps {
@@ -61,29 +63,48 @@ function TypewriterText({ text, delay = 0, className = '' }: TypewriterTextProps
 }
 
 function LandingPage() {
+  const navigate = useNavigate()
   const [showSignupModal, setShowSignupModal] = useState(false)
   const [showSigninModal, setShowSigninModal] = useState(false)
   const [currentTime, setCurrentTime] = useState(new Date())
+  const [showSuccessModal, setShowSuccessModal] = useState(false)
+  const [successData, setSuccessData] = useState({ title: '', message: '' })
 
-  // Mock handlers for now - these will be connected to backend later
-  const handleSignup = async (data: SignupData) => {
-    console.log('Signup data:', data)
-    // TODO: Connect to backend auth service
-    alert(`Welcome ${data.name}! Account creation coming soon.\nRecovery phrase: "${data.recoveryPhrase}"\nEmergency key generated: ${data.emergencyKey ? 'Yes' : 'No'}`)
-    setShowSignupModal(false)
+  const handleSignupSuccess = (user: any) => {
+    console.log('Signup successful:', user)
+    setSuccessData({
+      title: 'Welcome to Echo!',
+      message: `Your account has been created successfully, ${user.display_name}! Get ready to capture your thoughts.`
+    })
+    setShowSuccessModal(true)
+    
+    // Navigate to home page after success modal
+    setTimeout(() => {
+      navigate('/', { replace: true })
+      window.location.reload()
+    }, 3000)
   }
 
-  const handleLogin = async (data: LoginData) => {
-    console.log('Login data:', data)
-    // TODO: Connect to backend auth service
-    const method = data.password ? 'password' : data.recoveryPhrase ? 'recovery phrase' : 'emergency key'
-    alert(`Welcome back ${data.name}! Login with ${method} coming soon.`)
-    setShowSigninModal(false)
+  const handleLoginSuccess = (user: any) => {
+    console.log('Login successful:', user)
+    setSuccessData({
+      title: 'Welcome Back!',
+      message: `Good to see you again, ${user.display_name}! Let's dive back into your thoughts.`
+    })
+    setShowSuccessModal(true)
+    
+    // Navigate to home page after success modal
+    setTimeout(() => {
+      navigate('/', { replace: true })
+      window.location.reload()
+    }, 3000)
   }
 
-  const handleForgotPassword = () => {
-    // Recovery functionality is handled within LoginModal
-    console.log('Password recovery initiated')
+  const handleSuccessModalClose = () => {
+    setShowSuccessModal(false)
+    // Navigate to home page immediately when manually closed
+    navigate('/', { replace: true })
+    window.location.reload()
   }
 
   // Animation variants - EXACT same as HomePage
@@ -291,14 +312,21 @@ function LandingPage() {
       <SignupModal
         isOpen={showSignupModal}
         onClose={() => setShowSignupModal(false)}
-        onSubmit={handleSignup}
+        onSuccess={handleSignupSuccess}
       />
 
       <LoginModal
         isOpen={showSigninModal}
         onClose={() => setShowSigninModal(false)}
-        onSubmit={handleLogin}
-        onForgotPassword={handleForgotPassword}
+        onSuccess={handleLoginSuccess}
+      />
+
+      <SuccessModal
+        isOpen={showSuccessModal}
+        title={successData.title}
+        message={successData.message}
+        onClose={handleSuccessModalClose}
+        autoCloseMs={3000}
       />
     </div>
   )

@@ -8,7 +8,7 @@ import logging
 
 from app.services.memory_service import MemoryService
 from app.services.background_tasks import background_manager, get_background_task_status
-from app.db.database import db
+from app.db.database import get_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/memories", tags=["memories"])
@@ -62,6 +62,7 @@ async def get_paginated_memories(
     Returns memories with pagination metadata.
     """
     try:
+        db = get_db()
         # Build query based on filter
         base_query = "FROM agent_memories WHERE (is_active = 1 OR archived = 1)"
         
@@ -155,6 +156,7 @@ async def get_memory_statistics():
     Get statistics about stored memories.
     """
     try:
+        db = get_db()
         # Get various statistics
         stats_result = await db.fetch_one("""
             SELECT 
@@ -193,6 +195,7 @@ async def search_memories(
     Search memories with optional type filter.
     """
     try:
+        db = get_db()
         # Build query
         sql_query = """
             SELECT * FROM agent_memories 
@@ -266,6 +269,7 @@ async def get_pending_deletion_memories():
     Get memories marked for deletion.
     """
     try:
+        db = get_db()
         memories = await db.fetch_all("""
             SELECT id, content, deletion_reason, marked_for_deletion_at,
                    DATE(marked_for_deletion_at, '+14 days') as scheduled_deletion_date

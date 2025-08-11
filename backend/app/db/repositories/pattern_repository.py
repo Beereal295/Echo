@@ -1,7 +1,7 @@
 from typing import List, Optional
 from datetime import date
 
-from app.db.database import db
+from app.db.database import get_db
 from app.models.pattern import Pattern
 
 
@@ -10,6 +10,7 @@ class PatternRepository:
     
     @staticmethod
     async def create(pattern: Pattern) -> Pattern:
+        db = get_db()
         """Create a new pattern"""
         data = pattern.to_dict()
         del data["id"]

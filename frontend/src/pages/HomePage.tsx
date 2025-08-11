@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from 'framer-motion'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { FileText, Sparkles, Zap, Pen, BookOpen, Clock, FileAudio2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { FileText, Sparkles, Zap, Pen, BookOpen, Clock, FileAudio2, LogOut } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { api } from '@/lib/api'
@@ -17,6 +18,7 @@ function HomePage() {
   const [isTyping, setIsTyping] = useState(false)
   const [showPlusMenu, setShowPlusMenu] = useState(false)
   const [heroMessage, setHeroMessage] = useState('')
+  const [userName, setUserName] = useState('')
 
   // Hero messages array
   const heroMessages = [
@@ -48,9 +50,10 @@ function HomePage() {
     setHeroMessage(heroMessages[randomIndex])
   }, [])
 
-  // Load user data for insights
+  // Load user data for insights and user info
   useEffect(() => {
     loadUserData()
+    loadUserInfo()
   }, [])
 
   // Time-based snarky comments
@@ -134,6 +137,17 @@ function HomePage() {
       }
     } catch (error) {
       console.error('Failed to load user data:', error)
+    }
+  }
+
+  const loadUserInfo = async () => {
+    try {
+      const response = await api.getSessionInfo()
+      if (response.success && response.data?.user) {
+        setUserName(response.data.user.display_name || response.data.user.username)
+      }
+    } catch (error) {
+      console.error('Failed to load user info:', error)
     }
   }
 
@@ -240,6 +254,24 @@ function HomePage() {
       mode: "structured"
     }
   ]
+
+  // Logout function
+  const handleLogout = async () => {
+    try {
+      await api.logoutUser()
+      localStorage.removeItem('session_token')
+      
+      // Dispatch logout event to trigger AuthGuard update
+      window.dispatchEvent(new CustomEvent('auth-logout'))
+    } catch (error) {
+      console.error('Logout failed:', error)
+      // Even if API call fails, clear local session and redirect
+      localStorage.removeItem('session_token')
+      
+      // Dispatch logout event to trigger AuthGuard update
+      window.dispatchEvent(new CustomEvent('auth-logout'))
+    }
+  }
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -370,7 +402,7 @@ function HomePage() {
           />
         </motion.div>
       </div>
-      <div className="max-w-6xl mx-auto w-full flex flex-col flex-1 justify-center">
+      <div className="max-w-6xl mx-auto w-full flex flex-col flex-1 justify-center -mt-8">
         <motion.div 
           className="flex flex-col"
           variants={containerVariants}
@@ -380,12 +412,12 @@ function HomePage() {
       {/* Hero Section */}
       <motion.div className="text-center mb-16" variants={itemVariants}>
         <motion.h1 
-          className="text-5xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-white via-purple-400 to-blue-400 bg-clip-text text-transparent"
+          className="text-5xl md:text-6xl font-bold mb-8 pb-3 bg-gradient-to-r from-white via-purple-400 to-blue-400 bg-clip-text text-transparent"
           initial={{ scale: 0.9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ duration: 0.5 }}
         >
-          Welcome to Echo Journal
+          {userName ? `Welcome back, ${userName}` : 'Welcome to Echo Journal'}
         </motion.h1>
         <motion.p 
           className="text-gray-300 text-lg md:text-xl max-w-4xl mx-auto leading-relaxed"
@@ -444,6 +476,24 @@ function HomePage() {
             </Card>
           </motion.div>
         ))}
+      </motion.div>
+
+      {/* Top Left Logout Button */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.8 }}
+        className="absolute top-4 left-4 md:top-8 md:left-8 z-30"
+      >
+        <Button
+          onClick={handleLogout}
+          variant="ghost"
+          size="sm"
+          className="text-gray-300 hover:text-white hover:bg-red-500/10 transition-colors duration-200 gap-2"
+        >
+          <LogOut className="h-4 w-4" />
+          Logout
+        </Button>
       </motion.div>
 
       {/* Top Right Clock - NO CARD */}

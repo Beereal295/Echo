@@ -4,12 +4,12 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { X, Eye, EyeOff, LogIn, Shield, RefreshCw } from 'lucide-react'
+import { api } from '@/lib/api'
 
 interface LoginModalProps {
   isOpen: boolean
   onClose: () => void
-  onSubmit: (data: LoginData) => void
-  onForgotPassword: () => void
+  onSuccess: (user: any) => void
 }
 
 export interface LoginData {
@@ -19,7 +19,7 @@ export interface LoginData {
   emergencyKeyFile?: File
 }
 
-function LoginModal({ isOpen, onClose, onSubmit, onForgotPassword }: LoginModalProps) {
+function LoginModal({ isOpen, onClose, onSuccess }: LoginModalProps) {
   const [formData, setFormData] = useState<LoginData>({
     name: '',
     password: '',
@@ -31,6 +31,7 @@ function LoginModal({ isOpen, onClose, onSubmit, onForgotPassword }: LoginModalP
   const [errors, setErrors] = useState<Partial<LoginData>>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [loginMethod, setLoginMethod] = useState<'password' | 'phrase' | 'emergency'>('password')
+  const [apiError, setApiError] = useState('')
 
   const handleInputChange = (field: keyof LoginData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }))
@@ -85,11 +86,40 @@ function LoginModal({ isOpen, onClose, onSubmit, onForgotPassword }: LoginModalP
     if (!validateForm()) return
     
     setIsSubmitting(true)
+    setApiError('')
     
     try {
-      await onSubmit(formData)
+      let response;
+      
+      if (loginMethod === 'emergency' && formData.emergencyKeyFile) {
+        // Handle emergency key file upload
+        response = await api.uploadEmergencyKey(formData.name, formData.emergencyKeyFile)
+      } else {
+        // Handle regular login (password or recovery phrase)
+        const loginData: any = { name: formData.name }
+        
+        if (loginMethod === 'password') {
+          loginData.password = formData.password
+        } else if (loginMethod === 'phrase') {
+          loginData.recovery_phrase = formData.recoveryPhrase
+        }
+        
+        response = await api.loginUser(loginData)
+      }
+
+      if (response.success && response.data) {
+        // Store session token if needed (for future requests)
+        localStorage.setItem('session_token', response.data.session_token)
+        
+        // Call success handler
+        onSuccess(response.data.user)
+        onClose()
+      } else {
+        setApiError(response.error || 'Login failed')
+      }
     } catch (error) {
       console.error('Login failed:', error)
+      setApiError('Network error. Please try again.')
     } finally {
       setIsSubmitting(false)
     }
@@ -188,7 +218,7 @@ function LoginModal({ isOpen, onClose, onSubmit, onForgotPassword }: LoginModalP
                   onClick={() => switchLoginMethod('phrase')}
                   className={`flex-1 px-3 py-2 text-xs font-medium rounded-md transition-colors ${
                     loginMethod === 'phrase'
-                      ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
+                      ? 'bg-primary/20 text-primary border border-primary/30'
                       : 'text-gray-400 hover:text-white'
                   }`}
                 >
@@ -299,31 +329,32 @@ function LoginModal({ isOpen, onClose, onSubmit, onForgotPassword }: LoginModalP
               )}
             </div>
 
+            {/* API Error Display */}
+            {apiError && (
+              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                <p className="text-sm text-red-400">{apiError}</p>
+              </div>
+            )}
+
             {/* Submit Button */}
             <Button
               type="submit"
               disabled={isSubmitting}
-              className="w-full relative overflow-hidden group px-4 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20"
+              className="w-full flex items-center gap-2 relative overflow-hidden group transition-all duration-200 bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 hover:text-primary disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-              <span className="relative z-10 text-primary font-semibold group-hover:text-primary transition-colors duration-300">
+              <div className="flex items-center gap-2">
                 {isSubmitting ? (
                   <>
-                    <motion.div
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                      className="mr-2"
-                    >
-                      <RefreshCw className="h-4 w-4" />
-                    </motion.div>
+                    <RefreshCw className="h-4 w-4 animate-spin" />
                     {loginMethod === 'emergency' ? 'Recovering Account...' : 'Signing In...'}
                   </>
                 ) : (
                   <>
+                    <LogIn className="h-4 w-4" />
                     {loginMethod === 'emergency' ? 'Recover Account' : 'Sign In'}
                   </>
                 )}
-              </span>
+              </div>
             </Button>
           </form>
         </motion.div>

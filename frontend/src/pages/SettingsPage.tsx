@@ -7,9 +7,10 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Slider } from '@/components/ui/slider'
+import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/use-toast'
 import { api } from '@/lib/api'
-import { Keyboard, Globe, Mic, Settings2, Loader2, CheckCircle2, XCircle, FileText, MessageSquare, Brain, AlertTriangle, Palette } from 'lucide-react'
+import { Keyboard, Globe, Mic, Settings2, Loader2, CheckCircle2, XCircle, FileText, MessageSquare, Brain, AlertTriangle, Palette, User, LogOut, Eye, EyeOff, Download, Shield, Lock } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 
 function SettingsPage() {
@@ -58,12 +59,21 @@ function SettingsPage() {
   const [autoSaveInterval, setAutoSaveInterval] = useState('30')
   const [theme, setTheme] = useState('system')
 
+  // User settings
+  const [userName, setUserName] = useState('')
+  const [changingPassword, setChangingPassword] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [changingPhrase, setChangingPhrase] = useState(false)
+  const [newRecoveryPhrase, setNewRecoveryPhrase] = useState('')
+
   // Get current tab from URL or default to 'general'
   const currentTab = searchParams.get('tab') || 'general'
 
   // Load preferences on mount
   useEffect(() => {
     loadPreferences()
+    loadUserInfo()
   }, [])
 
   // Load available voices when TTS tab is active
@@ -187,6 +197,17 @@ function SettingsPage() {
       })
     } finally {
       setLoadingVoices(false)
+    }
+  }
+
+  const loadUserInfo = async () => {
+    try {
+      const response = await api.getSessionInfo()
+      if (response.success && response.data?.user) {
+        setUserName(response.data.user.display_name || response.data.user.username)
+      }
+    } catch (error) {
+      console.error('Failed to load user info:', error)
     }
   }
 
@@ -380,6 +401,245 @@ function SettingsPage() {
     setSearchParams({ tab: tabValue })
   }
 
+  // Logout function
+  const handleLogout = async () => {
+    try {
+      await api.logoutUser()
+      localStorage.removeItem('session_token')
+      
+      // Dispatch logout event to trigger AuthGuard update
+      window.dispatchEvent(new CustomEvent('auth-logout'))
+      
+      toast({
+        title: 'Logged out',
+        description: 'You have been logged out successfully'
+      })
+    } catch (error) {
+      console.error('Logout failed:', error)
+      // Even if API call fails, clear local session and redirect
+      localStorage.removeItem('session_token')
+      window.dispatchEvent(new CustomEvent('auth-logout'))
+    }
+  }
+
+  // User settings state  
+  const [currentPasswordForChange, setCurrentPasswordForChange] = useState('')
+  const [currentPasswordForPhrase, setCurrentPasswordForPhrase] = useState('')
+  const [currentPasswordForKey, setCurrentPasswordForKey] = useState('')
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [showPhrasePassword, setShowPhrasePassword] = useState(false)
+  const [showKeyPassword, setShowKeyPassword] = useState(false)
+  const [keyPasswordVerified, setKeyPasswordVerified] = useState(false)
+
+  // Handle password change
+  const handleChangePassword = async () => {
+    if (newPassword !== confirmPassword) {
+      toast({
+        title: 'Error',
+        description: 'Passwords do not match',
+        variant: 'destructive'
+      })
+      return
+    }
+
+    if (newPassword.length < 8) {
+      toast({
+        title: 'Error',
+        description: 'Password must be at least 8 characters long',
+        variant: 'destructive'
+      })
+      return
+    }
+
+    if (!currentPasswordForChange) {
+      toast({
+        title: 'Error',
+        description: 'Current password is required',
+        variant: 'destructive'
+      })
+      return
+    }
+
+    setSaving(true)
+    try {
+      const response = await api.changePassword({
+        current_password: currentPasswordForChange,
+        new_password: newPassword
+      })
+
+      if (response.success) {
+        toast({
+          title: 'Password changed',
+          description: 'Your password has been updated successfully'
+        })
+        setChangingPassword(false)
+        setNewPassword('')
+        setConfirmPassword('')
+        setCurrentPasswordForChange('')
+      } else {
+        toast({
+          title: 'Error',
+          description: response.error || 'Failed to change password',
+          variant: 'destructive'
+        })
+      }
+    } catch (error) {
+      console.error('Failed to change password:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to change password',
+        variant: 'destructive'
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Handle recovery phrase change
+  const handleChangeRecoveryPhrase = async () => {
+    if (!newRecoveryPhrase.trim() || newRecoveryPhrase.length < 10) {
+      toast({
+        title: 'Error',
+        description: 'Recovery phrase must be at least 10 characters long',
+        variant: 'destructive'
+      })
+      return
+    }
+
+    if (!currentPasswordForPhrase) {
+      toast({
+        title: 'Error',
+        description: 'Current password is required',
+        variant: 'destructive'
+      })
+      return
+    }
+
+    setSaving(true)
+    try {
+      const response = await api.changeRecoveryPhrase({
+        current_password: currentPasswordForPhrase,
+        new_recovery_phrase: newRecoveryPhrase
+      })
+
+      if (response.success) {
+        toast({
+          title: 'Recovery phrase changed',
+          description: 'Your recovery phrase has been updated successfully'
+        })
+        setChangingPhrase(false)
+        setNewRecoveryPhrase('')
+        setCurrentPasswordForPhrase('')
+      } else {
+        toast({
+          title: 'Error',
+          description: response.error || 'Failed to change recovery phrase',
+          variant: 'destructive'
+        })
+      }
+    } catch (error) {
+      console.error('Failed to change recovery phrase:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to change recovery phrase',
+        variant: 'destructive'
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Verify password for emergency key
+  const verifyKeyPassword = async () => {
+    if (!currentPasswordForKey) {
+      return
+    }
+
+    try {
+      // Verify password
+      const credentialsResponse = await api.getUserCredentials(currentPasswordForKey)
+      if (credentialsResponse.success) {
+        setKeyPasswordVerified(true)
+      } else {
+        setKeyPasswordVerified(false)
+      }
+    } catch (error) {
+      setKeyPasswordVerified(false)
+    }
+  }
+
+  // Download current user's emergency recovery key
+  const downloadEmergencyKey = async () => {
+    try {
+      // Get current user's session info
+      const sessionResponse = await api.getSessionInfo()
+      if (!sessionResponse.success || !sessionResponse.data?.user) {
+        throw new Error('Failed to get user information')
+      }
+      
+      const user = sessionResponse.data.user
+      
+      // Verify password and get the ACTUAL emergency key
+      const credentialsResponse = await api.getUserCredentials(currentPasswordForKey)
+      if (!credentialsResponse.success) {
+        toast({
+          title: 'Error',
+          description: 'Invalid password',
+          variant: 'destructive'
+        })
+        setKeyPasswordVerified(false)
+        return
+      }
+      
+      // Get the ACTUAL emergency key from signup (not a fake generated one)
+      const actualEmergencyKey = credentialsResponse.data.emergency_key
+      if (!actualEmergencyKey) {
+        toast({
+          title: 'Error',
+          description: 'Emergency key not found',
+          variant: 'destructive'
+        })
+        return
+      }
+      
+      // Create the emergency key file content with the ACTUAL key
+      const keyData = {
+        type: 'echo_emergency_key',
+        key: actualEmergencyKey,
+        created: new Date().toISOString(),
+        username: user.username,
+        name: user.display_name
+      }
+      
+      const content = JSON.stringify(keyData, null, 2)
+      const blob = new Blob([content], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${user.username}_recovery_${Date.now()}.echounlock`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+
+      setCurrentPasswordForKey('')
+      setKeyPasswordVerified(false)
+      toast({
+        title: 'Emergency key downloaded',
+        description: 'Your emergency recovery key has been downloaded',
+      })
+    } catch (error) {
+      console.error('Failed to download emergency key:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to download emergency key',
+        variant: 'destructive'
+      })
+    }
+  }
+
   if (loading) {
     return (
       <div className="max-w-4xl mx-auto p-8">
@@ -402,10 +662,14 @@ function SettingsPage() {
         </div>
 
         <Tabs value={currentTab} onValueChange={handleTabChange} className="flex-1 flex flex-col">
-          <TabsList className="grid w-full max-w-2xl grid-cols-5 mb-4 bg-card/50 backdrop-blur-sm border border-border/50 flex-shrink-0">
+          <TabsList className="grid w-full max-w-3xl grid-cols-6 mb-4 bg-card/50 backdrop-blur-sm border border-border/50 flex-shrink-0">
             <TabsTrigger value="general" className="flex items-center gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
               <Settings2 className="h-4 w-4" />
               <span className="hidden sm:inline">General</span>
+            </TabsTrigger>
+            <TabsTrigger value="user" className="flex items-center gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
+              <User className="h-4 w-4" />
+              <span className="hidden sm:inline">User</span>
             </TabsTrigger>
             <TabsTrigger value="hotkey" className="flex items-center gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
               <Keyboard className="h-4 w-4" />
@@ -518,6 +782,282 @@ function SettingsPage() {
                 </div>
               </CardContent>
             </Card>
+            </motion.div>
+          </TabsContent>
+
+          <TabsContent value="user" className="flex-1 overflow-hidden">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <Card className="bg-card/50 backdrop-blur-sm border-border/50 h-full flex flex-col overflow-hidden">
+                <CardHeader className="pb-2 flex-shrink-0">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+                      <User className="h-4 w-4 text-white" />
+                    </div>
+                    <div className="min-w-0">
+                      <CardTitle className="text-base text-white">User Settings</CardTitle>
+                      <CardDescription className="text-gray-400 text-xs">
+                        Manage your account and security settings
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="flex-1 overflow-y-auto space-y-3 p-3">
+                  
+                  {/* Account Information */}
+                  <div className="bg-muted/10 rounded-lg p-3 border border-border/50">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="username" className="text-white font-medium">Username</Label>
+                      <span className="text-gray-300 text-sm">{userName}</span>
+                    </div>
+                  </div>
+
+                  {/* Password */}
+                  <div className="bg-muted/10 rounded-lg p-3 border border-border/50">
+                    <Label htmlFor="password" className="text-white font-medium mb-3 block">Password</Label>
+                    {!changingPassword ? (
+                      <div className="flex justify-end">
+                        <button
+                          onClick={() => setChangingPassword(true)}
+                          className="relative overflow-hidden group px-3 py-1.5 rounded-md font-medium shadow hover:shadow-lg hover:scale-[1.01] transition-all duration-200 cursor-pointer inline-flex items-center justify-center bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                        >
+                          <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                          <span className="relative z-10 font-medium">Change password</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="relative">
+                          <Input
+                            type={showCurrentPassword ? "text" : "password"}
+                            value={currentPasswordForChange}
+                            onChange={(e) => setCurrentPasswordForChange(e.target.value)}
+                            placeholder="Current password"
+                            className="bg-background/50 border-border text-white text-sm placeholder:text-gray-500 pr-10"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                          >
+                            {showCurrentPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                          </button>
+                        </div>
+                        <div className="relative">
+                          <Input
+                            type={showNewPassword ? "text" : "password"}
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            placeholder="New password"
+                            className="bg-background/50 border-border text-white text-sm placeholder:text-gray-500 pr-10"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowNewPassword(!showNewPassword)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                          >
+                            {showNewPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                          </button>
+                        </div>
+                        <div className="relative">
+                          <Input
+                            type={showConfirmPassword ? "text" : "password"}
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            placeholder="Confirm new password"
+                            className="bg-background/50 border-border text-white text-sm placeholder:text-gray-500 pr-10"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                          >
+                            {showConfirmPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                          </button>
+                        </div>
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={() => {
+                              setChangingPassword(false)
+                              setNewPassword('')
+                              setConfirmPassword('')
+                              setCurrentPasswordForChange('')
+                            }}
+                            className="px-2 py-1.5 text-sm text-gray-400 hover:text-white bg-muted/20 hover:bg-muted/30 border border-border/50 rounded-md"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={handleChangePassword}
+                            disabled={saving || !currentPasswordForChange || !newPassword || !confirmPassword}
+                            className="relative overflow-hidden group px-3 py-1.5 rounded-md font-medium shadow hover:shadow-lg hover:scale-[1.01] transition-all duration-200 cursor-pointer inline-flex items-center justify-center bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                          >
+                            <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                            <span className="relative z-10 flex items-center font-medium">
+                              {saving ? (
+                                <>
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                  Saving...
+                                </>
+                              ) : (
+                                'Save Settings'
+                              )}
+                            </span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Recovery Phrase */}
+                  <div className="bg-muted/10 rounded-lg p-3 border border-border/50">
+                    <Label htmlFor="passphrase" className="text-white font-medium mb-3 block">Recovery Phrase</Label>
+                    {!changingPhrase ? (
+                      <div className="flex justify-end">
+                        <button
+                          onClick={() => setChangingPhrase(true)}
+                          className="relative overflow-hidden group px-3 py-1.5 rounded-md font-medium shadow hover:shadow-lg hover:scale-[1.01] transition-all duration-200 cursor-pointer inline-flex items-center justify-center bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                        >
+                          <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                          <span className="relative z-10 font-medium">Change passphrase</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="relative">
+                          <Input
+                            type={showPhrasePassword ? "text" : "password"}
+                            value={currentPasswordForPhrase}
+                            onChange={(e) => setCurrentPasswordForPhrase(e.target.value)}
+                            placeholder="Current password"
+                            className="bg-background/50 border-border text-white text-sm placeholder:text-gray-500 pr-10"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPhrasePassword(!showPhrasePassword)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                          >
+                            {showPhrasePassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                          </button>
+                        </div>
+                        <textarea
+                          rows={3}
+                          value={newRecoveryPhrase}
+                          onChange={(e) => setNewRecoveryPhrase(e.target.value)}
+                          placeholder="New recovery phrase"
+                          className="w-full bg-background/50 border border-border rounded-md text-white text-sm placeholder:text-gray-500 resize-none px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/50"
+                        />
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={() => {
+                              setChangingPhrase(false)
+                              setNewRecoveryPhrase('')
+                              setCurrentPasswordForPhrase('')
+                            }}
+                            className="px-2 py-1.5 text-sm text-gray-400 hover:text-white bg-muted/20 hover:bg-muted/30 border border-border/50 rounded-md"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={handleChangeRecoveryPhrase}
+                            disabled={saving || !currentPasswordForPhrase || !newRecoveryPhrase.trim()}
+                            className="relative overflow-hidden group px-3 py-1.5 rounded-md font-medium shadow hover:shadow-lg hover:scale-[1.01] transition-all duration-200 cursor-pointer inline-flex items-center justify-center bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                          >
+                            <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                            <span className="relative z-10 flex items-center font-medium">
+                              {saving ? (
+                                <>
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                  Saving...
+                                </>
+                              ) : (
+                                'Save Settings'
+                              )}
+                            </span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Emergency Recovery Key */}
+                  <div className="bg-muted/10 rounded-lg p-3 border border-border/50">
+                    <Label htmlFor="emergency-key" className="text-white font-medium mb-3 block">Emergency Recovery Key</Label>
+                    <div className="space-y-2">
+                      <div className="relative">
+                        <Input
+                          type={showKeyPassword ? "text" : "password"}
+                          value={currentPasswordForKey}
+                          onChange={(e) => {
+                            setCurrentPasswordForKey(e.target.value)
+                            setKeyPasswordVerified(false) // Reset verification when password changes
+                          }}
+                          onBlur={verifyKeyPassword} // Verify when user finishes typing
+                          placeholder="Enter password to download"
+                          className="bg-background/50 border-border text-white text-sm placeholder:text-gray-500 pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowKeyPassword(!showKeyPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                        >
+                          {showKeyPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                        </button>
+                      </div>
+                      {keyPasswordVerified && (
+                        <div className="flex justify-end">
+                          <button
+                            onClick={downloadEmergencyKey}
+                            className="relative overflow-hidden group px-3 py-1.5 rounded-md font-medium shadow hover:shadow-lg hover:scale-[1.01] transition-all duration-200 cursor-pointer inline-flex items-center justify-center bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 text-sm"
+                          >
+                            <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                            <span className="relative z-10 font-medium">Download Recovery Key</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Session Management */}
+                  <div className="bg-muted/10 rounded-lg p-3 border border-border/50">
+                    <Label htmlFor="session" className="text-white font-medium mb-3 block">Session</Label>
+                    <div className="flex justify-end">
+                      <button
+                        onClick={handleLogout}
+                        className="relative overflow-hidden group px-3 py-1.5 rounded-md font-medium shadow hover:shadow-lg hover:scale-[1.01] transition-all duration-200 cursor-pointer inline-flex items-center justify-center bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                      >
+                        <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                        <span className="relative z-10 font-medium">Logout</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Save Button */}
+                  <div className="flex justify-end pt-2">
+                    <button 
+                      onClick={handleSaveGeneral} 
+                      disabled={saving}
+                      className="relative overflow-hidden group px-3 py-1.5 rounded-md font-medium shadow hover:shadow-lg hover:scale-[1.01] transition-all duration-200 cursor-pointer inline-flex items-center justify-center bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                      <span className="relative z-10 flex items-center font-medium">
+                        {saving ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          'Save Settings'
+                        )}
+                      </span>
+                    </button>
+                  </div>
+
+                </CardContent>
+              </Card>
             </motion.div>
           </TabsContent>
 

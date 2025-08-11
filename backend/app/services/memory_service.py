@@ -17,7 +17,7 @@ from datetime import datetime, timedelta
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
-from app.db.database import db
+from app.db.database import get_db
 from app.db.repositories.preferences_repository import PreferencesRepository
 from app.services.ollama import OllamaService
 from app.core.config import settings
@@ -200,6 +200,7 @@ class MemoryService:
     
     async def store_memory(self, memory: Dict[str, Any]) -> int:
         """Store a memory in the database and trigger async scoring and embedding pipeline."""
+        db = get_db()
         
         # Check for exact duplicates first (without embedding)
         existing = await db.fetch_one("""
@@ -268,6 +269,7 @@ class MemoryService:
     
     async def _score_and_embed_async(self, memory_id: int, memory: Dict[str, Any]):
         """Async pipeline: LLM score memory then generate embedding."""
+        db = get_db()
         try:
             logger.info(f"Starting async scoring and embedding for memory {memory_id}")
             
@@ -305,6 +307,7 @@ class MemoryService:
     
     async def _generate_embedding_async(self, memory_id: int, content: str):
         """Generate embedding for a memory asynchronously after it's stored."""
+        db = get_db()
         try:
             if not self.embedding_model:
                 logger.warning(f"No embedding model available for memory {memory_id}")
@@ -332,6 +335,7 @@ class MemoryService:
         Retrieve memories relevant to a query.
         Uses semantic similarity if embeddings are available.
         """
+        db = get_db()
         memories = []
         
         # If we have embedding model, use semantic search
@@ -398,6 +402,7 @@ class MemoryService:
     
     async def get_memory_summary(self) -> Dict[str, Any]:
         """Get a summary of stored memories."""
+        db = get_db()
         # Get counts by type
         type_counts_result = await db.fetch_all("""
             SELECT memory_type, COUNT(*) as count
@@ -434,6 +439,7 @@ class MemoryService:
     
     async def deactivate_outdated_memories(self, memory_id: int):
         """Deactivate a memory (soft delete)."""
+        db = get_db()
         await db.execute("""
             UPDATE agent_memories
             SET is_active = 0
@@ -526,6 +532,7 @@ class MemoryService:
         Returns:
             List of memory dictionaries ready for storage
         """
+        db = get_db()
         try:
             # Get preferences if not provided
             if model is None:
@@ -850,6 +857,7 @@ Extract memories as JSON array:"""
         """
         Apply user rating to a memory (-3 to +3).
         """
+        db = get_db()
         # Validate adjustment
         adjustment = max(-3, min(3, adjustment))
         
@@ -882,6 +890,7 @@ Extract memories as JSON array:"""
     
     async def get_unrated_memories(self, limit: int = 10) -> List[Dict[str, Any]]:
         """Get memories that haven't been rated by user yet."""
+        db = get_db()
         memories = await db.fetch_all("""
             SELECT * FROM agent_memories 
             WHERE user_rated = 0 
@@ -903,6 +912,7 @@ Extract memories as JSON array:"""
         Process unprocessed memories with LLM in batches.
         Should be called periodically (e.g., every 5 minutes).
         """
+        db = get_db()
         # Get memories needing LLM processing
         memories = await db.fetch_all("""
             SELECT * FROM agent_memories 
@@ -958,6 +968,7 @@ Extract memories as JSON array:"""
         Mark memories for deletion based on criteria.
         Should be run monthly (e.g., 1st of each month).
         """
+        db = get_db()
         # Find candidates for deletion
         candidates = await db.fetch_all("""
             SELECT * FROM agent_memories 
@@ -996,6 +1007,7 @@ Extract memories as JSON array:"""
         Archive memories marked for deletion (soft delete).
         Should be run 2 weeks after marking.
         """
+        db = get_db()
         result = await db.execute("""
             UPDATE agent_memories 
             SET archived = 1,
@@ -1016,6 +1028,7 @@ Extract memories as JSON array:"""
         Permanently delete long-archived memories.
         Should be run monthly.
         """
+        db = get_db()
         result = await db.execute("""
             DELETE FROM agent_memories 
             WHERE archived = 1
@@ -1032,6 +1045,7 @@ Extract memories as JSON array:"""
         """
         Rescue a memory from deletion queue.
         """
+        db = get_db()
         await db.execute("""
             UPDATE agent_memories 
             SET marked_for_deletion = 0,

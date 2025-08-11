@@ -6,9 +6,9 @@ Implement local-first authentication system with multiple recovery options for E
 ## Authentication Strategy
 
 ### 1. Multi-User Architecture
-- **Separate Database Files**: Each user gets their own complete `diary.db` file
+- **Separate Database Files**: Each user gets their own complete `echo.db` file
 - **User Registry**: Shared `user_registry.db` for authentication and user management
-- **File Structure**: `app_data/users/{username}/diary.db` + `emergency.key`
+- **File Structure**: `app_data/users/{username}/echo.db` + `emergency.key`
 - **Privacy**: Complete data separation between users
 - **Performance**: Smaller, faster databases per user
 
@@ -33,10 +33,10 @@ Implement local-first authentication system with multiple recovery options for E
 app_data/
   users/
     john_doe/
-      diary.db              -- John's complete diary database (existing schema)
+      echo.db               -- John's complete diary database (existing schema)
       emergency.key         -- John's recovery key file
     jane_smith/
-      diary.db              -- Jane's complete diary database
+      echo.db               -- Jane's complete diary database
       emergency.key         -- Jane's recovery key file
   shared/
     user_registry.db        -- Shared authentication database
@@ -53,7 +53,7 @@ CREATE TABLE users (
     password_hash TEXT NOT NULL,          -- bcrypt hash of password
     secret_phrase_hash TEXT,              -- bcrypt hash of recovery phrase
     recovery_key TEXT,                    -- UUID for emergency unlock
-    database_path TEXT NOT NULL,          -- Path to user's diary.db
+    database_path TEXT NOT NULL,          -- Path to user's echo.db
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     last_login DATETIME,
     failed_login_attempts INTEGER DEFAULT 0,
@@ -67,7 +67,7 @@ CREATE INDEX idx_users_active ON users(is_active);
 ```
 
 ### Individual User Databases (Existing Schema)
-Each user gets their own complete `diary.db` with existing schema:
+Each user gets their own complete `echo.db` with existing schema:
 - `entries` table (unchanged)
 - `patterns` table (unchanged) 
 - `conversations` table (unchanged)
@@ -211,9 +211,9 @@ class SessionManager:
 ```python
 # Migration for existing single-user installations
 async def migrate_single_user_to_multi_user():
-    """Migrate existing diary.db to multi-user structure"""
+    """Migrate existing echo.db to multi-user structure"""
     
-    if os.path.exists("diary.db") and not os.path.exists("app_data/shared/user_registry.db"):
+    if os.path.exists("echo.db") and not os.path.exists("app_data/shared/user_registry.db"):
         # Create user registry
         await UserRegistryService.initialize()
         
@@ -224,13 +224,13 @@ async def migrate_single_user_to_multi_user():
         # Move existing database to user folder
         user_path = f"app_data/users/{username}/"
         os.makedirs(user_path, exist_ok=True)
-        shutil.move("diary.db", f"{user_path}diary.db")
+        shutil.move("echo.db", f"{user_path}echo.db")
         
         # Create registry entry (without password initially)
         await UserRegistryService.create_user(
             username=username,
             display_name=display_name,
-            database_path=f"{user_path}diary.db",
+            database_path=f"{user_path}echo.db",
             requires_setup=True  # Force auth setup on first login
         )
 ```
