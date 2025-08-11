@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CheckCircle, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 interface SuccessModalProps {
@@ -12,12 +11,12 @@ interface SuccessModalProps {
 }
 
 function SuccessModal({ isOpen, title, message, autoCloseMs = 3000, onClose }: SuccessModalProps) {
-  const [countdown, setCountdown] = useState(autoCloseMs / 1000)
+  const [countdown, setCountdown] = useState(Math.floor(autoCloseMs / 1000))
 
   useEffect(() => {
     if (!isOpen) return
 
-    setCountdown(autoCloseMs / 1000)
+    setCountdown(Math.floor(autoCloseMs / 1000))
     
     const interval = setInterval(() => {
       setCountdown(prev => {
@@ -39,63 +38,56 @@ function SuccessModal({ isOpen, title, message, autoCloseMs = 3000, onClose }: S
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.3, ease: "easeInOut" }}
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
+          className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+          onClick={onClose}
         >
           <motion.div
-            initial={{ scale: 0.9, opacity: 0, y: 20 }}
-            animate={{ scale: 1, opacity: 1, y: 0 }}
-            exit={{ scale: 0.85, opacity: 0, y: -20 }}
-            transition={{ 
-              type: "spring", 
-              stiffness: 300, 
-              damping: 30,
-              exit: { duration: 0.25, ease: "easeIn" }
-            }}
-            className="bg-card border border-border rounded-lg shadow-2xl overflow-hidden max-w-md w-full"
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.9, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 300, damping: 30 }}
+            className="w-full max-w-md bg-card border border-border rounded-lg shadow-2xl p-6"
+            onClick={(e) => e.stopPropagation()}
           >
-            {/* Header */}
-            <div className="px-6 py-4 border-b border-border bg-green-500/5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center">
-                    <CheckCircle className="h-4 w-4 text-green-400" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-bold text-white">{title}</h2>
-                  </div>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={onClose}
-                  className="h-8 w-8 p-0 text-green-300 hover:bg-muted/50 hover:text-white"
-                  title="Close"
+            <div className="text-center mb-6">
+              <div className="flex items-center justify-center w-16 h-16 rounded-full bg-green-500/20 mx-auto mb-4">
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: "spring", stiffness: 200, delay: 0.1 }}
+                  className="text-green-400 text-2xl font-bold"
                 >
-                  <X className="h-4 w-4" />
-                </Button>
+                  ✓
+                </motion.div>
               </div>
+              <h3 className="text-xl font-semibold text-white mb-2">{title}</h3>
+              <p className="text-sm text-muted-foreground">Redirecting you to Echo...</p>
             </div>
-
-            {/* Content */}
-            <div className="p-6">
-              <p className="text-gray-300 text-sm mb-4">{message}</p>
-              
-              {/* Auto-close countdown */}
-              <div className="flex items-center justify-between">
-                <div className="text-xs text-gray-500">
-                  Closing in {countdown}s...
+            
+            <p className="text-white mb-6">{message}</p>
+            
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="text-sm text-gray-400">
+                  Auto-closing in
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    onClick={onClose}
-                    size="sm"
-                    className="bg-green-500/10 border border-green-500/20 text-green-400 hover:bg-green-500/20"
-                  >
-                    Continue
-                  </Button>
-                </div>
+                <motion.div 
+                  key={countdown}
+                  initial={{ scale: 1.2, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ duration: 0.3 }}
+                  className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/20 border border-primary/30"
+                >
+                  <span className="text-primary font-bold text-lg">{countdown}</span>
+                </motion.div>
               </div>
+              <Button
+                onClick={onClose}
+                className="relative overflow-hidden group px-6 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-green-500/10 border border-green-500/20 text-green-400 hover:bg-green-500/20 hover:text-green-300"
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-green-500/10 to-green-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                <span className="relative z-10">Continue Now</span>
+              </Button>
             </div>
           </motion.div>
         </motion.div>

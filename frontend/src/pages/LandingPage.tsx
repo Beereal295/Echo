@@ -210,7 +210,7 @@ function LandingPage() {
         className="absolute top-3/4 left-1/2 w-14 h-14 bg-gradient-to-r from-blue-400/35 to-primary/35 rounded-full blur-xl"
       />
 
-      <div className="max-w-6xl mx-auto w-full flex flex-col flex-1 justify-center">
+      <div className="max-w-6xl mx-auto w-full flex flex-col flex-1 justify-center px-4">
         <motion.div 
           className="flex flex-col"
           variants={containerVariants}
@@ -219,9 +219,11 @@ function LandingPage() {
         >
           {/* Auth Card */}
           <motion.div className="text-center" variants={itemVariants}>
-            <Card className="bg-card/50 backdrop-blur-sm border-border/50 mx-auto max-w-2xl relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-secondary/5" />
-              <CardContent className="p-12 relative">
+            <Card className="bg-card/60 backdrop-blur-xl border border-border/60 mx-auto max-w-3xl relative overflow-hidden shadow-2xl">
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-secondary/5 to-purple-600/10" />
+              {/* Additional glow effect */}
+              <div className="absolute inset-0 bg-gradient-to-tr from-blue-500/5 via-transparent to-purple-500/5 blur-xl" />
+              <CardContent className="p-16 relative">
                 
                 {/* Echo Title - Much Larger - EXACT same classes as HomePage but bigger size */}
                 <motion.h1 
@@ -234,7 +236,7 @@ function LandingPage() {
                 </motion.h1>
                 
                 {/* Typewriter Tagline */}
-                <div className="h-16 flex items-center justify-center mb-12">
+                <div className="h-20 flex items-center justify-center mb-16">
                   <TypewriterText 
                     text="A quiet space... for your loud thoughts"
                     delay={0.5}
@@ -242,36 +244,48 @@ function LandingPage() {
                   />
                 </div>
 
-                {/* Auth Buttons - Separate animation with delay */}
+                {/* Auth Buttons - Enhanced design */}
                 <motion.div 
-                  className="flex flex-col sm:flex-row gap-16 justify-center items-center"
+                  className="flex flex-col sm:flex-row gap-6 justify-center items-center"
                   initial={{ opacity: 0, y: 30 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.6, delay: 1.8 }}
                 >
-          <motion.button
-            onClick={() => setShowSignupModal(true)}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className="relative overflow-hidden group px-8 py-4 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20"
-          >
-            <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-            <span className="relative z-10 text-primary font-semibold group-hover:text-primary transition-colors duration-300">
-              Sign Up
-            </span>
-          </motion.button>
-          
-          <motion.button
-            onClick={() => setShowSigninModal(true)}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className="relative overflow-hidden group px-8 py-4 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20"
-          >
-            <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-            <span className="relative z-10 text-primary font-semibold group-hover:text-primary transition-colors duration-300">
-              Sign In
-            </span>
-          </motion.button>
+                  {/* Sign Up Button - Primary */}
+                  <motion.button
+                    onClick={() => setShowSignupModal(true)}
+                    whileHover={{ scale: 1.02, y: -2 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="group relative overflow-hidden px-10 py-4 rounded-2xl font-bold text-lg shadow-2xl transition-all duration-300 min-w-[180px]"
+                    style={{
+                      background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.8) 0%, rgba(139, 92, 246, 0.8) 100%)',
+                      boxShadow: '0 10px 30px rgba(99, 102, 241, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2)'
+                    }}
+                  >
+                    {/* Animated background */}
+                    <div className="absolute inset-0 bg-gradient-to-r from-indigo-600/20 to-purple-600/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                    {/* Shimmer effect */}
+                    <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent group-hover:translate-x-full transition-transform duration-700" />
+                    <span className="relative z-10 text-white drop-shadow-sm">
+                      Create Account
+                    </span>
+                  </motion.button>
+                  
+                  {/* Sign In Button - Secondary */}
+                  <motion.button
+                    onClick={() => setShowSigninModal(true)}
+                    whileHover={{ scale: 1.02, y: -2 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="group relative overflow-hidden px-10 py-4 rounded-2xl font-bold text-lg shadow-2xl transition-all duration-300 min-w-[180px] bg-card/80 backdrop-blur-sm border-2 border-primary/30 text-white hover:border-primary/50"
+                  >
+                    {/* Animated background */}
+                    <div className="absolute inset-0 bg-gradient-to-r from-primary/5 to-secondary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                    {/* Shimmer effect */}
+                    <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/10 to-transparent group-hover:translate-x-full transition-transform duration-700" />
+                    <span className="relative z-10 drop-shadow-sm">
+                      Sign In
+                    </span>
+                  </motion.button>
                 </motion.div>
               </CardContent>
             </Card>

@@ -401,36 +401,60 @@ function MemoriesPage() {
 
   if (unratedMemories.length === 0 && allMemories.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center p-6">
-        <div className="text-center max-w-md">
-          <Sparkles className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-          <h2 className="text-2xl font-semibold mb-2">
-            {memoryFilter === 'rated' ? 'No Rated Memories' : 
-             memoryFilter === 'unrated' ? 'No Unrated Memories' : 
-             'No Memories to Review'}
-          </h2>
-          <p className="text-muted-foreground mb-4">
-            {memoryFilter === 'rated' ? 
-              "You haven't rated any memories yet. Try switching to 'All' or 'Pending' to see available memories." :
-             memoryFilter === 'unrated' ? 
-              "All memories have been rated! Great job helping Echo understand what's important to you." :
-              "All your memories have been rated! Come back later as Echo learns more about you through your journal entries and conversations."}
-          </p>
-          <div className="flex gap-2 justify-center">
-            <Button onClick={() => handleFilterChange('all')} variant="outline">
-              Show All Memories
-            </Button>
-            <Button onClick={() => {
-              if (memoryFilter === 'all' || memoryFilter === 'unrated') {
-                loadUnratedMemories()
-              } else {
-                loadRatedMemories()
-              }
-              loadPaginatedMemories(1, memoryFilter)
-            }} variant="outline">
-              Check Again
-            </Button>
-          </div>
+      <div className="h-screen flex flex-col p-4 md:p-6 overflow-hidden">
+        <div className="max-w-6xl mx-auto w-full flex flex-col flex-1 items-center justify-center">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="text-center"
+          >
+            <Brain className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-white mb-2">
+              {memoryFilter === 'rated' ? 'No Rated Memories' : 
+               memoryFilter === 'unrated' ? 'No Unrated Memories' : 
+               'No Memories Yet'}
+            </h2>
+            <p className="text-gray-400 mb-6">
+              {memoryFilter === 'rated' ? 
+                "You haven't rated any memories yet. Switch to 'Pending' to see available memories." :
+               memoryFilter === 'unrated' ? 
+                "All memories have been rated! Great job helping Echo understand what's important." :
+                "Keep journaling and chatting with Echo to build your memory collection."}
+            </p>
+            <div className="flex gap-3 justify-center">
+              <Button 
+                onClick={() => handleFilterChange('all')} 
+                variant="ghost"
+                size="sm"
+                className="relative overflow-hidden group transition-all duration-200 bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 hover:text-primary"
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                <span className="relative z-10 flex items-center font-medium">
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Show All Memories
+                </span>
+              </Button>
+              <Button 
+                onClick={() => {
+                  if (memoryFilter === 'all' || memoryFilter === 'unrated') {
+                    loadUnratedMemories()
+                  } else {
+                    loadRatedMemories()
+                  }
+                  loadPaginatedMemories(1, memoryFilter)
+                }} 
+                variant="ghost"
+                size="sm"
+                className="relative overflow-hidden group transition-all duration-200 bg-green-500/10 border border-green-500/20 text-green-400 hover:bg-green-500/20 hover:text-green-300"
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-green-500/10 to-green-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                <span className="relative z-10 flex items-center font-medium">
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                  Check Again
+                </span>
+              </Button>
+            </div>
+          </motion.div>
         </div>
       </div>
     )
@@ -441,23 +465,38 @@ function MemoriesPage() {
 
   if (isComplete) {
     return (
-      <div className="flex-1 flex items-center justify-center p-6">
-        <div className="text-center max-w-md">
+      <div className="h-screen flex flex-col p-4 md:p-6 overflow-hidden">
+        <div className="max-w-6xl mx-auto w-full flex flex-col flex-1 items-center justify-center">
           <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            className="w-16 h-16 mx-auto mb-4 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="text-center"
           >
-            <ThumbsUp className="w-8 h-8 text-green-600 dark:text-green-400" />
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ duration: 0.3, delay: 0.2 }}
+              className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4"
+            >
+              <ThumbsUp className="h-8 w-8 text-green-400" />
+            </motion.div>
+            <h2 className="text-2xl font-bold text-white mb-2">All Done!</h2>
+            <p className="text-gray-400 mb-6">
+              You've reviewed all available memories. Thank you for helping Echo understand what's important to you!
+            </p>
+            <Button 
+              onClick={loadUnratedMemories} 
+              variant="ghost"
+              size="sm"
+              className="relative overflow-hidden group transition-all duration-200 bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 hover:text-primary"
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+              <span className="relative z-10 flex items-center font-medium">
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Check for New Memories
+              </span>
+            </Button>
           </motion.div>
-          <h2 className="text-2xl font-semibold mb-2">All Done!</h2>
-          <p className="text-muted-foreground mb-4">
-            You've reviewed all available memories. Thank you for helping Echo understand what's important to you!
-          </p>
-          <Button onClick={loadUnratedMemories} variant="outline">
-            <RotateCcw className="w-4 h-4 mr-2" />
-            Check for New Memories
-          </Button>
         </div>
       </div>
     )
