@@ -1,5 +1,8 @@
 # Authentication Implementation Tasklist
 
+## Overview
+Implement local-first authentication with personalized user experience. Each user gets their own database and personalized interaction with Echo.
+
 ## Phase 1: Database Architecture & User Registry
 
 ### Multi-User Database Setup
@@ -55,31 +58,34 @@
 
 ## Phase 3: Frontend Authentication UI
 
-### Auth Screen Components
-40. [ ] Create `SignupScreen.tsx` component with form validation
-41. [ ] Create `LoginScreen.tsx` component with user selection
-42. [ ] Create `RecoveryScreen.tsx` with recovery options UI
-43. [ ] Create `EmergencyRecovery.tsx` for unlock file upload
-44. [ ] Create `UserSelectionScreen.tsx` for multi-user login
-45. [ ] Add form validation and error handling to all components
-46. [ ] Test all UI components with mock data
+### Landing Page & Auth Modals
+40. [x] Create `LandingPage.tsx` with Echo logo and tagline
+41. [x] Add "Sign Up" and "Sign In" buttons on landing page
+42. [x] Create `SignupModal.tsx` with name, password, recovery phrase, emergency key generation
+43. [x] Create `LoginModal.tsx` with name/password/recovery phrase/emergency key upload
+44. [x] Integrated recovery options into LoginModal (tabbed interface)
+45. [x] Emergency key file upload integrated into LoginModal
+46. [x] Add form validation and password strength indicator
+47. [x] Style modals with consistent Echo design
+48. [x] Test all modals with mock data
 
 ### Authentication State Management
-47. [ ] Create `useAuth.tsx` hook for authentication state
-48. [ ] Create `AuthContext` for React context management
-49. [ ] Implement `authUtils.ts` for client-side auth helpers
-50. [ ] Add session management to API service (`api.ts`)  
-51. [ ] Implement automatic session validation and refresh
-52. [ ] Add authentication middleware for protected routes
-53. [ ] Test authentication state across component tree
+49. [ ] Create `useAuth.tsx` hook for authentication state
+50. [ ] Create `AuthContext` with user's display name
+51. [ ] Implement `authUtils.ts` for client-side auth helpers
+52. [ ] Add session management to API service (`api.ts`)  
+53. [ ] Store user's display name in session for personalization
+54. [ ] Add authentication middleware for protected routes
+55. [ ] Test authentication state across component tree
 
-### Auth Flow Navigation
-54. [ ] Design auth flow navigation between screens
-55. [ ] Implement route protection for authenticated users
-56. [ ] Add loading states and error handling
-57. [ ] Create smooth transitions between auth screens
-58. [ ] Test complete auth flow navigation
-59. [ ] Handle edge cases (network errors, timeouts)
+### Personalization Integration
+56. [ ] Replace "Welcome to Echo Journal" with "Welcome back, {name}"
+57. [ ] Inject user name into diary chat service system prompt
+58. [ ] Add user name to memory context displays
+59. [ ] Personalize toast notifications with user's name
+60. [ ] Update pattern insights to show "{name}'s patterns"
+61. [ ] Test personalization across all components
+62. [ ] Ensure name persists across sessions
 
 ## Phase 4: Integration & Recovery Systems
 
@@ -100,48 +106,49 @@
 71. [ ] Test edge cases (expired keys, invalid phrases)
 
 ### Multi-User Integration
-72. [ ] Connect signup UI to user registry backend
+72. [ ] Connect signup modal to user registry backend
 73. [ ] Implement user database creation on registration
-74. [ ] Test user switching and database isolation
-75. [ ] Verify complete data separation between users
-76. [ ] Test concurrent user sessions (if applicable)
-77. [ ] Implement user profile management (display name changes)
+74. [ ] Pass user context to all API calls via session
+75. [ ] Update DatabaseManager on login to switch to user's DB
+76. [ ] Verify complete data separation between users
+77. [ ] Test database switching between different users
+78. [ ] Implement display name update functionality
 
 ## Phase 5: Production Hardening & Testing
 
 ### Security Enhancements
-78. [ ] Remove all development overrides and master passwords
-79. [ ] Implement comprehensive input validation and sanitization
-80. [ ] Add CSRF protection for auth endpoints
-81. [ ] Implement secure session token generation
-82. [ ] Add logging for security events (login attempts, failures)
-83. [ ] Conduct security review of all auth code
-84. [ ] Test against common attack vectors (brute force, injection)
+79. [ ] Remove all development overrides and master passwords
+80. [ ] Implement comprehensive input validation and sanitization
+81. [ ] Add CSRF protection for auth endpoints
+82. [ ] Implement secure session token generation
+83. [ ] Add logging for security events (login attempts, failures)
+84. [ ] Conduct security review of all auth code
+85. [ ] Test against common attack vectors (brute force, injection)
 
 ### Performance & Reliability
-85. [ ] Optimize database queries with proper indexing
-86. [ ] Add connection pooling for database operations
-87. [ ] Implement graceful error handling and recovery
-88. [ ] Add comprehensive logging for debugging
-89. [ ] Test performance with multiple users and large datasets
-90. [ ] Optimize file I/O operations for emergency keys
+86. [ ] Optimize database queries with proper indexing
+87. [ ] Add connection pooling for database operations
+88. [ ] Implement graceful error handling and recovery
+89. [ ] Add comprehensive logging for debugging
+90. [ ] Test performance with multiple users and large datasets
+91. [ ] Optimize file I/O operations for emergency keys
 
 ### Comprehensive Testing
-91. [ ] Create comprehensive test suite for all auth functions
-92. [ ] Test backward compatibility migration thoroughly
-93. [ ] Test with fresh database and existing user data
-94. [ ] Conduct end-to-end testing of all user flows
-95. [ ] Test error scenarios and edge cases
-96. [ ] Performance testing with realistic user loads
-97. [ ] Security penetration testing
+92. [ ] Create comprehensive test suite for all auth functions
+93. [ ] Test backward compatibility migration thoroughly
+94. [ ] Test with fresh database and existing user data
+95. [ ] Conduct end-to-end testing of all user flows
+96. [ ] Test error scenarios and edge cases
+97. [ ] Performance testing with realistic user loads
+98. [ ] Security penetration testing
 
 ### Documentation & Migration
-98. [ ] Create user documentation for auth features
-99. [ ] Document recovery procedures for users
-100. [ ] Create admin documentation for multi-user management
-101. [ ] Test automatic migration from single-user to multi-user
-102. [ ] Create backup and restore procedures
-103. [ ] Final production readiness checklist
+99. [ ] Create user documentation for auth features
+100. [ ] Document recovery procedures for users
+101. [ ] Create admin documentation for multi-user management
+102. [ ] Test automatic migration from single-user to multi-user
+103. [ ] Create backup and restore procedures
+104. [ ] Final production readiness checklist
 
 ## Development Safety Checklist
 
