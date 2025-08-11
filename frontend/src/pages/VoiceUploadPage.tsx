@@ -1127,7 +1127,7 @@ function VoiceUploadPage() {
                               className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white border-0 px-8"
                             >
                               <Save className="mr-2 h-4 w-4" />
-                              Add to Diary
+                              Add to Echo
                             </Button>
                           </div>
                         </motion.div>
@@ -1333,7 +1333,7 @@ function VoiceUploadPage() {
                   </span>
                 </motion.button>
 
-                {/* Add to Diary Button */}
+                {/* Add to Echo Button */}
                 <motion.button
                   onClick={handleSaveEntries}
                   initial={{ opacity: 0, y: 20 }}
@@ -1346,7 +1346,7 @@ function VoiceUploadPage() {
                   <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                   <span className="relative z-10 text-primary font-semibold group-hover:text-primary transition-colors duration-300 flex items-center">
                     <BookOpen className="mr-2 h-5 w-5" />
-                    Add to Diary
+                    Add to Echo
                   </span>
                 </motion.button>
 

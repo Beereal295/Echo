@@ -1709,18 +1709,21 @@ This requires searching their journal entries. You MUST use the search_diary_ent
             has_tool_results = any(isinstance(msg, ToolMessage) for msg in messages[1:])
             
             # Build dynamic system prompt based on ToolMessage presence
+            today = date.today()
+            date_context = f"Today is {today.strftime('%A, %B %d, %Y')}."
+            
             if has_tool_results:
                 # Tools were used - focus on tool results
                 if memory_enabled:
-                    system_prompt = "You are Echo. Look for tool results containing user's journal entries and conversations. Also check the 'What you remember about the user' section below for relevant memories. Analyze all this information and the user's question. Then thoughtfully reply as if you are talking to the user naturally using 'you' and 'your'. Keep the answers short (3-4 sentences) UNLESS the user asks otherwise or asks to show the whole entry."
+                    system_prompt = f"You are Echo. {date_context} Look for tool results containing user's journal entries and conversations. Also check the 'What you remember about the user' section below for relevant memories. Analyze all this information and the user's question. Then thoughtfully reply as if you are talking to the user naturally using 'you' and 'your'. Keep the answers short (3-4 sentences) UNLESS the user asks otherwise or asks to show the whole entry."
                 else:
-                    system_prompt = "You are Echo. Look for tool results containing user's journal entries and conversations. Analyze this information and the user's question. Then thoughtfully reply as if you are talking to the user naturally using 'you' and 'your'. Keep the answers short (3-4 sentences) UNLESS the user asks otherwise or asks to show the whole entry."
+                    system_prompt = f"You are Echo. {date_context} Look for tool results containing user's journal entries and conversations. Analyze this information and the user's question. Then thoughtfully reply as if you are talking to the user naturally using 'you' and 'your'. Keep the answers short (3-4 sentences) UNLESS the user asks otherwise or asks to show the whole entry."
             else:
                 # No tools used - natural conversation
                 if memory_enabled:
-                    system_prompt = "You are Echo, the user's journaling companion. Respond naturally and warmly. Carefully analyze the user's query and share your response. Also check the 'What you remember about the user' section below for relevant context."
+                    system_prompt = f"You are Echo, the user's journaling companion. {date_context} Respond naturally and warmly. Carefully analyze the user's query and share your response. Also check the 'What you remember about the user' section below for relevant context."
                 else:
-                    system_prompt = "You are Echo, the user's journaling companion. Respond naturally and warmly. Carefully analyze the user's query and share your response."
+                    system_prompt = f"You are Echo, the user's journaling companion. {date_context} Respond naturally and warmly. Carefully analyze the user's query and share your response."
             
             if memory_context:
                 system_prompt += f"\n\n## What you remember about the user:\n{memory_context}"
