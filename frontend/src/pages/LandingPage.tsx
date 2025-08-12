@@ -14,6 +14,9 @@ function LandingPage() {
   const [successData, setSuccessData] = useState({ title: '', message: '' })
   const [currentTime, setCurrentTime] = useState(new Date())
   const [timeOfDay, setTimeOfDay] = useState<'morning' | 'day' | 'evening' | 'night'>('day')
+  const [currentSnark, setCurrentSnark] = useState('')
+  const [displayedSnark, setDisplayedSnark] = useState('')
+  const [isTyping, setIsTyping] = useState(false)
   
   // Generate fixed star positions once
   const stars = useMemo(() => {
@@ -35,6 +38,34 @@ function LandingPage() {
     
     return { staticStars, shimmerStars }
   }, []) // Empty dependency array means these positions never change
+
+  // Time-based snarky comments
+  const snarkyComments = {
+    0: ["Midnight. Still here. Still overthinking. Still fabulous.", "12 AM: I am both the problem and the insomniac solution.", "It's midnight and I've never felt more creative or useless.", "12 AM: fueled by delusion and glowing screens."],
+    1: ["It's 1 AM. Perfect time to replay arguments in my head like a greatest hits album.", "1 AM: where \"just one more episode\" becomes five.", "1 AM and I've suddenly decided to rebrand my whole personality.", "1 AM: brain is loud, world is quiet, regrets are echoing."],
+    2: ["2 AM. Overthinking? Check. Hydrated? No.", "2 AM is just diet sadness with worse lighting.", "It's 2 AM. I've solved zero problems and invented three new ones.", "2 AM: the hour my inner monologue turns into a TED Talk no one asked for."],
+    3: ["3 AM: Why sleep when I can spiral in style?", "3 AM. Body tired. Brain: what if dinosaurs had anxiety?", "It's 3 AM and my pillow just became a therapy session.", "3 AM: unlocked a new memory to cringe about forever."],
+    4: ["4 AM: Birds are chirping. I'm still a disaster.", "It's 4 AM and the only thing up is my cortisol.", "4 AM: technically morning, emotionally a haunted house.", "4 AM: nature wakes up, and so does my self-doubt."],
+    5: ["5 AM. Too early to function, too late to pretend I slept.", "5 AM: when you're not awake on purpose, just on accident.", "It's 5 AM and I'm watching the sun rise out of spite.", "5 AM: the sky's changing and so is my grip on sanity."],
+    6: ["6 AM: my alarm clock hates me and honestly? Valid.", "6 AM and I'm already 3 years behind on life.", "It's 6 AM. Should I meditate or scream quietly?", "6 AM: the day starts, but I do not."],
+    7: ["7 AM. I'm vertical but not thriving.", "7 AM: awake in body, missing in spirit.", "It's 7 AM and I'm already Googling how to fake enthusiasm.", "7 AM: coffee's hot, my ambition is lukewarm."],
+    8: ["8 AM. Pretending I'm a productive citizen again.", "It's 8 AM and the email avalanche begins.", "8 AM: fully dressed in despair and denim.", "8 AM: caffeine loading, willpower buffering."],
+    9: ["9 AM. I've opened five tabs and zero intentions.", "9 AM: work mode ON, motivation OFF.", "It's 9 AM and I'm already pretending to be in a meeting.", "9 AM: crushing emails like dreams."],
+    10: ["10 AM: halfway to lunch, emotionally at the end.", "10 AM and I still haven't accepted that I'm awake.", "It's 10 AM. Time to pretend I understand my job.", "10 AM: thriving, if your definition of thriving is \"not crying yet.\""],
+    11: ["11 AM: I'm not procrastinating. I'm time traveling inefficiently.", "It's 11 AM. I've done nothing but feel busy.", "11 AM: floating between coffee and crisis.", "11 AM: is it too early to call it a day?"],
+    12: ["12 PM: Lunch? Already? I did so little to deserve this.", "Noon. Halfway to nowhere, fueled by snacks and sarcasm.", "12 PM: the sun is at its peak, unlike me.", "It's 12 PM and I've contributed one (1) sigh to society."],
+    13: ["1 PM: productivity's ghost hour.", "1 PM and I'm just a meat puppet staring at a screen.", "It's 1 PM. Still pretending that spreadsheet makes sense.", "1 PM: brain left the chat."],
+    14: ["2 PM. Daydreaming about escape plans and snacks.", "It's 2 PM: hunger, confusion, and fake smiling.", "2 PM: I've hit the wall. The wall hit back.", "2 PM: the hour of unproductive rebellion."],
+    15: ["3 PM. Caffeine gone. Hope vanished. Just vibes.", "It's 3 PM and I've opened my 19th tab of denial.", "3 PM: The day's still happening and I deeply resent that.", "3 PM: brain melted. Only sarcasm remains."],
+    16: ["4 PM. Energy low. Complaints high.", "It's 4 PM. I'm technically conscious but emotionally buffering.", "4 PM: Why is this meeting happening to me?", "4 PM: fading faster than my phone battery."],
+    17: ["5 PM. Workday ends, existential crisis begins.", "5 PM: I survived. Somehow. Barely.", "It's 5 PM. I've earned the right to collapse.", "5 PM: logging off but still dead inside."],
+    18: ["6 PM: cooking? Or just eating crackers over the sink?", "It's 6 PM. The food is hot, my standards are low.", "6 PM: Dinner plans? You mean depression with a side of pasta?", "6 PM: feasting like a raccoon in emotional recovery."],
+    19: ["7 PM. I call this meal: chaos and calories.", "7 PM: too late to be productive, too early to sleep.", "It's 7 PM. Nothing makes sense, but the snacks are here.", "7 PM: vibes are weird, leftovers are divine."],
+    20: ["8 PM: intentionally ignoring the dishes.", "8 PM: Peak delusion hour. I'm totally going to clean my life now.", "It's 8 PM. Netflix, take the wheel.", "8 PM: productivity now legally prohibited."],
+    21: ["9 PM: where guilt meets popcorn.", "9 PM: I should be sleeping. Instead, I'm reorganizing my trauma.", "It's 9 PM. Let's start a hobby we'll never finish.", "9 PM: the hour of unrealistic intentions."],
+    22: ["10 PM. One more episode = three less hours of sleep.", "10 PM: truly a time for poor decisions and blanket forts.", "It's 10 PM and I'm just getting weird now.", "10 PM: peak \"I swear I'll go to bed soon\" energy."],
+    23: ["11 PM: I'm awake and dramatic for no reason.", "11 PM: bedtime is a concept, not a reality.", "It's 11 PM. I'm texting people I shouldn't and opening apps I hate.", "11 PM: just one last scroll... for science."]
+  }
 
   const handleSignupSuccess = (user: any) => {
     console.log('Signup successful:', user)
@@ -70,13 +101,19 @@ function LandingPage() {
     window.location.reload()
   }
 
-  // Clock update effect
+  // Clock update effect and snarky comments
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date())
-    }, 1000)
-    
-    return () => clearInterval(timer)
+    const updateTimeAndSnark = () => {
+      const now = new Date()
+      setCurrentTime(now)
+      const hour = now.getHours()
+      const comments = snarkyComments[hour as keyof typeof snarkyComments] || ["Time to reflect with Echo"]
+      setCurrentSnark(comments[Math.floor(Math.random() * comments.length)])
+    }
+
+    updateTimeAndSnark()
+    const interval = setInterval(updateTimeAndSnark, 60000) // Update every minute
+    return () => clearInterval(interval)
   }, [])
 
   // Determine time of day
@@ -92,6 +129,32 @@ function LandingPage() {
       setTimeOfDay('night')
     }
   }, [currentTime])
+
+  // Typewriter effect for snarky comments
+  useEffect(() => {
+    if (!currentSnark) return
+
+    // Start typing after all other animations are done (delay matches other elements + buffer)
+    const startDelay = setTimeout(() => {
+      setIsTyping(true)
+      setDisplayedSnark('')
+      
+      let index = 0
+      const typeInterval = setInterval(() => {
+        if (index < currentSnark.length) {
+          setDisplayedSnark(currentSnark.slice(0, index + 1))
+          index++
+        } else {
+          setIsTyping(false)
+          clearInterval(typeInterval)
+        }
+      }, 50) // 50ms per character for smooth typing
+
+      return () => clearInterval(typeInterval)
+    }, 1500) // Wait for other animations to complete
+
+    return () => clearTimeout(startDelay)
+  }, [currentSnark])
 
   // Get gradient colors based on time
   const getSceneGradient = () => {
@@ -331,6 +394,22 @@ function LandingPage() {
           >
             {format(currentTime, 'a')}
           </motion.div>
+        </div>
+
+        {/* Snarky Comment - Typewriter Effect */}
+        <div className="w-[32rem] min-h-[1.5rem]">
+          <p className="text-gray-300 text-sm italic text-right whitespace-nowrap">
+            "{displayedSnark}
+            {isTyping && (
+              <motion.span
+                animate={{ opacity: [1, 0] }}
+                transition={{ duration: 0.8, repeat: Infinity }}
+                className="text-pink-400"
+              >
+                |
+              </motion.span>
+            )}"
+          </p>
         </div>
       </motion.div>
 
