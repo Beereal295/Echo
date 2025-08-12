@@ -1255,7 +1255,7 @@ function SettingsPage() {
                           </SelectContent>
                         </Select>
                         <p className="text-xs text-gray-400">
-                          Model for raw → enhanced → structured processing (fast, reliable models recommended)
+                          Model for raw → enhanced → structured processing (fast model like mistral:7b recommended)
                         </p>
                       </div>
 
@@ -1327,7 +1327,7 @@ function SettingsPage() {
                           </SelectContent>
                         </Select>
                         <p className="text-xs text-gray-400">
-                          Model for diary conversations (thinking models like Qwen recommended)
+                          Model for diary conversations (thinking models like qwen3:8b recommended)
                         </p>
                       </div>
 

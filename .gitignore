@@ -100,4 +100,5 @@ embeddings_cache/
 whisper_models/
 ollama_models/
 user_data/
+Keys/
 *.bak
