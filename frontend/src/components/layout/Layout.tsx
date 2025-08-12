@@ -218,7 +218,7 @@ function Layout({ children }: LayoutProps) {
                 </Link>
               </TooltipTrigger>
               <TooltipContent side="right" sideOffset={20} className="z-[200]">
-                <p>Echo Journal</p>
+                <p>Echo</p>
               </TooltipContent>
             </Tooltip>
           ) : (
@@ -240,7 +240,7 @@ function Layout({ children }: LayoutProps) {
                     transition={{ duration: 0.2, ease: "easeOut" }}
                     className="font-bold text-xl bg-gradient-to-r from-white via-purple-400 to-blue-400 bg-clip-text text-transparent whitespace-nowrap"
                   >
-                    Echo Journal
+                    Echo
                   </motion.h1>
                 </AnimatePresence>
               </motion.div>

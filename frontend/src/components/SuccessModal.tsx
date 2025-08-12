@@ -16,19 +16,30 @@ function SuccessModal({ isOpen, title, message, autoCloseMs = 3000, onClose }: S
   useEffect(() => {
     if (!isOpen) return
 
-    setCountdown(Math.floor(autoCloseMs / 1000))
+    // Reset countdown when modal opens
+    const seconds = Math.floor(autoCloseMs / 1000)
+    setCountdown(seconds)
     
+    // Set up the countdown interval
     const interval = setInterval(() => {
       setCountdown(prev => {
         if (prev <= 1) {
-          onClose()
           return 0
         }
         return prev - 1
       })
     }, 1000)
 
-    return () => clearInterval(interval)
+    // Set up the auto-close timeout
+    const timeout = setTimeout(() => {
+      onClose()
+    }, autoCloseMs)
+
+    // Cleanup
+    return () => {
+      clearInterval(interval)
+      clearTimeout(timeout)
+    }
   }, [isOpen, autoCloseMs, onClose])
 
   return (
@@ -67,26 +78,18 @@ function SuccessModal({ isOpen, title, message, autoCloseMs = 3000, onClose }: S
             <p className="text-white mb-6">{message}</p>
             
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="text-sm text-gray-400">
-                  Auto-closing in
-                </div>
-                <motion.div 
-                  key={countdown}
-                  initial={{ scale: 1.2, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ duration: 0.3 }}
-                  className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/20 border border-primary/30"
-                >
-                  <span className="text-primary font-bold text-lg">{countdown}</span>
-                </motion.div>
+              <div className="flex items-center gap-2">
+                <div className="h-2 w-2 rounded-full bg-green-400 animate-pulse" />
+                <span className="text-xs text-gray-300">
+                  Redirecting in <span className="text-green-400 font-semibold">{countdown}s</span>
+                </span>
               </div>
               <Button
                 onClick={onClose}
-                className="relative overflow-hidden group px-6 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-green-500/10 border border-green-500/20 text-green-400 hover:bg-green-500/20 hover:text-green-300"
+                size="sm"
+                className="bg-green-500/10 border border-green-500/20 text-green-400 hover:bg-green-500/20 hover:text-green-300"
               >
-                <div className="absolute inset-0 bg-gradient-to-r from-green-500/10 to-green-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                <span className="relative z-10">Continue Now</span>
+                Continue Now
               </Button>
             </div>
           </motion.div>

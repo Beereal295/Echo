@@ -10,61 +10,37 @@ router = APIRouter(prefix="/patterns", tags=["patterns"])
 
 
 @router.get("/check", response_model=SuccessResponse)
-async def check_pattern_threshold():
-    """Check if pattern detection threshold is met"""
+async def check_pattern_availability():
+    """Check pattern detection availability - now always available"""
     try:
         db = get_db()
-        pattern_detector = PatternDetector()
-        preferences_repo = await get_preferences_repository()
-        
-        # Get threshold from preferences
-        threshold = await preferences_repo.get_value(
-            "pattern_detection_threshold", default=30
-        )
-        
-        # Check if threshold is met
-        is_met = await pattern_detector.check_threshold_met(threshold)
         
         # Get current entry count
         result = await db.fetch_one("SELECT COUNT(*) as count FROM entries")
         entry_count = result["count"] if result else 0
         
         return SuccessResponse(
-            message=f"Pattern detection {'enabled' if is_met else 'disabled'}",
+            message="Pattern detection is available",
             data={
-                "threshold_met": is_met,
-                "threshold": threshold,
+                "available": True,
                 "entry_count": entry_count,
-                "remaining": max(0, threshold - entry_count) if not is_met else 0
+                "message": "Pattern analysis is available for all users"
             }
         )
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to check pattern threshold: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to check pattern availability: {str(e)}")
 
 
 @router.post("/analyze", response_model=SuccessResponse)
 async def analyze_patterns():
-    """Manually trigger pattern analysis"""
+    """Manually trigger pattern analysis - available for all users"""
     try:
         pattern_detector = PatternDetector()
-        preferences_repo = await get_preferences_repository()
         
-        # Get threshold from preferences
-        threshold = await preferences_repo.get_value(
-            "pattern_detection_threshold", default=30
-        )
-        
-        # Check if threshold is met
-        if not await pattern_detector.check_threshold_met(threshold):
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Pattern detection requires at least {threshold} entries"
-            )
-        
-        # Run pattern analysis
+        # Run pattern analysis without threshold restrictions
         try:
-            patterns = await pattern_detector.analyze_entries(min_entries=threshold)
+            patterns = await pattern_detector.analyze_entries(min_entries=1)  # Allow analysis with just 1 entry
             
             return SuccessResponse(
                 message=f"Pattern analysis complete",

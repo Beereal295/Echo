@@ -28,13 +28,8 @@ class PatternDetector:
         self.min_cluster_size = 3  # Minimum entries to form a pattern
         self.similarity_threshold = 0.5  # Cosine similarity threshold (lowered for more distinct clusters)
         
-    async def analyze_entries(self, min_entries: int) -> List[Pattern]:
+    async def analyze_entries(self, min_entries: int = 1) -> List[Pattern]:
         """Analyze all entries and detect patterns"""
-        # Get entry count
-        entry_count = await self._get_entry_count()
-        if entry_count < min_entries:
-            return []
-            
         # Fetch all entries with embeddings
         entries = await self._fetch_entries_with_embeddings()
         if not entries:
@@ -491,7 +486,3 @@ Respond with only the specific topic title (max 8 words). Be precise, not generi
             
         return patterns
     
-    async def check_threshold_met(self, threshold: int) -> bool:
-        """Check if entry count meets the threshold for pattern detection"""
-        count = await self._get_entry_count()
-        return count >= threshold

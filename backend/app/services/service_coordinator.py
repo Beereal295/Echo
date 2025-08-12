@@ -100,29 +100,20 @@ class ServiceCoordinator:
         logger.error(f"Recording error via hotkey: {error}")
     
     async def _refresh_patterns(self):
-        """Refresh patterns based on current threshold setting"""
+        """Refresh patterns - now available for all users"""
         try:
-            # Get pattern detection threshold from preferences
-            threshold = await self.preferences_repo.get_value(
-                "pattern_detection_threshold", default=30
-            )
+            logger.info("Refreshing patterns for all users...")
             
-            # Check if threshold is met
-            if await self.pattern_detector.check_threshold_met(threshold):
-                logger.info(f"Pattern detection threshold met ({threshold} entries), refreshing patterns...")
-                
-                # Run pattern analysis
-                patterns = await self.pattern_detector.analyze_entries(min_entries=threshold)
-                logger.info(f"Pattern analysis complete, found {len(patterns)} patterns")
-                
-                # Mark pattern unlock as shown if this is the first time
-                if not await self.preferences_repo.get_value("pattern_unlock_shown", default=False):
+            # Run pattern analysis without threshold restrictions
+            patterns = await self.pattern_detector.analyze_entries(min_entries=1)
+            logger.info(f"Pattern analysis complete, found {len(patterns)} patterns")
+            
+            # Mark pattern unlock as shown if this is the first time
+            if not await self.preferences_repo.get_value("pattern_unlock_shown", default=False):
                     await self.preferences_repo.set_value(
                         "pattern_unlock_shown", True, "bool",
                         "Whether pattern unlock celebration was shown"
                     )
-            else:
-                logger.info(f"Pattern detection threshold not met (requires {threshold} entries)")
                 
         except Exception as e:
             logger.error(f"Error refreshing patterns: {e}")
