@@ -1025,7 +1025,6 @@ function VoiceUploadPage() {
                       onClick={() => {
                         setShowModal(false)
                         setShowUploadCard(true)
-                        setShowTranscriptionCard(false)
                       }}
                       className="h-8 w-8 p-0 text-blue-300 drop-shadow-[0_0_4px_rgba(147,197,253,0.6)] hover:bg-muted/50 hover:text-white hover:drop-shadow-[0_0_6px_rgba(255,255,255,0.6)]"
                       title="Close modal"
