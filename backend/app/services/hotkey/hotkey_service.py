@@ -82,20 +82,18 @@ class HotkeyService:
         """Load hotkey configuration from preferences"""
         try:
             if self.preferences_repo:
-                hotkey_pref = await self.preferences_repo.get_by_key("recording_hotkey")
+                hotkey_pref = await self.preferences_repo.get_by_key("hotkey")
                 if hotkey_pref:
-                    self.current_hotkey = hotkey_pref.typed_value
+                    self.current_hotkey = hotkey_pref.get_typed_value()
                     logger.info(f"Loaded hotkey preference: {self.current_hotkey}")
                 else:
                     # Set default preference
-                    from app.models.preferences import Preference
-                    default_pref = Preference(
-                        key="recording_hotkey",
+                    await self.preferences_repo.set_value(
+                        key="hotkey",
                         value=self.current_hotkey,
-                        type="string",
-                        description="Hotkey for voice recording (press and hold)"
+                        value_type="string",
+                        description="Global hotkey for voice recording"
                     )
-                    await self.preferences_repo.create(default_pref)
                     logger.info(f"Created default hotkey preference: {self.current_hotkey}")
         except Exception as e:
             logger.warning(f"Failed to load hotkey preference: {e}")
@@ -375,6 +373,6 @@ async def get_hotkey_service() -> HotkeyService:
     
     if _hotkey_service is None:
         _hotkey_service = HotkeyService()
-        await _hotkey_service.initialize()
+        # Don't auto-initialize - will be done after user login
     
     return _hotkey_service

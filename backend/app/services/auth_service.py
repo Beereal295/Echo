@@ -232,6 +232,24 @@ class AuthenticationService:
             display_name=user['display_name']
         )
         
+        # Start background memory processing for this user
+        try:
+            from .service_coordinator import get_service_coordinator
+            coordinator = await get_service_coordinator()
+            await coordinator.start_background_memory_processing_for_user()
+        except Exception as e:
+            # Don't fail login if background processing fails
+            logger.error(f"Failed to start background memory processing for user: {e}")
+        
+        # Initialize hotkey service with user preferences
+        try:
+            from .service_coordinator import get_service_coordinator
+            coordinator = await get_service_coordinator()
+            await coordinator.initialize_hotkey_for_user()
+        except Exception as e:
+            # Don't fail login if hotkey initialization fails
+            logger.error(f"Failed to initialize hotkey for user: {e}")
+        
         # Trigger pattern detection for this user's database
         try:
             from .service_coordinator import get_service_coordinator

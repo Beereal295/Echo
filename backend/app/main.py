@@ -4,7 +4,6 @@ from fastapi.exceptions import RequestValidationError
 from contextlib import asynccontextmanager
 
 from app.core.config import settings
-from app.db.database import init_db
 from app.api.api import api_router
 from app.api.errors import (
     http_exception_handler,
@@ -19,7 +18,9 @@ from app.services.background_tasks import background_manager
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    await init_db()
+    # Removed init_db() - we don't want to create standalone echo.db
+    # User databases are initialized when users register/login
+    # Shared auth database (user_registry.db) persists from registration
     
     # Initialize processing queue
     processing_queue = await get_processing_queue()
@@ -28,8 +29,7 @@ async def lifespan(app: FastAPI):
     service_coordinator = await get_service_coordinator()
     await service_coordinator.initialize()
     
-    # Start background tasks for memory processing
-    await background_manager.start()
+    # Background memory processing now starts per-user after login
     
     yield
     

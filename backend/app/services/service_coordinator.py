@@ -42,15 +42,14 @@ class ServiceCoordinator:
             self.stt_service = await get_stt_service()
             logger.info("STT service initialized")
             
-            # Initialize hotkey service
-            self.hotkey_service = await get_hotkey_service()
-            logger.info("Hotkey service initialized")
-            
             # Initialize WebSocket manager
             self.websocket_manager = await get_websocket_manager()
             logger.info("WebSocket manager initialized")
             
-            # Set up service dependencies
+            # Get hotkey service but don't initialize yet - will be done after login
+            self.hotkey_service = await get_hotkey_service()
+            
+            # Set up basic service dependencies (initialization will happen after login)
             self.hotkey_service.set_stt_service(self.stt_service)
             self.hotkey_service.set_preferences_repository(self.preferences_repo)
             
@@ -117,6 +116,26 @@ class ServiceCoordinator:
                 
         except Exception as e:
             logger.error(f"Error refreshing patterns: {e}")
+    
+    async def initialize_hotkey_for_user(self):
+        """Initialize hotkey service with user preferences after login"""
+        try:
+            if self.hotkey_service:
+                await self.hotkey_service.initialize()
+                logger.info("Hotkey service initialized for user")
+        except Exception as e:
+            logger.error(f"Failed to initialize hotkey for user: {e}")
+            raise
+    
+    async def start_background_memory_processing_for_user(self):
+        """Start background memory processing for the currently logged-in user"""
+        try:
+            from .background_tasks import background_manager
+            await background_manager.start()
+            logger.info("Background memory processing started for user")
+        except Exception as e:
+            logger.error(f"Failed to start background memory processing for user: {e}")
+            raise
     
     async def refresh_patterns_for_user(self):
         """Refresh patterns for the currently logged-in user"""
