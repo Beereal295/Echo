@@ -31,7 +31,7 @@ function SettingsPage() {
   const [testingOllama, setTestingOllama] = useState(false)
   
   // Journal Processing settings
-  const [journalModel, setJournalModel] = useState('mistral:instruct')
+  const [journalModel, setJournalModel] = useState('mistral:7b')
   const [journalTemperature, setJournalTemperature] = useState('0.1')
   const [journalContextWindow, setJournalContextWindow] = useState('4096')
   
@@ -103,7 +103,7 @@ function SettingsPage() {
               setOllamaPort(String(pref.typed_value || '11434'))
               break
             case 'ollama_model':
-              setJournalModel(pref.typed_value || 'mistral:instruct')
+              setJournalModel(pref.typed_value || 'mistral:7b')
               break
             case 'ollama_temperature':
               setJournalTemperature(String(pref.typed_value || '0.1'))
