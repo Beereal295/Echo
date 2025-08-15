@@ -181,13 +181,14 @@ def install_python_dependencies(project_root):
     
     print_colored("Installing Python dependencies...", Colors.OKCYAN)
     
-    # Upgrade pip first
-    result = run_command([str(pip_executable), "install", "--upgrade", "pip"], cwd=str(backend_dir))
+    # Upgrade pip first using python -m pip to avoid path issues
+    python_executable = venv_dir / ("Scripts" if os.name == 'nt' else "bin") / ("python.exe" if os.name == 'nt' else "python")
+    result = run_command([str(python_executable), "-m", "pip", "install", "--upgrade", "pip"], shell=False, cwd=str(backend_dir))
     if not result:
         return False
     
-    # Install requirements
-    result = run_command([str(pip_executable), "install", "-r", "requirements.txt"], cwd=str(backend_dir))
+    # Install requirements using python -m pip
+    result = run_command([str(python_executable), "-m", "pip", "install", "-r", "requirements.txt"], shell=False, cwd=str(backend_dir))
     if not result:
         return False
     
@@ -205,7 +206,8 @@ def install_node_dependencies(project_root):
     
     print_colored("Installing Node.js dependencies...", Colors.OKCYAN)
     
-    result = run_command("npm install", cwd=str(frontend_dir))
+    # Use list format with shell=False for better path handling
+    result = run_command(["npm", "install"], shell=False, cwd=str(frontend_dir))
     if not result:
         return False
     
