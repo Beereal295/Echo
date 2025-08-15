@@ -827,16 +827,15 @@ function TalkToYourDiaryPage() {
               className="text-center"
             >
               <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-6" />
-              <h2 className="text-2xl font-semibold text-white mb-2">Echo is getting ready</h2>
-              <motion.p
+              <motion.h2
                 key={preparingMessageIndex}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                className="text-lg text-gray-300 max-w-md mx-auto"
+                className="text-2xl font-semibold text-white max-w-md mx-auto"
               >
                 {preparingMessages[preparingMessageIndex]}
-              </motion.p>
+              </motion.h2>
             </motion.div>
           </motion.div>
         )}
