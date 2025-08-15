@@ -160,6 +160,9 @@ async def apply_migration(db, version: int, description: str, up_sql: str):
         # Split multiple statements by semicolon and execute each one
         statements = [stmt.strip() for stmt in up_sql.split(';') if stmt.strip()]
         for statement in statements:
+            # Skip comment-only statements
+            if statement.startswith('--') or not statement:
+                continue
             try:
                 await db.execute(statement)
             except Exception as e:
