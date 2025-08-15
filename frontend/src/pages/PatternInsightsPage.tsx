@@ -125,25 +125,6 @@ function PatternInsightsPage() {
   const generateInsights = async () => {
     setRefreshing(true)
     try {
-      // Check if threshold is met before generating
-      const thresholdResponse = await api.checkPatternThreshold()
-      
-      if (thresholdResponse.success && thresholdResponse.data) {
-        // Backend wraps data in SuccessResponse, so access nested data
-        const thresholdData = thresholdResponse.data.data || thresholdResponse.data
-        
-        if (!thresholdData.threshold_met) {
-          // Show message about needing more entries
-          toast({
-            title: 'More entries needed',
-            description: `You need ${thresholdData.remaining} more entries to unlock pattern insights.`,
-            variant: 'default'
-          })
-          setRefreshing(false)
-          return
-        }
-      }
-
       // Generate new patterns
       const response = await api.analyzePatterns()
       if (response.success) {

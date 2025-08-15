@@ -25,7 +25,7 @@ class PatternDetector:
     def __init__(self):
         self.embedding_service = EmbeddingService()
         self.ollama_service = OllamaService()
-        self.min_cluster_size = 3  # Minimum entries to form a pattern
+        self.min_cluster_size = 1  # Minimum entries to form a pattern
         self.similarity_threshold = 0.5  # Cosine similarity threshold (lowered for more distinct clusters)
         
     async def analyze_entries(self, min_entries: int = 1) -> List[Pattern]:
