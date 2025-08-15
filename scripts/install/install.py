@@ -48,7 +48,7 @@ def print_error(text):
     """Print error message"""
     print_colored(f"✗ {text}", Colors.FAIL)
 
-def run_command(command, shell=True, cwd=None, check=True):
+def run_command(command, shell=True, cwd=None, check=True, stream_output=False):
     """Run a command and return the result"""
     try:
         if isinstance(command, str):
@@ -56,22 +56,57 @@ def run_command(command, shell=True, cwd=None, check=True):
         else:
             print_colored(f"  Running: {' '.join(command)}", Colors.OKCYAN)
         
-        result = subprocess.run(
-            command, 
-            shell=shell, 
-            capture_output=True, 
-            text=True, 
-            cwd=cwd,
-            check=check
-        )
-        
-        if result.stdout.strip():
-            print(f"  Output: {result.stdout.strip()}")
-        
-        return result
+        if stream_output:
+            # Stream output in real-time for long-running commands
+            process = subprocess.Popen(
+                command,
+                shell=shell,
+                cwd=cwd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                universal_newlines=True
+            )
+            
+            output_lines = []
+            for line in iter(process.stdout.readline, ''):
+                line = line.rstrip()
+                if line:
+                    print(f"    {line}")
+                    output_lines.append(line)
+            
+            process.wait()
+            
+            if check and process.returncode != 0:
+                raise subprocess.CalledProcessError(process.returncode, command)
+            
+            # Create a result-like object for compatibility
+            class StreamResult:
+                def __init__(self, returncode, stdout):
+                    self.returncode = returncode
+                    self.stdout = stdout
+                    self.stderr = ""
+            
+            return StreamResult(process.returncode, '\n'.join(output_lines))
+        else:
+            # Original behavior for quick commands
+            result = subprocess.run(
+                command, 
+                shell=shell, 
+                capture_output=True, 
+                text=True, 
+                cwd=cwd,
+                check=check
+            )
+            
+            if result.stdout.strip():
+                print(f"  Output: {result.stdout.strip()}")
+            
+            return result
+            
     except subprocess.CalledProcessError as e:
         print_error(f"Command failed: {e}")
-        if e.stderr:
+        if hasattr(e, 'stderr') and e.stderr:
             print_error(f"Error: {e.stderr.strip()}")
         return None
 
@@ -183,12 +218,12 @@ def install_python_dependencies(project_root):
     
     # Upgrade pip first using python -m pip to avoid path issues
     python_executable = venv_dir / ("Scripts" if os.name == 'nt' else "bin") / ("python.exe" if os.name == 'nt' else "python")
-    result = run_command([str(python_executable), "-m", "pip", "install", "--upgrade", "pip"], shell=False, cwd=str(backend_dir))
+    result = run_command([str(python_executable), "-m", "pip", "install", "--upgrade", "pip"], shell=False, cwd=str(backend_dir), stream_output=True)
     if not result:
         return False
     
-    # Install requirements using python -m pip
-    result = run_command([str(python_executable), "-m", "pip", "install", "-r", "requirements.txt"], shell=False, cwd=str(backend_dir))
+    # Install requirements using python -m pip with real-time output
+    result = run_command([str(python_executable), "-m", "pip", "install", "-r", "requirements.txt"], shell=False, cwd=str(backend_dir), stream_output=True)
     if not result:
         return False
     
@@ -209,10 +244,10 @@ def install_node_dependencies(project_root):
     # For Windows, we need to use shell=True or find npm.cmd explicitly
     if os.name == 'nt':
         # On Windows, npm is actually npm.cmd, so we need shell=True
-        result = run_command("npm install", shell=True, cwd=str(frontend_dir))
+        result = run_command("npm install", shell=True, cwd=str(frontend_dir), stream_output=True)
     else:
         # On Unix-like systems, use list format with shell=False
-        result = run_command(["npm", "install"], shell=False, cwd=str(frontend_dir))
+        result = run_command(["npm", "install"], shell=False, cwd=str(frontend_dir), stream_output=True)
     
     if not result:
         return False
