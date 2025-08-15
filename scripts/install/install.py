@@ -206,8 +206,14 @@ def install_node_dependencies(project_root):
     
     print_colored("Installing Node.js dependencies...", Colors.OKCYAN)
     
-    # Use list format with shell=False for better path handling
-    result = run_command(["npm", "install"], shell=False, cwd=str(frontend_dir))
+    # For Windows, we need to use shell=True or find npm.cmd explicitly
+    if os.name == 'nt':
+        # On Windows, npm is actually npm.cmd, so we need shell=True
+        result = run_command("npm install", shell=True, cwd=str(frontend_dir))
+    else:
+        # On Unix-like systems, use list format with shell=False
+        result = run_command(["npm", "install"], shell=False, cwd=str(frontend_dir))
+    
     if not result:
         return False
     
