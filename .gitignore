@@ -102,3 +102,17 @@ ollama_models/
 user_data/
 Keys/
 *.bak
+
+# Application data
+app_data/
+backend/app_data/
+*.echounlock
+
+# TTS models (large files)
+backend/TTS/
+*.onnx
+*.onnx.json
+
+# User databases
+backend/echo.db
+backend/data/
