@@ -97,6 +97,8 @@ function TalkToYourDiaryPage() {
     searchQueries: string[]
   } | null>(null)
   const [loading, setLoading] = useState(false)
+  const [isPreparing, setIsPreparing] = useState(false)
+  const [preparingMessageIndex, setPreparingMessageIndex] = useState(0)
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
@@ -109,6 +111,22 @@ function TalkToYourDiaryPage() {
   const pageSize = 6 // Show 6 conversations per page
   
   const { toast } = useToast()
+
+  // Preparing messages for loading animation
+  const preparingMessages = [
+    "Getting ready to listen…",
+    "Opening the pages of your story…",
+    "Collecting my thoughts for you…",
+    "Tuning in to your frequency…",
+    "Clearing a space for our conversation…",
+    "Setting the stage for our chat…",
+    "Taking a deep (digital) breath…",
+    "Finding the right words…",
+    "Preparing a comfortable silence…",
+    "Letting ideas settle before we begin…",
+    "Adjusting to your wavelength…",
+    "Almost ready to begin…"
+  ]
 
   // Helper function to ensure toast content is valid (same as NewEntryPage)
   const safeToast = (params: Parameters<typeof toast>[0]) => {
@@ -126,6 +144,17 @@ function TalkToYourDiaryPage() {
   useEffect(() => {
     loadConversations()
   }, [])
+
+  // Rotate preparing messages while loading
+  useEffect(() => {
+    if (!isPreparing) return
+
+    const interval = setInterval(() => {
+      setPreparingMessageIndex((prev) => (prev + 1) % preparingMessages.length)
+    }, 2000) // Change message every 2 seconds
+
+    return () => clearInterval(interval)
+  }, [isPreparing, preparingMessages.length])
 
   const loadConversations = async () => {
     setLoading(true)
@@ -168,8 +197,26 @@ function TalkToYourDiaryPage() {
     }
   }
 
-  const handleStartChat = () => {
-    setIsChatModalOpen(true)
+  const handleStartChat = async () => {
+    setIsPreparing(true)
+    setPreparingMessageIndex(0)
+    
+    try {
+      // Wait for model to be FULLY ready
+      await api.preheatDiaryChat()
+      
+      // Only open modal after preheat succeeds
+      setIsChatModalOpen(true)
+    } catch (error) {
+      console.error('Failed to preheat Echo:', error)
+      safeToast({
+        title: "Failed to initialize Echo",
+        description: "Please try again",
+        variant: "destructive"
+      })
+    } finally {
+      setIsPreparing(false)
+    }
   }
 
   const handleChatEnd = (transcription: string, duration: number, messageCount: number, searchQueries: string[]) => {
@@ -451,11 +498,19 @@ function TalkToYourDiaryPage() {
               >
                 <button
                   onClick={handleStartChat}
-                  className="relative overflow-hidden group px-8 py-3 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 gap-3"
+                  disabled={isPreparing}
+                  className="relative overflow-hidden group px-8 py-3 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer inline-flex items-center justify-center bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                   <span className="relative z-10 flex items-center font-medium">
-                    Start Conversation
+                    {isPreparing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        Preparing Echo...
+                      </>
+                    ) : (
+                      'Start Conversation'
+                    )}
                   </span>
                 </button>
               </motion.div>
@@ -751,6 +806,37 @@ function TalkToYourDiaryPage() {
                   )}
                 </Button>
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Loading Overlay for Echo Preparation */}
+      <AnimatePresence>
+        {isPreparing && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="text-center"
+            >
+              <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-6" />
+              <h2 className="text-2xl font-semibold text-white mb-2">Echo is getting ready</h2>
+              <motion.p
+                key={preparingMessageIndex}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="text-lg text-gray-300 max-w-md mx-auto"
+              >
+                {preparingMessages[preparingMessageIndex]}
+              </motion.p>
             </motion.div>
           </motion.div>
         )}

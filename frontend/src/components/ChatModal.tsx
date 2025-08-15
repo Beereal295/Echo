@@ -805,7 +805,7 @@ function ChatModal({ isOpen, onClose, onEndChat }: ChatModalProps) {
     setIsProcessing(true)
 
     // Set initial processing message
-    setProcessingMessage('Connecting to Echo...')
+    setProcessingMessage('Analyzing your question...')
 
     // Send message to AI
     try {
@@ -829,15 +829,15 @@ function ChatModal({ isOpen, onClose, onEndChat }: ChatModalProps) {
         const hasToolCalls = chatData.tool_calls_made?.length > 0
         setIsToolCall(hasToolCalls)
         
-        // Simulate progressive status updates using processing phases
+        // Show progressive status updates using enhanced processing phases
         if (chatData.processing_phases && chatData.processing_phases.length > 0) {
           for (let i = 0; i < chatData.processing_phases.length; i++) {
             const phase = chatData.processing_phases[i]
             setProcessingMessage(phase.message)
             
-            // Add a small delay between phases to show progression
+            // Add a shorter delay between phases for better responsiveness
             if (i < chatData.processing_phases.length - 1) {
-              await new Promise(resolve => setTimeout(resolve, 800))
+              await new Promise(resolve => setTimeout(resolve, 350))
             }
           }
         }
@@ -1048,7 +1048,6 @@ function ChatModal({ isOpen, onClose, onEndChat }: ChatModalProps) {
               <div className={`flex items-center gap-2 text-sm ${isToolCall ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>
                 <Loader2 className="h-3 w-3 animate-spin" />
                 <span>{typeof processingMessage === 'string' ? processingMessage : 'Processing...'}</span>
-                <span className="animate-pulse">...</span>
               </div>
             </div>
           )}

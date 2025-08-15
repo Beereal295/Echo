@@ -1765,27 +1765,53 @@ This requires searching their journal entries. You MUST use the search_diary_ent
                 final_response = "Hello! I'm Echo, your journal companion. I'm here to help you explore your thoughts and memories. What would you like to talk about today?"
                 logger.warning("Used fallback response due to empty model response")
             
-            # Generate tool-specific feedback
+            # Generate tool-specific feedback and processing phases
             tool_feedback = None
             processing_phases = []
             
+            # Tool name to user-friendly message mapping
+            tool_messages = {
+                "search_diary_entries": "Searching your diary entries",
+                "get_entries_by_date": "Looking up entries by date", 
+                "get_context_before_after": "Finding related entries",
+                "extract_ideas_and_concepts": "Analyzing ideas and concepts",
+                "extract_action_items": "Extracting action items",
+                "summarize_time_period": "Summarizing time period",
+                "add_entry_to_diary": "Saving entry to diary",
+                "search_conversations": "Searching past conversations"
+            }
+            
             if tool_calls_made:
                 tool_names = [tool["tool"] for tool in tool_calls_made]
+                
+                # Generate tool feedback for summary
                 if len(tool_names) == 1:
                     tool_feedback = f"Used {tool_names[0].replace('_', ' ').title()}"
                 else:
                     tool_list = ", ".join([name.replace('_', ' ').title() for name in tool_names[:-1]])
                     tool_feedback = f"Used {tool_list} and {tool_names[-1].replace('_', ' ').title()}"
                 
-                # Add processing phases for frontend
-                processing_phases = [
-                    {"phase": "tool_calling", "message": "Analyzing your request..."},
-                    {"phase": "tool_execution", "tools": tool_names, "message": f"Using {', '.join([name.replace('_', ' ').title() for name in tool_names])}..."},
-                    {"phase": "summarization", "message": "Generating response..."}
-                ]
+                # Create detailed processing phases for tool execution
+                processing_phases = [{"phase": "analysis", "message": "Analyzing your question"}]
+                
+                # Add a phase for each tool used
+                for tool_name in tool_names:
+                    tool_message = tool_messages.get(tool_name, tool_name.replace('_', ' ').title())
+                    processing_phases.append({
+                        "phase": f"tool_{tool_name}",
+                        "message": tool_message,
+                        "tool": tool_name
+                    })
+                
+                # Add final response generation phase
+                processing_phases.append({"phase": "generation", "message": "Generating response"})
+                
             else:
+                # Non-tool response phases
                 processing_phases = [
-                    {"phase": "direct_response", "message": "Processing your message..."}
+                    {"phase": "analysis", "message": "Analyzing your question"},
+                    {"phase": "thinking", "message": "Thinking about your request"},
+                    {"phase": "generation", "message": "Generating response"}
                 ]
             
             # Collect debug information if requested

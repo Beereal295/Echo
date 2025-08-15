@@ -443,6 +443,16 @@ class ApiClient {
     return this.request('/diary/search-feedback')
   }
 
+  async preheatDiaryChat(): Promise<ApiResponse<{
+    preheated: boolean
+    model_ready: boolean
+    entry_count?: number
+  }>> {
+    return this.request('/diary/preheat', {
+      method: 'POST'
+    })
+  }
+
   async sendDiaryChatMessage(message: string, conversationHistory?: Array<{ role: string; content: string }>, conversationId?: number, memoryEnabled: boolean = true, debugMode: boolean = false): Promise<ApiResponse<{
     response: string
     tool_calls_made: Array<{ tool: string; arguments: any; result: any }>

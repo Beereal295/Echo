@@ -22,6 +22,49 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/diary", tags=["diary-chat"])
 
 
+@router.post("/preheat")
+async def preheat_diary_chat(current_user = Depends(get_current_user)):
+    """
+    Preheat the diary chat service by initializing the model and loading preferences.
+    This should be called when the user opens the chat modal to reduce response latency.
+    """
+    try:
+        chat_service = get_diary_chat_service()
+        
+        # Initialize the service (loads preferences and creates ChatOllama)
+        await chat_service._ensure_initialized()
+        
+        # Do a quick warmup inference to load the model into memory
+        from langchain.schema import SystemMessage, HumanMessage
+        warmup_messages = [
+            SystemMessage(content="You are Echo, a helpful diary companion."),
+            HumanMessage(content="Hi")
+        ]
+        
+        # This call loads the model into GPU/RAM memory
+        await chat_service.llm.ainvoke(warmup_messages)
+        
+        # Optional: Get entry count for quick stats
+        from app.db.repositories.entry_repository import EntryRepository
+        entry_count = await EntryRepository.count()
+        
+        logger.info(f"Diary chat service preheated successfully for user {current_user.get('username', 'unknown')}")
+        
+        return SuccessResponse(
+            success=True,
+            message="Diary chat service preheated successfully",
+            data={
+                "preheated": True,
+                "model_ready": True,
+                "entry_count": entry_count
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to preheat diary chat service: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to preheat chat service: {str(e)}")
+
+
 class DiaryChatRequest(BaseModel):
     """Request model for diary chat."""
     message: str = Field(..., min_length=1, max_length=2000, description="User's message to the diary")
