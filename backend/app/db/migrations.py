@@ -103,6 +103,36 @@ DROP INDEX IF EXISTS idx_memory_final_score;
 DROP INDEX IF EXISTS idx_memory_marked_deletion;
 DROP INDEX IF EXISTS idx_memory_archived;"""
     ),
+    (
+        7,
+        "Add memory extraction tracking columns",
+        """-- Add memory_extracted columns to entries table
+ALTER TABLE entries ADD COLUMN memory_extracted INTEGER DEFAULT 0;
+ALTER TABLE entries ADD COLUMN memory_extracted_llm INTEGER DEFAULT 0;
+ALTER TABLE entries ADD COLUMN memory_extracted_at DATETIME;
+
+-- Add memory_extracted columns to conversations table  
+ALTER TABLE conversations ADD COLUMN memory_extracted INTEGER DEFAULT 0;
+ALTER TABLE conversations ADD COLUMN memory_extracted_llm INTEGER DEFAULT 0;
+ALTER TABLE conversations ADD COLUMN memory_extracted_at DATETIME;
+
+-- Create indexes for efficient querying
+CREATE INDEX IF NOT EXISTS idx_entries_memory_extracted ON entries(memory_extracted);
+CREATE INDEX IF NOT EXISTS idx_conversations_memory_extracted ON conversations(memory_extracted);
+CREATE INDEX IF NOT EXISTS idx_entries_memory_extracted_llm ON entries(memory_extracted_llm);
+CREATE INDEX IF NOT EXISTS idx_conversations_memory_extracted_llm ON conversations(memory_extracted_llm);""",
+        """-- Rollback: Drop indexes and columns
+DROP INDEX IF EXISTS idx_entries_memory_extracted;
+DROP INDEX IF EXISTS idx_conversations_memory_extracted;
+DROP INDEX IF EXISTS idx_entries_memory_extracted_llm;
+DROP INDEX IF EXISTS idx_conversations_memory_extracted_llm;
+ALTER TABLE entries DROP COLUMN memory_extracted;
+ALTER TABLE entries DROP COLUMN memory_extracted_llm;
+ALTER TABLE entries DROP COLUMN memory_extracted_at;
+ALTER TABLE conversations DROP COLUMN memory_extracted;
+ALTER TABLE conversations DROP COLUMN memory_extracted_llm;
+ALTER TABLE conversations DROP COLUMN memory_extracted_at;"""
+    ),
 ]
 
 
