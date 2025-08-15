@@ -14,7 +14,11 @@ CREATE TABLE IF NOT EXISTS entries (
     timestamp DATETIME NOT NULL,
     mood_tags TEXT,   -- JSON array of strings
     word_count INTEGER DEFAULT 0,
-    processing_metadata TEXT  -- JSON object for AI processing info
+    processing_metadata TEXT,  -- JSON object for AI processing info
+    smart_tags TEXT,  -- JSON array for smart tags
+    memory_extracted INTEGER DEFAULT 0,
+    memory_extracted_llm INTEGER DEFAULT 0,
+    memory_extracted_at DATETIME
 )
 """
 
@@ -66,7 +70,13 @@ CREATE TABLE IF NOT EXISTS conversations (
     message_count INTEGER DEFAULT 0,
     search_queries_used TEXT,  -- JSON array
     created_at DATETIME NOT NULL,
-    updated_at DATETIME
+    updated_at DATETIME,
+    embedding TEXT,
+    summary TEXT,
+    key_topics TEXT,
+    memory_extracted INTEGER DEFAULT 0,
+    memory_extracted_llm INTEGER DEFAULT 0,
+    memory_extracted_at DATETIME
 )
 """
 
