@@ -463,45 +463,6 @@ function MemoriesPage() {
   const displayMemory = getDisplayMemory()
   const isComplete = currentMemorySource === 'swipe' && currentIndex >= unratedMemories.length
 
-  if (isComplete) {
-    return (
-      <div className="h-screen flex flex-col p-4 md:p-6 overflow-hidden">
-        <div className="max-w-6xl mx-auto w-full flex flex-col flex-1 items-center justify-center">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="text-center"
-          >
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ duration: 0.3, delay: 0.2 }}
-              className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4"
-            >
-              <ThumbsUp className="h-8 w-8 text-green-400" />
-            </motion.div>
-            <h2 className="text-2xl font-bold text-white mb-2">All Done!</h2>
-            <p className="text-gray-400 mb-6">
-              You've reviewed all available memories. Thank you for helping Echo understand what's important to you!
-            </p>
-            <Button 
-              onClick={loadUnratedMemories} 
-              variant="ghost"
-              size="sm"
-              className="relative overflow-hidden group transition-all duration-200 bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 hover:text-primary"
-            >
-              <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-              <span className="relative z-10 flex items-center font-medium">
-                <RotateCcw className="mr-2 h-4 w-4" />
-                Check for New Memories
-              </span>
-            </Button>
-          </motion.div>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="max-w-7xl mx-auto p-8">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -541,34 +502,68 @@ function MemoriesPage() {
             </CardHeader>
             
             <CardContent className="flex-1 flex flex-col items-center justify-center relative p-6">
-              {/* Confirmation feedback */}
-              <AnimatePresence>
-                {showConfirmation && lastAction && (
+              {/* Show completion message when all memories are reviewed */}
+              {isComplete ? (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="text-center w-full"
+                >
                   <motion.div
-                    initial={{ opacity: 0, y: -50, scale: 0.8 }}
-                    animate={{ opacity: 1, y: -100, scale: 1 }}
-                    exit={{ opacity: 0, y: -150, scale: 0.8 }}
-                    className="absolute top-4 z-20 bg-card border border-border rounded-lg px-4 py-2 shadow-lg"
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ duration: 0.3, delay: 0.2 }}
+                    className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4"
                   >
-                    <div className="flex items-center gap-2">
-                      {lastAction.type === 'relevant' ? (
-                        <>
-                          <ThumbsUp className="w-4 h-4 text-green-500" />
-                          <span className="text-green-500 font-medium">Marked as Relevant</span>
-                        </>
-                      ) : (
-                        <>
-                          <ThumbsDown className="w-4 h-4 text-red-500" />
-                          <span className="text-red-500 font-medium">Marked as Irrelevant</span>
-                        </>
-                      )}
-                    </div>
+                    <ThumbsUp className="h-8 w-8 text-green-400" />
                   </motion.div>
-                )}
-              </AnimatePresence>
+                  <h2 className="text-xl font-bold text-white mb-2">All Done!</h2>
+                  <p className="text-gray-400 mb-6 text-sm">
+                    All memories reviewed. Great job helping Echo!
+                  </p>
+                  <Button 
+                    onClick={loadUnratedMemories} 
+                    variant="ghost"
+                    size="sm"
+                    className="relative overflow-hidden group transition-all duration-200 bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 hover:text-primary"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                    <span className="relative z-10 flex items-center font-medium">
+                      <RotateCcw className="mr-2 h-4 w-4" />
+                      Check for New Memories
+                    </span>
+                  </Button>
+                </motion.div>
+              ) : (
+                <>
+                  {/* Confirmation feedback */}
+                  <AnimatePresence>
+                    {showConfirmation && lastAction && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -50, scale: 0.8 }}
+                        animate={{ opacity: 1, y: -100, scale: 1 }}
+                        exit={{ opacity: 0, y: -150, scale: 0.8 }}
+                        className="absolute top-4 z-20 bg-card border border-border rounded-lg px-4 py-2 shadow-lg"
+                      >
+                        <div className="flex items-center gap-2">
+                          {lastAction.type === 'relevant' ? (
+                            <>
+                              <ThumbsUp className="w-4 h-4 text-green-500" />
+                              <span className="text-green-500 font-medium">Marked as Relevant</span>
+                            </>
+                          ) : (
+                            <>
+                              <ThumbsDown className="w-4 h-4 text-red-500" />
+                              <span className="text-red-500 font-medium">Marked as Irrelevant</span>
+                            </>
+                          )}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
 
-              {/* Single Card Display */}
-              {displayMemory && (
+                  {/* Single Card Display */}
+                  {displayMemory && (
                 <motion.div
                   className="relative w-full max-w-md h-80 mb-6"
                   initial={{ y: 20, opacity: 0, scale: 0.9 }}
@@ -649,9 +644,9 @@ function MemoriesPage() {
                 </motion.div>
               )}
 
-              {/* Action Buttons or Rating Status */}
-              <div className="relative w-full max-w-md">
-                {canRate() ? (
+                  {/* Action Buttons or Rating Status */}
+                  <div className="relative w-full max-w-md">
+                    {canRate() ? (
                   <div className="flex justify-between gap-4">
                     <Button
                       onClick={() => handleButtonRate(false)}
@@ -701,9 +696,11 @@ function MemoriesPage() {
                         <><ThumbsDown className="w-5 h-5 mr-2" /> Previously marked as Irrelevant</>
                       )}
                     </Badge>
+                    </div>
+                  )}
                   </div>
-                )}
-              </div>
+                </>
+              )}
             </CardContent>
           </Card>
         </motion.div>
